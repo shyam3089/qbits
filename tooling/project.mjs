@@ -19,8 +19,11 @@ export function counterSource() {
 export function greetingSource() {
   return 'component Greeting:\n    name = ""\n\n    input:\n        value=name\n        on input:\n            name = event.value\n\n    p text="Hello, " + name\n';
 }
+export function notificationSettingSource() {
+  return 'component NotificationSetting:\n    enabled = false\n\n    input:\n        type="checkbox"\n        checked=enabled\n        on change:\n            enabled = event.checked\n';
+}
 export function appSource(identity) {
-  return `import Counter from "./Counter${identity.sourceExtension}"\nimport Greeting from "./Greeting${identity.sourceExtension}"\n\ncomponent App:\n    main class="page":\n        h1 text="Two independent counters"\n        Counter label="First: " class="compact"\n        Counter label="Second: "\n        Greeting\n`;
+  return `import Counter from "./Counter${identity.sourceExtension}"\nimport Greeting from "./Greeting${identity.sourceExtension}"\nimport NotificationSetting from "./NotificationSetting${identity.sourceExtension}"\n\ncomponent App:\n    main class="page":\n        h1 text="Two independent counters"\n        Counter label="First: " class="compact"\n        Counter label="Second: "\n        Greeting\n        NotificationSetting\n`;
 }
 export const counterCSS = '.counter { padding: 16px; }\n.counter-button { color: rgb(20, 80, 160); }\n.counter.compact { padding: 4px; }\n';
 export function applicationFiles(identity, version, frameworkSpec, viteSpec, manager = 'npm') {
@@ -31,6 +34,7 @@ export function applicationFiles(identity, version, frameworkSpec, viteSpec, man
     'index.html': '<!doctype html>\n<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Counter</title></head><body><main><h1>Reactive counter</h1><div id="app"></div></main><script type="module" src="/src/main.ts"></script></body></html>\n',
     [`src/Counter${identity.sourceExtension}`]: counterSource(),
     [`src/Greeting${identity.sourceExtension}`]: greetingSource(),
+    [`src/NotificationSetting${identity.sourceExtension}`]: notificationSettingSource(),
     [`src/App${identity.sourceExtension}`]: appSource(identity),
     'src/Counter.css': counterCSS,
     'src/main.ts': `import mount from './App${identity.sourceExtension}';\nimport * as runtime from '${identity.packageName}/runtime';\nconst target = document.querySelector('#app');\nif (!target) throw new Error('Missing application target');\nmount(target, runtime);\n`,

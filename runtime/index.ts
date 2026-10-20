@@ -1,14 +1,14 @@
 export interface CounterModel { initial: number; prefix: string; step: number }
 type Value = string | number | boolean;
 type Expr = {kind:'literal';value:Value} | {kind:'reference';name:string} | {kind:'str';argument:Expr} | {kind:'add';left:Expr;right:Expr};
-type Handler = {kind?:'click';target:string;operand:string;step:number} | {kind:'input';target:string};
+type Handler = {kind?:'click';target:string;operand:string;step:number} | {kind:'input';target:string} | {kind:'change';target:string};
 interface View {tag:string;component:number;attributes:Record<string,Expr>;children:View[];handler?:Handler}
-interface Model {props:Record<string,Value>;states:Record<string,string|number>;roots:View[]}
+interface Model {props:Record<string,Value>;states:Record<string,Value>;roots:View[]}
 type Dispose = (()=>void) & {refresh?:()=>void};
 type Mount = (target:Element,runtime:typeof import('./index.js'),props?:Record<string,Value>)=>Dispose;
 export function mountComponent(target:Element,model:Model,components:Mount[],supplied:Record<string,Value>={}):Dispose {
   const props=Object.create(null) as Record<string,Value>;
-  const states=Object.assign(Object.create(null),model.states) as Record<string,string|number>;
+  const states=Object.assign(Object.create(null),model.states) as Record<string,Value>;
   for(const key of Object.keys(supplied)) if(key!=='class'&&!Object.hasOwn(model.props,key)) throw new TypeError(`Unknown prop ${key}`);
   function readProps() {
     for(const [key,initial] of Object.entries(model.props)) {
@@ -39,6 +39,7 @@ export function mountComponent(target:Element,model:Model,components:Mount[],sup
     const element=parent.ownerDocument.createElement(view.tag);
     const classes=[view.attributes.class?String(evaluate(view.attributes.class)):'',forward].join(' ').split(/\s+/).filter(Boolean);
     if(classes.length) element.classList.add(...new Set(classes));
+    if(view.attributes.type) (element as HTMLInputElement).type=String(evaluate(view.attributes.type));
     if(view.attributes.text) {
       const text=parent.ownerDocument.createTextNode('');element.append(text);
       updates.push(()=>{text.data=String(evaluate(view.attributes.text));});
@@ -47,14 +48,21 @@ export function mountComponent(target:Element,model:Model,components:Mount[],sup
       const input=element as HTMLInputElement;
       updates.push(()=>{const value=String(evaluate(view.attributes.value));if(input.value!==value)input.value=value;});
     }
+    if(view.attributes.checked) {
+      const input=element as HTMLInputElement;
+      updates.push(()=>{const checked=evaluate(view.attributes.checked);if(typeof checked!=='boolean')throw new TypeError('Input checked requires a boolean');if(input.checked!==checked)input.checked=checked;});
+    }
     if(view.handler) {
       const h=view.handler;
-      if(h.kind!=='input') {
+      if(h.kind!=='input'&&h.kind!=='change') {
         const click=()=>{const current=states[h.operand];if(typeof current!=='number')throw new TypeError('Click increments require numeric state');const next=current+h.step;if(!Number.isSafeInteger(next))throw new RangeError('State exceeded safe integer range');states[h.target]=next;render();};
         element.addEventListener('click',click);cleanups.push(()=>element.removeEventListener('click',click));
-      } else {
+      } else if(h.kind==='input') {
         const input=()=>{states[h.target]=(element as HTMLInputElement).value;render();};
         element.addEventListener('input',input);cleanups.push(()=>element.removeEventListener('input',input));
+      } else {
+        const change=()=>{states[h.target]=(element as HTMLInputElement).checked;render();};
+        element.addEventListener('change',change);cleanups.push(()=>element.removeEventListener('change',change));
       }
     }
     parent.append(element);cleanups.push(()=>element.remove());

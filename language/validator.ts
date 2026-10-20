@@ -31,8 +31,9 @@ export function validate(ast:Component,source:string,filename='<input>',options:
     const native=elements.has(node.tag.value);
     if(!native&&!imported.has(node.tag.value)) error(node.tag.span,`Unknown element or missing component import ${JSON.stringify(node.tag.value)}`);
     const child=options.components?.get(node.tag.value);
-    if(!native&&(node.children.length||node.handler)) error(node.span,'Component instances do not accept children or click handlers');
+    if(!native&&(node.children.length||node.handler)) error(node.span,'Component instances do not accept children or event handlers');
     if(!native&&node.indentedAttributes.length) error(node.attributes[node.indentedAttributes[0]].span,'Indented properties are supported on standard elements only');
+    const checkbox=node.attributes.type?.kind==='literal'&&node.attributes.type.value==='checkbox';
     for(const [key,value] of Object.entries(node.attributes)) {
       const actual=type(value);
       if(key==='class') {
@@ -43,7 +44,15 @@ export function validate(ast:Component,source:string,filename='<input>',options:
           if(actual!=='string') error(value.span,'text requires a string expression; use str(value)');
         } else if(key==='value') {
           if(node.tag.value!=='input'||!node.indentedAttributes.includes(key)) error(value.span,'value is supported only as an indented input property');
+          if(checkbox) error(value.span,'value is supported on text inputs only');
           if(actual!=='string') error(value.span,'input value requires a string expression');
+        } else if(key==='type') {
+          if(node.tag.value!=='input'||!node.indentedAttributes.includes(key)) error(value.span,'type is supported only as an indented input property');
+          if(value.kind!=='literal'||actual!=='string'||value.value!=='checkbox') error(value.span,'input type requires the static string literal "checkbox"');
+        } else if(key==='checked') {
+          if(node.tag.value!=='input'||!node.indentedAttributes.includes(key)) error(value.span,'checked is supported only as an indented input property');
+          if(!checkbox) error(value.span,'checked requires input type="checkbox"');
+          if(actual!=='boolean') error(value.span,'input checked requires a boolean expression');
         } else error(value.span,`Unsupported element attribute ${JSON.stringify(key)}`);
       } else if(child) {
         const prop=child.props.find(p=>p.name.value===key);
@@ -60,10 +69,14 @@ export function validate(ast:Component,source:string,filename='<input>',options:
           if(!stateNames.has(ref.value)) error(ref.span,`Unknown state ${JSON.stringify(ref.value)}`);
           if(stateTypes.get(ref.value)!=='number') error(ref.span,'Click increments require numeric state');
         }
-      } else {
-        if(node.tag.value!=='input') error(h.span,'Input handlers are supported on input elements only');
+      } else if(h.kind==='input') {
+        if(node.tag.value!=='input'||checkbox) error(h.span,'Input handlers are supported on text inputs only');
         if(!stateNames.has(h.target.value)) error(h.target.span,`Unknown state ${JSON.stringify(h.target.value)}`);
         if(stateTypes.get(h.target.value)!=='string') error(h.target.span,'Input handlers require string state');
+      } else {
+        if(node.tag.value!=='input'||!checkbox) error(h.span,'Change handlers are supported on checkbox inputs only');
+        if(!stateNames.has(h.target.value)) error(h.target.span,`Unknown state ${JSON.stringify(h.target.value)}`);
+        if(stateTypes.get(h.target.value)!=='boolean') error(h.target.span,'Change handlers require boolean state');
       }
     }
     node.children.forEach(visit);

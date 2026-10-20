@@ -14,7 +14,7 @@ component Counter:
 Props are named, read-only, and have literal defaults. Types are inferred as
 string, number, or boolean. Numeric literals currently remain nonnegative safe
 integers. Multiple props use commas inside the component header; commas do not
-terminate statements. Local numeric or string state declarations precede root elements.
+terminate statements. Local numeric, string or boolean state declarations precede root elements.
 
 ```text
 import "./Counter.css"
@@ -54,15 +54,35 @@ handler assigns the current text from the fixed `event.value` form to a string
 state. `event.value` is available only as that handler assignment source. Runtime
 updates preserve the input element, focus and caret.
 
+The approved checkbox form uses boolean state, a static checkbox type, a boolean
+`checked` property, and the fixed `event.checked` handler value:
+
+```text
+component NotificationSetting:
+    enabled = false
+
+    input:
+        type="checkbox"
+        checked=enabled
+        on change:
+            enabled = event.checked
+```
+
+`type` and `checked` are indented input properties. The only supported `type` value
+is the static string literal `"checkbox"`. `checked` requires a boolean expression,
+and `on change` assigns `event.checked` to boolean state. `event.checked` is
+available only as that handler assignment source.
+
 Supported standard elements: main, section, div, h1–h6, p, span, label, button, input.
 Elements may nest using colon blocks or end at a newline when they have no children
 or handler. Properties are `text=expression`, static `class="space separated classes"`,
-and the documented indented input `value=expression` form.
+and the documented indented input `value`, `type` and `checked` forms.
 `text` requires a string and creates a text node, never HTML. Expressions are literals,
 state/prop references, `str(reference)`, and addition of two strings or two numbers.
 Mixed additions require explicit `str`. Arbitrary calls and JavaScript are unsupported.
 Buttons accept `on click` blocks containing one numeric state increment:
-`target = operand + integer`. Inputs accept the documented `on input` assignment.
+`target = operand + integer`. Text inputs accept the documented `on input`
+assignment; checkbox inputs accept the documented `on change` assignment.
 Each instance owns its state, bindings and listeners.
 
 `class` on a component instance forwards to its single resolved root element,
@@ -94,7 +114,7 @@ lines/columns. NEWLINE covers the physical ending or is zero-width at EOF. INDEN
 covers leading spaces; DEDENT is zero-width at the next code token or EOF. Block
 spans end at their final statement, excluding trailing comments.
 
-Checkbox events, boolean operations, other form controls and event forms,
+Boolean operators, other event members, controls and event forms,
 conditionals, loops, routing, SSR, plugins and LSP remain deferred.
 Development reloads on component/CSS edits and recovers from located errors.
 Reload resets state; state-preserving HMR and generated JavaScript source maps are deferred.

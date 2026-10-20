@@ -59,6 +59,10 @@ export function parse(source:string, filename='<input>'):Component {
             const sourceStart=word('event').span.start;sym('.');const sourceEnd=word('value').span.end;
             node.handler={kind:'input',target,eventValue:{value:'event.value',span:{start:sourceStart,end:sourceEnd}},span:{start,end:sourceEnd}};
             take('NEWLINE');take('DEDENT');node.span.end=sourceEnd;
+          } else if(event.value==='change') {
+            const sourceStart=word('event').span.start;sym('.');const sourceEnd=word('checked').span.end;
+            node.handler={kind:'change',target,eventChecked:{value:'event.checked',span:{start:sourceStart,end:sourceEnd}},span:{start,end:sourceEnd}};
+            take('NEWLINE');take('DEDENT');node.span.end=sourceEnd;
           } else fail(source,filename,event.span,`Unsupported event ${JSON.stringify(event.value)}`);
         } else if(peek().kind==='identifier'&&tokens[cursor+1]?.value==='=') {
           attribute(true);node.span.end=tokens[cursor-2].span.end;
@@ -84,10 +88,8 @@ export function parse(source:string, filename='<input>'):Component {
   while(peek().kind!=='DEDENT'&&peek().kind!=='eof') {
     if(tokens[cursor+1]?.value==='=') {
       if(roots.length) fail(source,filename,peek().span,'State declarations must precede elements');
-      const name=id();sym('=');const t=peek();
-      if(t.kind!=='number'&&t.kind!=='string') fail(source,filename,t.span,'State requires a number or string literal');
-      cursor++;const value=t.kind==='number'?Number(t.value):t.value;
-      states.push({name,initial:{value,span:t.span},span:{start:name.span.start,end:t.span.end}});take('NEWLINE');
+      const name=id();sym('=');const initial=literal();
+      states.push({name,initial,span:{start:name.span.start,end:initial.span.end}});take('NEWLINE');
     } else roots.push(element());
   }
   take('DEDENT');take('eof');

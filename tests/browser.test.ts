@@ -24,6 +24,9 @@ for (const production of [false, true]) test(`browser counter (${production ? 'p
     assert.equal(await input.inputValue(),'Ada');
     assert.equal(await page.getByText('Hello, Ada',{exact:true}).textContent(),'Hello, Ada');
     assert.deepEqual(await input.evaluate(element=>({focused:element.ownerDocument.activeElement===element,start:(element as HTMLInputElement).selectionStart,end:(element as HTMLInputElement).selectionEnd})),{focused:true,start:3,end:3});
+    const checkbox=page.getByRole('checkbox');assert.equal(await checkbox.isChecked(),false);
+    await checkbox.click();assert.equal(await checkbox.isChecked(),true);assert.equal(await checkbox.evaluate(element=>element.ownerDocument.activeElement===element),true);
+    await checkbox.click();assert.equal(await checkbox.isChecked(),false);
     // Exercise the generated generic mount, hostile text and special identifiers,
     // typed defaults, and teardown rather than only the legacy runtime helper.
     const code=compile('component C(__proto__ = "safe", amount = 2, enabled = true):\n    count = 0\n    div class="base":\n        span text=__proto__ + str(amount) + str(enabled)\n        button text=str(count):\n            on click:\n                count = count + 1').code;

@@ -1,0 +1,8 @@
+component NotificationSetting:
+    enabled = false
+
+    input:
+        type="checkbox"
+        checked=enabled
+        on change:
+            enabled = event.checked

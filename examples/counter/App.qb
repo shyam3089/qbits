@@ -1,5 +1,6 @@
 import Counter from "./Counter.qb"
 import Greeting from "./Greeting.qb"
+import NotificationSetting from "./NotificationSetting.qb"
 
 component App:
     main class="page":
@@ -7,3 +8,4 @@ component App:
         Counter label="First: " class="compact"
         Counter label="Second: "
         Greeting
+        NotificationSetting

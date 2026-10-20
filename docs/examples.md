@@ -28,11 +28,25 @@ component Greeting:
     p text="Hello, " + name
 ```
 
+Save as src/NotificationSetting.qb:
+
+```qubits
+component NotificationSetting:
+    enabled = false
+
+    input:
+        type="checkbox"
+        checked=enabled
+        on change:
+            enabled = event.checked
+```
+
 Save as src/App.qb:
 
 ```qubits
 import Counter from "./Counter.qb"
 import Greeting from "./Greeting.qb"
+import NotificationSetting from "./NotificationSetting.qb"
 
 component App:
     main class="page":
@@ -40,6 +54,7 @@ component App:
         Counter label="First: " class="compact"
         Counter label="Second: "
         Greeting
+        NotificationSetting
 ```
 
 Mount App from main.ts with the browser runtime. The starter includes Counter.css:

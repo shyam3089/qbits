@@ -11,13 +11,14 @@ blank/comment-only lines. The parser accepts only colon-headed blocks and an
 explicit expression AST nodes for literals, references, addition and `str(value)`. Runtime
 rendering uses `String(value)`; old brace syntax is rejected. See docs/syntax.md.
 
-`runtime/` owns DOM creation, local state, click/input listeners, property updates,
+`runtime/` owns DOM creation, local state, click/input/change listeners, property updates,
 and disposal. Its
 serialized component model is the boundary with generated code. The legacy
 `mountCounter` runtime export remains available. User names never
 become JS identifiers. Literal text uses JSON serialization and DOM text nodes.
 Safe-integer overflow throws without changing state. Controlled text inputs update
 their existing DOM value only when it differs, preserving focus and caret while typing.
+Checkbox state is synchronized through the DOM `checked` property.
 
 `tooling/` owns identity validation, CLI filesystem access, and Vite transformation.
 The Vite plugin compiles configured suffixes and appends identity metadata; the
