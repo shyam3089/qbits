@@ -1,6 +1,6 @@
 # Contributing
 
-Use Node.js 22+, `npm ci`, and `npx playwright install chromium`. Run `npm run dev`
+Use Node.js 22+, `npm ci`, and `npx playwright install firefox`. Run `npm run dev`
 for the counter. Before proposing changes run `npm run sync:check`, `npm run build`,
 `npm run test:docs`, `npm test`, `npm run test:rename`, and `npm run test:external`.
 The external test installs local tarballs in an OS temporary directory, edits source

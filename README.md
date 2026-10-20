@@ -15,7 +15,7 @@ Requires Node.js 22+ and npm. From the repository root:
 
 ```sh
 npm ci
-npx playwright install chromium
+npx playwright install firefox
 npm run sync:check
 npm run dev
 ```
@@ -32,7 +32,7 @@ npm run cli -- docs --agent
 ```
 
 Run build before tests: browser tests check both development and `dist/site`.
-Linux systems may need `npx playwright install --with-deps chromium`.
+Linux systems may need `npx playwright install --with-deps firefox`.
 The CLI produces an ES module: import its default mount function and call
 `mount(element, runtime)` using the exports from `runtime/index.ts` (or its compiled
 output). Optional third-argument props override defaults. The return value disposes

@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, preview } from 'vite';
-import { chromium } from 'playwright';
+import { firefox } from 'playwright';
 import { compile } from '../language/index.js';
 for (const production of [false, true]) test(`browser counter (${production ? 'production' : 'development'})`, async () => {
   const server = production ? await preview({preview:{host:'127.0.0.1',port:0}}) : await createServer({server:{host:'127.0.0.1',port:0}});
   if (!production) await (server as Awaited<ReturnType<typeof createServer>>).listen();
-  const browser = await chromium.launch({headless:true});
+  const browser = await firefox.launch({headless:true});
   try {
     const page = await browser.newPage(); const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
     await page.goto(server.resolvedUrls!.local[0]);

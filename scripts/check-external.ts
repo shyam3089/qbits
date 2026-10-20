@@ -4,7 +4,7 @@ import { resolve, join, relative, isAbsolute } from 'node:path';
 import { spawnSync, spawn, type ChildProcess } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
-import { chromium } from 'playwright';
+import { firefox } from 'playwright';
 import { identity } from '../tooling/config.js';
 const root = resolve('.');
 const npm = process.env.npm_execpath ?? resolve('.tools/package/bin/npm-cli.js');
@@ -45,7 +45,7 @@ async function pack(directory: string) {
   return join(temp,info.filename);
 }
 let server: ChildProcess | undefined;
-let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+let browser: Awaited<ReturnType<typeof firefox.launch>> | undefined;
 const browserLog:string[]=[];
 async function startServer(app: string, production: boolean) {
   let output = '';
@@ -117,7 +117,7 @@ try {
   const sourcePath = join(app,`src/Counter${identity.sourceExtension}`); const original = await readFile(sourcePath,'utf8');
   assert.ok(compiler.compile(original,sourcePath).code);
   console.log('Installed docs, init, local CLI and compiler checks passed.');
-  browser = await chromium.launch({headless:true}); const page = await browser.newPage();
+  browser = await firefox.launch({headless:true}); const page = await browser.newPage();
   const pageErrors: string[] = [];
   page.on('pageerror',error => pageErrors.push(error.message));
   page.on('console',message=>browserLog.push(message.text()));
