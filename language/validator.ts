@@ -1,6 +1,6 @@
 import type { Component, Expression, ElementNode, Span } from './ast.js';
 import { fail } from './diagnostics.js';
-export const elements = new Set(['main','section','div','h1','h2','h3','h4','h5','h6','p','span','label','button']);
+export const elements = new Set(['main','section','div','h1','h2','h3','h4','h5','h6','p','span','label','button','input']);
 export interface ValidationOptions { sourceExtension?:string; components?:Map<string,Component> }
 export function validate(ast:Component,source:string,filename='<input>',options:ValidationOptions={}):void {
   const error=(span:Span,message:string):never=>fail(source,filename,span,message);
@@ -26,19 +26,25 @@ export function validate(ast:Component,source:string,filename='<input>',options:
     return left;
   }
   const stateNames=new Set(ast.states.map(s=>s.name.value));
+  const stateTypes=new Map(ast.states.map(s=>[s.name.value,typeof s.initial.value]));
   function visit(node:ElementNode):void {
     const native=elements.has(node.tag.value);
     if(!native&&!imported.has(node.tag.value)) error(node.tag.span,`Unknown element or missing component import ${JSON.stringify(node.tag.value)}`);
     const child=options.components?.get(node.tag.value);
     if(!native&&(node.children.length||node.handler)) error(node.span,'Component instances do not accept children or click handlers');
+    if(!native&&node.indentedAttributes.length) error(node.attributes[node.indentedAttributes[0]].span,'Indented properties are supported on standard elements only');
     for(const [key,value] of Object.entries(node.attributes)) {
       const actual=type(value);
       if(key==='class') {
         if(value.kind!=='literal'||actual!=='string') error(value.span,'class requires a static string literal');
         if(child) assertSingleRoot(child,value.span);
       } else if(native) {
-        if(key!=='text') error(value.span,`Unsupported element attribute ${JSON.stringify(key)}`);
-        if(actual!=='string') error(value.span,'text requires a string expression; use str(value)');
+        if(key==='text') {
+          if(actual!=='string') error(value.span,'text requires a string expression; use str(value)');
+        } else if(key==='value') {
+          if(node.tag.value!=='input'||!node.indentedAttributes.includes(key)) error(value.span,'value is supported only as an indented input property');
+          if(actual!=='string') error(value.span,'input value requires a string expression');
+        } else error(value.span,`Unsupported element attribute ${JSON.stringify(key)}`);
       } else if(child) {
         const prop=child.props.find(p=>p.name.value===key);
         if(!prop) error(value.span,`Unknown prop ${JSON.stringify(key)} on ${node.tag.value}`);
@@ -46,10 +52,19 @@ export function validate(ast:Component,source:string,filename='<input>',options:
       }
     }
     if(node.handler) {
-      if(node.tag.value!=='button') error(node.handler.span,'Click handlers are supported on button elements only');
       const h=node.handler;
       if(ast.props.some(p=>p.name.value===h.target.value)) error(h.target.span,`Cannot assign read-only prop ${h.target.value}`);
-      for(const ref of [h.target,h.operand]) if(!stateNames.has(ref.value)) error(ref.span,`Unknown state ${JSON.stringify(ref.value)}`);
+      if(h.kind==='click') {
+        if(node.tag.value!=='button') error(h.span,'Click handlers are supported on button elements only');
+        for(const ref of [h.target,h.operand]) {
+          if(!stateNames.has(ref.value)) error(ref.span,`Unknown state ${JSON.stringify(ref.value)}`);
+          if(stateTypes.get(ref.value)!=='number') error(ref.span,'Click increments require numeric state');
+        }
+      } else {
+        if(node.tag.value!=='input') error(h.span,'Input handlers are supported on input elements only');
+        if(!stateNames.has(h.target.value)) error(h.target.span,`Unknown state ${JSON.stringify(h.target.value)}`);
+        if(stateTypes.get(h.target.value)!=='string') error(h.target.span,'Input handlers require string state');
+      }
     }
     node.children.forEach(visit);
   }

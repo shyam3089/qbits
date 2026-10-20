@@ -1,0 +1,9 @@
+component Greeting:
+    name = ""
+
+    input:
+        value=name
+        on input:
+            name = event.value
+
+    p text="Hello, " + name

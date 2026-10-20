@@ -20,6 +20,10 @@ for (const production of [false, true]) test(`browser counter (${production ? 'p
     assert.equal(await page.locator('.counter').nth(0).evaluate(e=>getComputedStyle(e).padding),'4px');
     assert.equal(await page.locator('.counter').nth(1).evaluate(e=>getComputedStyle(e).padding),'16px');
     assert.equal(await page.getByRole('button').nth(0).evaluate(e=>getComputedStyle(e).color),'rgb(20, 80, 160)');
+    const input=page.getByRole('textbox');await input.focus();await input.pressSequentially('Ada');
+    assert.equal(await input.inputValue(),'Ada');
+    assert.equal(await page.getByText('Hello, Ada',{exact:true}).textContent(),'Hello, Ada');
+    assert.deepEqual(await input.evaluate(element=>({focused:element.ownerDocument.activeElement===element,start:(element as HTMLInputElement).selectionStart,end:(element as HTMLInputElement).selectionEnd})),{focused:true,start:3,end:3});
     // Exercise the generated generic mount, hostile text and special identifiers,
     // typed defaults, and teardown rather than only the legacy runtime helper.
     const code=compile('component C(__proto__ = "safe", amount = 2, enabled = true):\n    count = 0\n    div class="base":\n        span text=__proto__ + str(amount) + str(enabled)\n        button text=str(count):\n            on click:\n                count = count + 1').code;

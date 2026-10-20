@@ -1,4 +1,4 @@
-# Phase 2A syntax
+# Phase 2B syntax
 
 One default component is declared per file. Imports precede the component.
 The Phase 1 counter remains valid:
@@ -14,7 +14,7 @@ component Counter:
 Props are named, read-only, and have literal defaults. Types are inferred as
 string, number, or boolean. Numeric literals currently remain nonnegative safe
 integers. Multiple props use commas inside the component header; commas do not
-terminate statements. Local numeric state declarations precede root elements.
+terminate statements. Local numeric or string state declarations precede root elements.
 
 ```text
 import "./Counter.css"
@@ -33,14 +33,37 @@ by its local import name. Named attributes supply props. Omitted props retain de
 Unknown props, incompatible value types, and assignments to props are errors.
 Component instances cannot accept children, slots, or event handlers in this phase.
 
-Supported standard elements: main, section, div, h1–h6, p, span, label, button.
+Phase 2B adds the approved text-input form:
+
+```text
+component Greeting:
+    name = ""
+
+    input:
+        value=name
+        on input:
+            name = event.value
+
+    p text="Hello, " + name
+```
+
+An indented property such as `value=name` has no colon and belongs to its
+parent element. Existing inline `text` and `class` properties remain supported;
+`value` is supported only as an indented property on `input`. The `on input`
+handler assigns the current text from the fixed `event.value` form to a string
+state. `event.value` is available only as that handler assignment source. Runtime
+updates preserve the input element, focus and caret.
+
+Supported standard elements: main, section, div, h1–h6, p, span, label, button, input.
 Elements may nest using colon blocks or end at a newline when they have no children
-or handler. Attributes are `text=expression` and static `class="space separated classes"`.
+or handler. Properties are `text=expression`, static `class="space separated classes"`,
+and the documented indented input `value=expression` form.
 `text` requires a string and creates a text node, never HTML. Expressions are literals,
 state/prop references, `str(reference)`, and addition of two strings or two numbers.
 Mixed additions require explicit `str`. Arbitrary calls and JavaScript are unsupported.
-Only buttons accept `on click` blocks, containing one numeric state increment:
-`target = operand + integer`. Each instance owns its state, bindings and listeners.
+Buttons accept `on click` blocks containing one numeric state increment:
+`target = operand + integer`. Inputs accept the documented `on input` assignment.
+Each instance owns its state, bindings and listeners.
 
 `class` on a component instance forwards to its single resolved root element,
 merging with existing classes and retaining defaults. Duplicate classes are removed.
@@ -71,6 +94,7 @@ lines/columns. NEWLINE covers the physical ending or is zero-width at EOF. INDEN
 covers leading spaces; DEDENT is zero-width at the next code token or EOF. Block
 spans end at their final statement, excluding trailing comments.
 
-Forms/binding, conditionals, loops, routing, SSR, plugins and LSP remain deferred.
+Checkbox events, boolean operations, other form controls and event forms,
+conditionals, loops, routing, SSR, plugins and LSP remain deferred.
 Development reloads on component/CSS edits and recovers from located errors.
 Reload resets state; state-preserving HMR and generated JavaScript source maps are deferred.

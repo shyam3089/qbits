@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { compile, CompileError } from '../language/index.js';
 import { compileFile } from '../tooling/modules.js';
 import { identity } from '../tooling/config.js';
-import { counterSource, appSource, counterCSS } from '../tooling/project.mjs';
+import { counterSource, greetingSource, appSource, counterCSS } from '../tooling/project.mjs';
 
 test('nested elements, typed defaults, imports and class spans',()=>{
   const source='import "./view.css"\ncomponent View(title = "Hello", amount = 2, enabled = true):\n    main class="one two":\n        section:\n            h1 text=title\n            p text=str(amount)\n            span text=str(enabled)\n            label text="safe <b>text</b>"';
@@ -34,6 +34,26 @@ test('props are read-only and expressions and class attributes are checked',()=>
   for(const [source,message] of invalid) assert.throws(()=>compile(source,'invalid.input'),(e:unknown)=>e instanceof CompileError&&e.diagnostic.line>0&&message.test(e.message));
 });
 
+test('text input binds string state through the approved event.value form',()=>{
+  const source='component Greeting:\n    name = ""\n\n    input:\n        value=name\n        on input:\n            name = event.value\n\n    p text="Hello, " + name';
+  const {ast,code}=compile(source);
+  assert.equal(ast.states[0].initial.value,'');
+  assert.deepEqual(ast.roots[0].indentedAttributes,['value']);
+  assert.equal(ast.roots[0].handler?.kind,'input');
+  assert.match(code,/\\"kind\\":\\"input\\"/);
+  assert.doesNotMatch(code,/innerHTML|eval\(/);
+  const invalid:[string,RegExp][]=[
+    ['component C:\n    name = ""\n    input value=name',/indented input property/],
+    ['component C:\n    name = ""\n    div:\n        value=name',/indented input property/],
+    ['component C:\n    input:\n        value=1',/string expression/],
+    ['component C:\n    name = ""\n    button:\n        on input:\n            name = event.value',/input elements only/],
+    ['component C:\n    name = ""\n    input:\n        value=name\n        on input:\n            name = event.other',/Expected value/],
+    ['component C:\n    enabled = true\n    input',/number or string literal/],
+    ['component C:\n    name = ""\n    button:\n        on click:\n            name = name + 1',/numeric state/],
+  ];
+  for(const [text,message] of invalid) assert.throws(()=>compile(text,'invalid.input'),(error:unknown)=>error instanceof CompileError&&message.test(error.message));
+});
+
 test('module graph validates props, missing files, suffixes, cycles and transitive root forwarding',async()=>{
   const temp=await mkdtemp(join(tmpdir(),'qubits-modules-'));const ext=identity.sourceExtension;
   const counter=join(temp,'Counter'+ext),app=join(temp,'App'+ext);
@@ -41,7 +61,7 @@ test('module graph validates props, missing files, suffixes, cycles and transiti
   const expect=(text:string,pattern:RegExp)=>assert.throws(()=>check(text),(e:unknown)=>e instanceof CompileError&&e.diagnostic.filename.startsWith(temp)&&pattern.test(e.message));
   const instance=(attributes:string)=>`import Counter from "./Counter${ext}"\ncomponent App:\n    Counter ${attributes}\n`;
   try {
-    await writeFile(join(temp,'Counter.css'),counterCSS);await writeFile(counter,counterSource());await writeFile(app,appSource(identity));
+    await writeFile(join(temp,'Counter.css'),counterCSS);await writeFile(counter,counterSource());await writeFile(join(temp,'Greeting'+ext),greetingSource());await writeFile(app,appSource(identity));
     assert.ok(compileFile(app).code);
     expect(instance('unknown="bad"'),/Unknown prop/);
     expect(instance('label=2'),/requires string/);

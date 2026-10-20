@@ -36,21 +36,32 @@ export function parse(source:string, filename='<input>'):Component {
   }
   const block=()=>{sym(':');take('NEWLINE');take('INDENT');};
   function element():ElementNode {
-    const tag=id();const attributes:Record<string,Expression>={}; const children:ElementNode[]=[];
-    while(peek().kind==='identifier') {
+    const tag=id();const attributes:Record<string,Expression>={};const indentedAttributes:string[]=[];const children:ElementNode[]=[];
+    function attribute(indented=false):void {
       const key=take('identifier');sym('=');
       if(Object.hasOwn(attributes,key.value)) fail(source,filename,key.span,`Duplicate attribute ${key.value}`);
-      Object.defineProperty(attributes,key.value,{value:expression(),enumerable:true});
+      const value=expression();Object.defineProperty(attributes,key.value,{value,enumerable:true});
+      if(indented) {indentedAttributes.push(key.value);take('NEWLINE');}
     }
-    const node:ElementNode={tag,attributes,children,span:{start:tag.span.start,end:tokens[cursor-1].span.end}};
+    while(peek().kind==='identifier'&&tokens[cursor+1]?.value==='=') attribute();
+    const node:ElementNode={tag,attributes,indentedAttributes,children,span:{start:tag.span.start,end:tokens[cursor-1].span.end}};
     if(at(':')) {
       block();
       while(peek().kind!=='DEDENT'&&peek().kind!=='eof') {
         if(at('on')) {
-          const start=word('on').span.start;word('click');block();const target=id();sym('=');const operand=id();sym('+');const value=take('number');
-          if(node.handler) fail(source,filename,target.span,'Duplicate click handler');
-          node.handler={target,operand,step:{value:Number(value.value),span:value.span},span:{start,end:value.span.end}};
-          take('NEWLINE');take('DEDENT');node.span.end=value.span.end;
+          const start=word('on').span.start;const event=take('identifier');block();const target=id();sym('=');
+          if(node.handler) fail(source,filename,target.span,'Duplicate event handler');
+          if(event.value==='click') {
+            const operand=id();sym('+');const value=take('number');
+            node.handler={kind:'click',target,operand,step:{value:Number(value.value),span:value.span},span:{start,end:value.span.end}};
+            take('NEWLINE');take('DEDENT');node.span.end=value.span.end;
+          } else if(event.value==='input') {
+            const sourceStart=word('event').span.start;sym('.');const sourceEnd=word('value').span.end;
+            node.handler={kind:'input',target,eventValue:{value:'event.value',span:{start:sourceStart,end:sourceEnd}},span:{start,end:sourceEnd}};
+            take('NEWLINE');take('DEDENT');node.span.end=sourceEnd;
+          } else fail(source,filename,event.span,`Unsupported event ${JSON.stringify(event.value)}`);
+        } else if(peek().kind==='identifier'&&tokens[cursor+1]?.value==='=') {
+          attribute(true);node.span.end=tokens[cursor-2].span.end;
         } else {const child=element();children.push(child);node.span.end=child.span.end;}
       }
       take('DEDENT');
@@ -73,7 +84,10 @@ export function parse(source:string, filename='<input>'):Component {
   while(peek().kind!=='DEDENT'&&peek().kind!=='eof') {
     if(tokens[cursor+1]?.value==='=') {
       if(roots.length) fail(source,filename,peek().span,'State declarations must precede elements');
-      const name=id();sym('=');const t=take('number');states.push({name,initial:{value:Number(t.value),span:t.span},span:{start:name.span.start,end:t.span.end}});take('NEWLINE');
+      const name=id();sym('=');const t=peek();
+      if(t.kind!=='number'&&t.kind!=='string') fail(source,filename,t.span,'State requires a number or string literal');
+      cursor++;const value=t.kind==='number'?Number(t.value):t.value;
+      states.push({name,initial:{value,span:t.span},span:{start:name.span.start,end:t.span.end}});take('NEWLINE');
     } else roots.push(element());
   }
   take('DEDENT');take('eof');
