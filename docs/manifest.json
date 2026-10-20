@@ -1,0 +1,21 @@
+{
+  "version": "0.1.0",
+  "identity": {
+    "displayName": "Qubits",
+    "languageId": "qubits",
+    "sourceExtension": ".qb",
+    "cliName": "qb",
+    "packageName": "qubits",
+    "createCommand": "qb",
+    "createPackageName": "create-qb"
+  },
+  "topics": [
+    "agent",
+    "syntax",
+    "examples",
+    "commands",
+    "security",
+    "limitations",
+    "package-managers"
+  ]
+}

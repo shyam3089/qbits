@@ -1,0 +1,9 @@
+{
+  "displayName": "Qubits",
+  "languageId": "qubits",
+  "sourceExtension": ".qb",
+  "cliName": "qb",
+  "packageName": "qubits",
+  "createCommand": "qb",
+  "createPackageName": "create-qb"
+}

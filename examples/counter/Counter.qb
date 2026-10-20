@@ -1,0 +1,5 @@
+component Counter:
+    count = 0
+    button text="Count: " + str(count):
+        on click:
+            count = count + 1

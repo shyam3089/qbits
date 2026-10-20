@@ -1,0 +1,53 @@
+{
+  "name": "qubits",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    "./compiler": "./dist/lib/language/index.js",
+    "./runtime": "./dist/lib/runtime/index.js",
+    "./vite": "./dist/lib/tooling/vite.js"
+  },
+  "files": [
+    "dist/lib",
+    "identity.json",
+    "docs",
+    "SECURITY.md",
+    "GOVERNANCE.md",
+    "CONTRIBUTING.md",
+    "README.md"
+  ],
+  "scripts": {
+    "sync": "node scripts/sync.mjs",
+    "sync:check": "node scripts/sync.mjs --check",
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc && vite build",
+    "test": "tsx --test tests/*.test.ts",
+    "test:rename": "tsx scripts/check-rename.ts",
+    "cli": "node dist/lib/tooling/cli.js",
+    "test:docs": "tsx scripts/check-docs.ts",
+    "test:external": "tsx scripts/check-external.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5",
+    "tsx": "^4.19.4",
+    "playwright": "^1.51.1"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "peerDependencies": {
+    "vite": "^6.3.5"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
+  },
+  "bin": {
+    "qb": "dist/lib/tooling/cli.js"
+  }
+}

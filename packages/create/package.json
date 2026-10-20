@@ -1,0 +1,19 @@
+{
+  "name": "create-qb",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "bin": {
+    "create-qb": "tooling/scaffold.mjs"
+  },
+  "files": [
+    "tooling",
+    "identity.json",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "frameworkViteRange": "^6.3.5"
+}
