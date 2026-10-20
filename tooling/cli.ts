@@ -2,9 +2,10 @@
 import { readFile, writeFile, readdir, lstat } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { compile, CompileError, type Diagnostic } from '../language/index.js';
+import { CompileError, type Diagnostic } from '../language/index.js';
 import { identity, isSource, metadata } from './config.js';
 import { initialize } from './onboarding.js';
+import { compileFile } from './modules.js';
 const args = process.argv.slice(2);
 const docsRoot = new URL('../../../docs/', import.meta.url);
 const usage = `Usage: ${identity.cliName} compile <input${identity.sourceExtension}> <output.js> | check [path ...] [--json] | init | docs [--agent|topic]`;
@@ -27,7 +28,7 @@ async function check(paths: string[]): Promise<void> {
     if (input.startsWith('-')) io(input,'Unknown check option'); else await visit(resolve(input),true);
   }
   for (const file of [...new Set(files)]) {
-    try { compile(await readFile(file,'utf8'),file); }
+    try { compileFile(file); }
     catch (error) { if (error instanceof CompileError) diagnostics.push({...error.diagnostic,kind:'syntax'}); else io(file,error instanceof Error ? error.message : String(error)); }
   }
   if (!files.length && !diagnostics.length) io(resolve(inputs[0] ?? 'src'),`No ${identity.sourceExtension} source files found`);
@@ -49,7 +50,7 @@ try {
     // Retain the earlier local two-argument compile invocation for compatibility.
     const [input,output,...extra] = command === 'compile' ? rest : args;
     if (!input || !output || extra.length || !isSource(input)) throw new Error(usage);
-    const result = compile(await readFile(input,'utf8'),input);
+    const result = compileFile(input);
     await writeFile(output,metadata() + result.code);
     console.log(`${identity.displayName}: compiled ${input} -> ${output}`);
   }

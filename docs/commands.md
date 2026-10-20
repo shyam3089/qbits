@@ -17,7 +17,8 @@ init preserves existing instructions and conflicting scripts. It does not instal
 modify Vite configuration, or attach agent integrations. It adds a managed guidance section
 and missing local CLI/check scripts. For pnpm use pnpm exec instead of npm exec, and pnpm run <script> <args> without the npm argument separator. init detects existing manager declarations/lockfiles, preserves them, and refuses conflicts or unsupported managers before writing. If script names conflict, retain your existing scripts
 and invoke the installed binary with npm exec -- qb instead.
-Check defaults to src; specify other directories/files as needed. JSON schemaVersion 1
+Check defaults to src; specify other directories/files as needed. It validates relative component imports, missing CSS, cycles, prop schemas and root-class forwarding without executing application source.
+Compile emits one ES module and retains source/CSS import specifiers; keep imports resolvable when relocating output. Use Vite build to bundle a complete production app. Mount accepts (element, runtime, optionalProps) and returns an instance disposer. JSON schemaVersion 1
 returns ok, filesChecked, diagnostics; each diagnostic has kind (syntax/io), filename,
 line, column, span and message. Lines/columns are one-based, spans zero-based exclusive.
 Exit 0 means valid; exit 1 means syntax, I/O, usage, or no-source errors.

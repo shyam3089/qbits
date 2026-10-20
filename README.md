@@ -1,10 +1,14 @@
 # qubits
 A declarative UI language and framework for building reactive web interfaces, designed for simplicity, extensibility, and excellent developer tooling.
-# Qubits UI — Phase 1
+# Qubits UI — Phase 2A
 
-A small UI language compiling to browser JavaScript. One component can declare
-numeric state without declaration keywords, convert it with `str(state)` in button text, and
-update the DOM on clicks. Blocks use spaces and colon headers; newlines end statements.
+A small UI language compiling to browser JavaScript. Components support nested
+standard elements, numeric local state, read-only typed props with literal defaults,
+relative component imports, static classes and ordinary external CSS imports.
+Use `text=expression` and `str(value)` for safe text content, and button click handlers
+to update state. Blocks use spaces and colon headers; newlines end statements.
+The example mounts two independent counters. Instance classes merge into a single
+root element's defaults; ambiguous forwarding is an error.
 See the [grammar](docs/syntax.md) and [identity reference](docs/identity.md).
 
 Requires Node.js 22+ and npm. From the repository root:
@@ -31,7 +35,10 @@ Run build before tests: browser tests check both development and `dist/site`.
 Linux systems may need `npx playwright install --with-deps chromium`.
 The CLI produces an ES module: import its default mount function and call
 `mount(element, runtime)` using the exports from `runtime/index.ts` (or its compiled
-output). The return value disposes the component. The Vite example demonstrates it.
+output). Optional third-argument props override defaults. The return value disposes
+the component, nested instances and listeners. Source component/CSS imports are
+retained for Vite; a CLI output module must retain resolvable import paths.
+Use the Vite build for a complete production application.
 Source edits automatically recompile and fully reload the browser. Located errors
 appear in Vite's overlay; fixing source reloads the app without restarting Vite.
 Component HMR/state preservation is not implemented; state resets on reload.
@@ -59,6 +66,7 @@ See [architecture](docs/architecture.md), [renaming](docs/renaming.md),
 Packages are private. An open-source license decision is pending; no license grant
 is implied. Nothing here publishes packages or deploys a website.
 
-Phase 1 omits plugins, LSP/editor extensions, routing, SSR, native targets, and a
-registry. Next milestone: founder-approved syntax refinement and incremental
-compiler diagnostics suitable for a future language server.
+Phase 2A defers forms/binding, conditionals, loops, routing, SSR, plugins,
+LSP/editor extensions, native targets, and a registry. Numeric literals remain
+nonnegative safe integers; only text/class attributes and button click increments
+are supported. Component children/slots and state-preserving HMR are deferred.

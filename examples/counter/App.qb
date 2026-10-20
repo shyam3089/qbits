@@ -1,0 +1,7 @@
+import Counter from "./Counter.qb"
+
+component App:
+    main class="page":
+        h1 text="Two independent counters"
+        Counter label="First: " class="compact"
+        Counter label="Second: "

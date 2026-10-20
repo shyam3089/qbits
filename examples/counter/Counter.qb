@@ -1,5 +1,8 @@
-component Counter:
+import "./Counter.css"
+
+component Counter(label = "Count: "):
     count = 0
-    button text="Count: " + str(count):
-        on click:
-            count = count + 1
+    div class="counter":
+        button class="counter-button" text=label + str(count):
+            on click:
+                count = count + 1

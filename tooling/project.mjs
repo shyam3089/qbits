@@ -14,8 +14,12 @@ export function mergeAgentInstructions(existing, block) {
   return existing.slice(0, start) + block.trimEnd() + existing.slice(end + endMarker.length);
 }
 export function counterSource() {
-  return 'component Counter:\n    count = 0\n    button text="Count: " + str(count):\n        on click:\n            count = count + 1\n';
+  return 'import "./Counter.css"\n\ncomponent Counter(label = "Count: "):\n    count = 0\n    div class="counter":\n        button class="counter-button" text=label + str(count):\n            on click:\n                count = count + 1\n';
 }
+export function appSource(identity) {
+  return `import Counter from "./Counter${identity.sourceExtension}"\n\ncomponent App:\n    main class="page":\n        h1 text="Two independent counters"\n        Counter label="First: " class="compact"\n        Counter label="Second: "\n`;
+}
+export const counterCSS = '.counter { padding: 16px; }\n.counter-button { color: rgb(20, 80, 160); }\n.counter.compact { padding: 4px; }\n';
 export function applicationFiles(identity, version, frameworkSpec, viteSpec, manager = 'npm') {
   const commands = managerCommands(manager);
   return {
@@ -23,7 +27,9 @@ export function applicationFiles(identity, version, frameworkSpec, viteSpec, man
     'vite.config.ts': `import { defineConfig } from 'vite';\nimport { languagePlugin } from '${identity.packageName}/vite';\nexport default defineConfig({ plugins: [languagePlugin()] });\n`,
     'index.html': '<!doctype html>\n<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Counter</title></head><body><main><h1>Reactive counter</h1><div id="app"></div></main><script type="module" src="/src/main.ts"></script></body></html>\n',
     [`src/Counter${identity.sourceExtension}`]: counterSource(),
-    'src/main.ts': `import mount from './Counter${identity.sourceExtension}';\nimport * as runtime from '${identity.packageName}/runtime';\nconst target = document.querySelector('#app');\nif (!target) throw new Error('Missing application target');\nmount(target, runtime);\n`,
+    [`src/App${identity.sourceExtension}`]: appSource(identity),
+    'src/Counter.css': counterCSS,
+    'src/main.ts': `import mount from './App${identity.sourceExtension}';\nimport * as runtime from '${identity.packageName}/runtime';\nconst target = document.querySelector('#app');\nif (!target) throw new Error('Missing application target');\nmount(target, runtime);\n`,
     '.gitignore': 'node_modules/\ndist/\n*.log\n.env\n.env.*\n!.env.example\n',
     'AGENTS.md': agentBlock(identity, version, manager),
     'README.md': `# ${identity.displayName} counter\n\nPackage manager: ${manager}.\n\n\`\`\`sh\n${commands.install}\n${commands.run('dev')}\n${commands.run('check')}\n${commands.run('build')}\n${commands.cli(identity.cliName,'docs --agent')}\n\`\`\`\n\nInstallation creates ${commands.lockfile}; commit it and keep only this manager's\nlockfile. package.json remains the dependency manifest. No lockfile is fabricated\nby the generator; the selected manager resolves and writes it during installation.\n${manager === 'pnpm' ? 'pnpm uses its existing shared content-addressable store and project-specific links.\nShared storage can save disk space; the app lockfile preserves project-specific resolutions.\nIf pnpm is unavailable, explicitly run npm exec --package=pnpm -- pnpm install\n(and prefix subsequent pnpm commands the same way), or select npm for a new app.\nThis opt-in tool download is not a global installation.' : 'npm uses normal project-local node_modules installation.'}\nVersions remain independent across apps; never use globally installed application\ndependencies. Storage, linking, integrity checks and cleanup belong to the package\nmanager. Existing projects keep their manager and lockfile; do not silently migrate.\nSource edits trigger full page reload; component HMR/state preservation is not supported.\nLicense selection for the framework is pending.\n`,

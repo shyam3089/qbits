@@ -7,7 +7,8 @@ export * from './generator.js';
 import { parse } from './parser.js';
 import { validate } from './validator.js';
 import { generate } from './generator.js';
-export function compile(source: string, filename = '<input>') {
-  const ast = parse(source, filename); validate(ast, source, filename);
+import type { ValidationOptions } from './validator.js';
+export function compile(source: string, filename = '<input>', options:ValidationOptions = {}) {
+  const ast = parse(source, filename); validate(ast, source, filename, options);
   return {ast, code: generate(ast)};
 }

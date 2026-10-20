@@ -1,36 +1,82 @@
-import type { Component, Node } from './ast.js';
+import type { Component, Node, Literal, Expression, ElementNode, Import, Prop, State } from './ast.js';
 import { tokenize, type Token } from './tokenizer.js';
 import { fail } from './diagnostics.js';
-export function parse(source: string, filename = '<input>'): Component {
-  const tokens = tokenize(source, filename); let cursor = 0;
-  function take(kind: Token['kind'], value?: string): Token {
-    const t = tokens[cursor];
-    if (t.kind !== kind || (value !== undefined && t.value !== value)) {
-      const expected = kind === 'INDENT' ? 'an indented block' : kind === 'DEDENT' ? 'dedent to the enclosing block' : value ?? kind;
-      const found = t.kind === 'eof' ? 'end of input' : ['NEWLINE', 'INDENT', 'DEDENT'].includes(t.kind) ? t.kind : JSON.stringify(t.value);
-      fail(source, filename, t.span, `Expected ${expected}, found ${found}`);
-    }
+export function parse(source:string, filename='<input>'):Component {
+  const tokens=tokenize(source,filename); let cursor=0;
+  const peek=()=>tokens[cursor];
+  const at=(value:string)=>peek().value===value;
+  function take(kind:Token['kind'],value?:string):Token {
+    const t=peek();
+    if(t.kind!==kind || (value!==undefined && t.value!==value)) fail(source,filename,t.span,`Expected ${kind==='INDENT'?'an indented block':value??kind}, found ${t.kind==='eof'?'end of input':JSON.stringify(t.value)||t.kind}`);
     cursor++; return t;
   }
-  const word = (value: string) => take('identifier', value);
-  const symbol = (value: string) => take('symbol', value);
-  const id = (): Node<string> => {
-    const t = take('identifier');
-    if (['component', 'button', 'text', 'str', 'on', 'click', 'var', 'let', 'const'].includes(t.value)) fail(source, filename, t.span, `Reserved word ${JSON.stringify(t.value)} cannot be an identifier`);
-    return {value: t.value, span: t.span};
-  };
-  const number = (): Node<number> => { const t = take('number'); return {value: Number(t.value), span: t.span}; };
-  const block = () => { symbol(':'); take('NEWLINE'); take('INDENT'); };
-  const start = word('component').span.start; const name = id(); block();
-  const stateName = id(); symbol('='); const initial = number(); const stateEnd = initial.span.end; take('NEWLINE');
-  const buttonStart = word('button').span.start; word('text'); symbol('='); const text = take('string'); symbol('+');
-  const conversionStart = word('str').span.start; symbol('('); const reference = id(); const conversionEnd = symbol(')').span.end; block();
-  const handlerStart = word('on').span.start; word('click'); block();
-  const target = id(); symbol('='); const operand = id(); symbol('+'); const step = number(); take('NEWLINE');
-  const end = step.span.end; take('DEDENT'); take('DEDENT'); take('DEDENT'); take('eof');
-  return {kind: 'Component', span: {start, end}, name,
-    state: {span: {start: stateName.span.start, end: stateEnd}, name: stateName, initial},
-    button: {span: {start: buttonStart, end}, prefix: {value: text.value, span: text.span},
-      conversion: {kind: 'StringConversion', span: {start: conversionStart, end: conversionEnd}, argument: reference},
-      handlerSpan: {start: handlerStart, end}, target, operand, step}};
+  const word=(v:string)=>take('identifier',v);
+  const sym=(v:string)=>take('symbol',v);
+  function id():Node<string> {
+    const t=take('identifier');
+    if(['component','import','from','text','class','str','on','click','var','let','const','true','false'].includes(t.value)) fail(source,filename,t.span,`Reserved word ${JSON.stringify(t.value)} cannot be an identifier`);
+    return {value:t.value,span:t.span};
+  }
+  function literal():Node<Literal> {
+    const t=peek();
+    if(t.kind==='string'||t.kind==='number') {cursor++; return {value:t.kind==='number'?Number(t.value):t.value,span:t.span};}
+    if(at('true')||at('false')) {cursor++;return {value:t.value==='true',span:t.span};}
+    fail(source,filename,t.span,'Expected a string, number or boolean literal');
+  }
+  function atom():Expression {
+    const t=peek();
+    if(t.kind==='string'||t.kind==='number'||at('true')||at('false')) { const l=literal(); return {kind:'literal',...l}; }
+    if(at('str')) {cursor++;sym('(');const name=id(); const argument:Expression={kind:'reference',name:name.value,span:name.span};const end=sym(')').span.end;return {kind:'str',argument,span:{start:t.span.start,end}};}
+    const name=id();return {kind:'reference',name:name.value,span:name.span};
+  }
+  function expression():Expression {
+    let left=atom();
+    while(at('+')) {cursor++;const right=atom();left={kind:'add',left,right,span:{start:left.span.start,end:right.span.end}};}
+    return left;
+  }
+  const block=()=>{sym(':');take('NEWLINE');take('INDENT');};
+  function element():ElementNode {
+    const tag=id();const attributes:Record<string,Expression>={}; const children:ElementNode[]=[];
+    while(peek().kind==='identifier') {
+      const key=take('identifier');sym('=');
+      if(Object.hasOwn(attributes,key.value)) fail(source,filename,key.span,`Duplicate attribute ${key.value}`);
+      Object.defineProperty(attributes,key.value,{value:expression(),enumerable:true});
+    }
+    const node:ElementNode={tag,attributes,children,span:{start:tag.span.start,end:tokens[cursor-1].span.end}};
+    if(at(':')) {
+      block();
+      while(peek().kind!=='DEDENT'&&peek().kind!=='eof') {
+        if(at('on')) {
+          const start=word('on').span.start;word('click');block();const target=id();sym('=');const operand=id();sym('+');const value=take('number');
+          if(node.handler) fail(source,filename,target.span,'Duplicate click handler');
+          node.handler={target,operand,step:{value:Number(value.value),span:value.span},span:{start,end:value.span.end}};
+          take('NEWLINE');take('DEDENT');node.span.end=value.span.end;
+        } else {const child=element();children.push(child);node.span.end=child.span.end;}
+      }
+      take('DEDENT');
+    } else take('NEWLINE');
+    return node;
+  }
+  const imports:Import[]=[];
+  while(at('import')) {
+    const start=word('import').span.start;let name:Node<string>|undefined;
+    if(peek().kind!=='string') {name=id();word('from');}
+    const path=take('string');take('NEWLINE');imports.push({name,path:{value:path.value,span:path.span},span:{start,end:path.span.end}});
+  }
+  const start=word('component').span.start;const name=id();const props:Prop[]=[];
+  if(at('(')) {
+    cursor++;
+    if(!at(')')) do {const name=id();sym('=');const initial=literal();props.push({name,initial,span:{start:name.span.start,end:initial.span.end}});if(!at(','))break;cursor++;}while(true);
+    sym(')');
+  }
+  block();const states:State[]=[];const roots:ElementNode[]=[];
+  while(peek().kind!=='DEDENT'&&peek().kind!=='eof') {
+    if(tokens[cursor+1]?.value==='=') {
+      if(roots.length) fail(source,filename,peek().span,'State declarations must precede elements');
+      const name=id();sym('=');const t=take('number');states.push({name,initial:{value:Number(t.value),span:t.span},span:{start:name.span.start,end:t.span.end}});take('NEWLINE');
+    } else roots.push(element());
+  }
+  take('DEDENT');take('eof');
+  if(!roots.length) fail(source,filename,name.span,'Component requires at least one root element');
+  return {kind:'Component',name,span:{start,end:roots.at(-1)!.span.end},imports,props,states,roots};
 }

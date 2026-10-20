@@ -15,13 +15,16 @@ function diagnostic(text: string) {
 test('AST spans, explicit conversion and deterministic output', () => {
   const {ast, code} = compile(source, 'counter.input');
   const slice = (span: {start:number; end:number}) => source.slice(span.start, span.end);
-  assert.equal(slice(ast.state.name.span), 'n');
-  assert.equal(slice(ast.state.span), 'n = 0');
-  assert.equal(slice(ast.button.conversion.span), 'str(n)');
-  assert.equal(slice(ast.button.conversion.argument.span), 'n');
-  assert.equal(slice(ast.button.handlerSpan), 'on click:\n            n = n + 1');
+  assert.equal(slice(ast.states[0].name.span), 'n');
+  assert.equal(slice(ast.states[0].span), 'n = 0');
+  const text = ast.roots[0].attributes.text;
+  assert.equal(text.kind,'add');
+  if(text.kind !== 'add' || text.right.kind !== 'str') throw new Error('Expected conversion');
+  assert.equal(slice(text.right.span), 'str(n)');
+  assert.equal(slice(text.right.argument.span), 'n');
+  assert.equal(slice(ast.roots[0].handler!.span), 'on click:\n            n = n + 1');
   assert.equal(ast.span.end, source.length);
-  assert.match(code, /"initial":0,"prefix":"Count: ","step":1/);
+  assert.match(code, /mountComponent/);
   assert.equal(code, compile(source).code);
 });
 test('NEWLINE/INDENT/DEDENT describe three nested blocks and EOF closes them', () => {
@@ -43,7 +46,8 @@ test('blank/comment-only lines do not change indentation, trailing comments work
   }
   assert.equal(compile(source.replaceAll('    ','  ')).code, compile(source).code);
   assert.equal(tokenize('# only a comment\n\n').length, 1);
-  assert.equal(compile(source.replace('Count: ', '# {literal}; ')).ast.button.prefix.value, '# {literal}; ');
+  const text=compile(source.replace('Count: ', '# {literal}; ')).ast.roots[0].attributes.text;
+  assert.equal(text.kind==='add'&&text.left.kind==='literal'&&text.left.value, '# {literal}; ');
 });
 test('invalid indentation has precise, useful diagnostics', () => {
   const cases: [string, number, number, RegExp][] = [
@@ -88,10 +92,10 @@ test('untrusted text remains literal and generated output mounts via explicit ru
   const prefix = '<img src=x onerror=alert(1)>${globalThis.payload=1}';
   const {code} = compile(source.replace('"Count: "', JSON.stringify(prefix)));
   const module = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
-  assert.equal(module.model.prefix, prefix); assert.equal((globalThis as any).payload, undefined);
+  assert.equal(module.model.roots[0].attributes.text.left.value, prefix); assert.equal((globalThis as any).payload, undefined);
   const target = {}; const dispose = () => {};
-  assert.equal(module.default(target, {mountCounter(actual: unknown, model: unknown) {
-    assert.equal(actual,target); assert.deepEqual(model,{initial:0,prefix,step:1}); return dispose;
+  assert.equal(module.default(target, {mountComponent(actual: unknown, model: unknown) {
+    assert.equal(actual,target); assert.deepEqual(model,module.model); return dispose;
   }}), dispose);
 });
 test('identity is validated and suffix handling is derived', () => {

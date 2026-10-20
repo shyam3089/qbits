@@ -14,10 +14,11 @@ try {
   const old = JSON.parse(await readFile(join(temp,'identity.json'),'utf8'));
   await writeFile(join(temp,'identity.json'), JSON.stringify({...old,displayName:'Orbit',languageId:'orbit',sourceExtension:'.orb',cliName:'ob',packageName:'orbit',createCommand:'ob',createPackageName:'create-ob'}));
   await rename(join(temp,`examples/counter/Counter${old.sourceExtension}`),join(temp,'examples/counter/Counter.orb'));
+  await rename(join(temp,`examples/counter/App${old.sourceExtension}`),join(temp,'examples/counter/App.orb'));
   run(['scripts/sync.mjs']); run(['scripts/sync.mjs','--check']);
   run(['node_modules/tsx/dist/cli.mjs','scripts/check-docs.ts']);
   run(['node_modules/typescript/bin/tsc']); run(['node_modules/vite/bin/vite.js','build']);
-  run(['node_modules/tsx/dist/cli.mjs','--test','tests/compiler.test.ts','tests/browser.test.ts']);
+  run(['node_modules/tsx/dist/cli.mjs','--test','tests/compiler.test.ts','tests/phase2.test.ts','tests/browser.test.ts']);
   run(['node_modules/tsx/dist/cli.mjs','--test','tests/tooling.test.ts']);
   run(['node_modules/tsx/dist/cli.mjs','tooling/cli.ts','examples/counter/Counter.orb','dist/counter.js']);
   const output = await readFile(join(temp,'dist/counter.js'),'utf8');

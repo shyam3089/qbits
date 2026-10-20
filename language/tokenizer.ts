@@ -47,7 +47,7 @@ export function tokenize(source: string, filename = '<input>'): Token[] {
         i++;
         try { value = JSON.parse(source.slice(tokenStart, i)); }
         catch { fail(source, filename, {start: tokenStart, end: i}, 'Invalid JSON string'); }
-      } else if (':=+()'.includes(source[i])) { kind = 'symbol'; value = source[i++]; }
+      } else if (':=+(),'.includes(source[i])) { kind = 'symbol'; value = source[i++]; }
       else fail(source, filename, {start: i, end: i + 1}, `Unexpected character ${JSON.stringify(source[i])}; use indentation and newlines, not braces or semicolons`);
       emit(kind, tokenStart, i, value);
     }

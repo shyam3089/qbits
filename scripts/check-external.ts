@@ -46,6 +46,7 @@ async function pack(directory: string) {
 }
 let server: ChildProcess | undefined;
 let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+const browserLog:string[]=[];
 async function startServer(app: string, production: boolean) {
   let output = '';
   const child = spawn(process.execPath,[join(app,'node_modules/vite/bin/vite.js'),...(production ? ['preview'] : []),'--host','127.0.0.1','--port','0'],{cwd:app,env,stdio:['ignore','pipe','pipe']});
@@ -119,32 +120,46 @@ try {
   browser = await chromium.launch({headless:true}); const page = await browser.newPage();
   const pageErrors: string[] = [];
   page.on('pageerror',error => pageErrors.push(error.message));
+  page.on('console',message=>browserLog.push(message.text()));
   const url = await startServer(app,false); const pid = server!.pid;
-  await page.goto(url); await page.getByRole('button',{name:'Count: 0',exact:true}).waitFor();
-  await page.getByRole('button').click(); assert.equal(await page.getByRole('button').textContent(),'Count: 1');
+  const first=page.getByRole('button').nth(0),second=page.getByRole('button').nth(1);
+  await page.goto(url); await page.getByRole('button',{name:'First: 0',exact:true}).waitFor();
+  await first.click(); assert.equal(await first.textContent(),'First: 1');assert.equal(await second.textContent(),'Second: 0');
+  assert.equal(await page.locator('.counter').nth(0).getAttribute('class'),'counter compact');
+  assert.equal(await first.evaluate(e=>getComputedStyle(e).color),'rgb(20, 80, 160)');
   // Editing source, not the config or process: this must refresh and reset local state.
-  await writeFile(sourcePath,original.replace('Count: ','Updated: '));
-  await page.getByRole('button',{name:'Updated: 0',exact:true}).waitFor(); assert.equal(server!.pid,pid);
+  await writeFile(sourcePath,original.replace('text=label','text="Updated: " + label'));
+  await page.getByRole('button',{name:'Updated: First: 0',exact:true}).waitFor(); assert.equal(server!.pid,pid);
+  assert.equal(await second.textContent(),'Updated: Second: 0');
   console.log('Source edit triggered browser reload and reset state.');
+  const cssPath=join(app,'src/Counter.css');const css=await readFile(cssPath,'utf8');
+  await writeFile(cssPath,css.replace('20, 80, 160','160, 40, 20'));
+  await page.waitForFunction(()=>getComputedStyle(document.querySelector('button')!).color==='rgb(160, 40, 20)');
+  await writeFile(cssPath,css);
   const broken = original.replace('str(count)','str(missing)');
   await writeFile(sourcePath,broken);
   await page.waitForFunction(() => {
     const text = document.querySelector('vite-error-overlay')?.shadowRoot?.textContent ?? '';
-    return text.includes('Unknown state') && /Counter[^\n]*:3:33/.test(text);
+    return text.includes('Unknown state') && /Counter[^\n]*:6:56/.test(text);
   });
   console.log('Located syntax error appeared in the browser overlay.');
   const failed = appRun(app,['exec','--offline','--',identity.cliName,'check','src','--json'],false);
-  assert.equal(failed.status,1); assert.equal(JSON.parse(failed.stdout).diagnostics[0].line,3);
-  await writeFile(sourcePath,original.replace('Count: ','Recovered: '));
-  await page.getByRole('button',{name:'Recovered: 0',exact:true}).waitFor();
+  assert.equal(failed.status,1); assert.equal(JSON.parse(failed.stdout).diagnostics[0].line,6);
+  await writeFile(sourcePath,original.replace('text=label','text="Recovered: " + label'));
+  await page.getByRole('button',{name:'Recovered: First: 0',exact:true}).waitFor();
   await page.waitForFunction(() => !document.querySelector('vite-error-overlay'));
-  await page.getByRole('button').click(); assert.equal(await page.getByRole('button').textContent(),'Recovered: 1');
+  await first.click(); assert.equal(await first.textContent(),'Recovered: First: 1');assert.equal(await second.textContent(),'Recovered: Second: 0');
   assert.equal(server!.pid,pid,'Error recovery must not restart the server');
   // Also recover when the very first request begins with a syntax error.
-  await writeFile(sourcePath,broken); await page.reload();
+  await writeFile(sourcePath,broken);
+  // A failed dependency can finish before Vite's websocket connects. Wait for
+  // the fresh page's connection before asking it to receive an edit notification.
+  const connected = page.waitForEvent('websocket').then(socket=>socket.waitForEvent('framereceived'));
+  await page.reload();
   await page.waitForFunction(() => !!document.querySelector('vite-error-overlay'));
+  await connected;
   await writeFile(sourcePath,original);
-  await page.getByRole('button',{name:'Count: 0',exact:true}).waitFor();
+  await page.getByRole('button',{name:'First: 0',exact:true}).waitFor();
   await page.goto('about:blank'); await stopServer();
   appRun(app,['run','check']); appRun(app,['run','build']);
   const assets = await readdir(join(app,'dist/assets'));
@@ -153,12 +168,14 @@ try {
     assert.doesNotMatch(js,/node:fs|node:path|readFile|process\.argv|agentBlock|compile\(source|createServer|initialize\(/,'Browser bundle must not contain Node-only tooling');
   }
   const production = await startServer(app,true); await page.goto(production);
-  await page.getByRole('button',{name:'Count: 0',exact:true}).waitFor(); await page.getByRole('button').click();
-  assert.equal(await page.getByRole('button').textContent(),'Count: 1');
+  await page.getByRole('button',{name:'First: 0',exact:true}).waitFor(); await first.click();
+  assert.equal(await first.textContent(),'First: 1');assert.equal(await second.textContent(),'Second: 0');
+  assert.equal(await first.evaluate(e=>getComputedStyle(e).color),'rgb(20, 80, 160)');
   assert.deepEqual(pageErrors,[],'Generated app must have no uncaught browser exceptions');
   console.log(`External ${manager} tarball app passed: ${identity.createPackageName}, local ${identity.cliName}, installed docs/init, full reload, located errors/recovery, production and browser bundle boundaries.`);
 } catch (error) {
   console.error('External integration failed:',error);
+  console.error('Browser console:',browserLog.slice(-20).join('\n'));
   for (const page of browser?.contexts().flatMap(context => context.pages()) ?? []) console.error('Browser failure detail:',await page.evaluate(() => document.querySelector('vite-error-overlay')?.shadowRoot?.textContent ?? document.body.innerText).catch(() => 'Page unavailable'));
   throw error;
 }

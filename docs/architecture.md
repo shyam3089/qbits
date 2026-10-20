@@ -8,11 +8,12 @@ No stage evaluates source or resolves application imports.
 
 The lexer emits NEWLINE/INDENT/DEDENT from space-indented logical lines, ignoring
 blank/comment-only lines. The parser accepts only colon-headed blocks and an
-explicit `StringConversion` AST node for `str(state)` in button text. Runtime
+explicit expression AST nodes for literals, references, addition and `str(value)`. Runtime
 rendering uses `String(value)`; old brace syntax is rejected. See docs/syntax.md.
 
 `runtime/` owns DOM creation, local state, click listeners, and disposal. Its
-`CounterModel` interface is the boundary with generated code. User names never
+serialized component model is the boundary with generated code. The legacy
+`mountCounter` runtime export remains available. User names never
 become JS identifiers. Literal text uses JSON serialization and DOM text nodes.
 Safe-integer overflow throws without changing state.
 
@@ -22,6 +23,17 @@ compiler itself knows neither branding nor suffixes. Vite invalidates source mod
 and explicitly triggers full reloads, including after failed transforms. Component
 HMR/state preservation is unsupported; component state resets on reload. Source maps are deferred, while
 compile diagnostics retain original locations. `examples/` contains only the demo.
+
+`tooling/modules.ts` validates the relative component graph without executing it:
+missing imports, configured extensions, cycles, prop types and transitive single-root
+class forwarding are checked before emission. The pure compiler accepts linked
+component metadata through validation options; standalone source compilation cannot
+check a dependency's prop schema without that metadata. Generation retains normal
+ES module imports so Vite owns module loading and CSS. Runtime mounts allocate
+independent state, safe text nodes, child mounts and teardown callbacks per instance.
+Props are read-only inputs; parent state changes refresh child text without remounting.
+CSS edits also trigger a full reload. Error frames refer to the failing dependency,
+even when discovered while transforming its importer.
 
 `npm run build` emits TypeScript modules/declarations to `dist/lib` and Vite browser
 assets to `dist/site`. Production compilation excludes tests and scripts. The package

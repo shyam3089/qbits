@@ -14,12 +14,13 @@ test('check emits stable structured diagnostics and nonzero failure status', asy
   try {
     const source = join(temp,`Counter${identity.sourceExtension}`);
     await writeFile(source,counterSource());
+    await writeFile(join(temp,'Counter.css'),'.counter {}');
     const valid = invoke(temp,['check',source,'--json']); assert.equal(valid.status,0); assert.equal(valid.stderr,'');
     assert.deepEqual(JSON.parse(valid.stdout),{schemaVersion:1,ok:true,filesChecked:1,diagnostics:[]});
     await writeFile(source,counterSource().replace('str(count)','str(missing)'));
     const invalid = invoke(temp,['check',source,'--json']); assert.equal(invalid.status,1);
     const result = JSON.parse(invalid.stdout); assert.equal(result.ok,false); assert.equal(result.diagnostics[0].kind,'syntax');
-    assert.equal(result.diagnostics[0].filename,source); assert.equal(result.diagnostics[0].line,3); assert.equal(result.diagnostics[0].column,33);
+    assert.equal(result.diagnostics[0].filename,source); assert.equal(result.diagnostics[0].line,6); assert.equal(result.diagnostics[0].column,56);
     for (const args of [['check','absent','--json'],['check','--bad','--json']]) {
       const error = invoke(temp,args); assert.equal(error.status,1); assert.equal(JSON.parse(error.stdout).diagnostics[0].kind,'io');
     }

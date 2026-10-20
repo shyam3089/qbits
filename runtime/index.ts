@@ -1,4 +1,59 @@
 export interface CounterModel { initial: number; prefix: string; step: number }
+type Value = string | number | boolean;
+type Expr = {kind:'literal';value:Value} | {kind:'reference';name:string} | {kind:'str';argument:Expr} | {kind:'add';left:Expr;right:Expr};
+interface View {tag:string;component:number;attributes:Record<string,Expr>;children:View[];handler?:{target:string;operand:string;step:number}}
+interface Model {props:Record<string,Value>;states:Record<string,number>;roots:View[]}
+type Dispose = (()=>void) & {refresh?:()=>void};
+type Mount = (target:Element,runtime:typeof import('./index.js'),props?:Record<string,Value>)=>Dispose;
+export function mountComponent(target:Element,model:Model,components:Mount[],supplied:Record<string,Value>={}):Dispose {
+  const props=Object.create(null) as Record<string,Value>;
+  const states=Object.assign(Object.create(null),model.states) as Record<string,number>;
+  for(const key of Object.keys(supplied)) if(key!=='class'&&!Object.hasOwn(model.props,key)) throw new TypeError(`Unknown prop ${key}`);
+  function readProps() {
+    for(const [key,initial] of Object.entries(model.props)) {
+      const value=Object.hasOwn(supplied,key)?supplied[key]:initial;
+      if(typeof value!==typeof initial) throw new TypeError(`Invalid prop ${key}`);
+      props[key]=value;
+    }
+  }
+  readProps();
+  if(supplied.class!==undefined&&(typeof supplied.class!=='string'||model.roots.length!==1)) throw new TypeError('class forwarding requires a string and a single root');
+  function evaluate(e:Expr):Value {
+    if(e.kind==='literal') return e.value;
+    if(e.kind==='reference') return Object.hasOwn(states,e.name)?states[e.name]:props[e.name];
+    if(e.kind==='str') return String(evaluate(e.argument));
+    const left=evaluate(e.left),right=evaluate(e.right);
+    return typeof left==='number'&&typeof right==='number'?left+right:String(left)+String(right);
+  }
+  const updates:(()=>void)[]=[];const cleanups:(()=>void)[]=[];let disposed=false;
+  const render=()=>{if(!disposed){readProps();updates.forEach(update=>update());}};
+  function create(view:View,parent:Element,forward=''):void {
+    if(view.component>=0) {
+      const input=Object.create(null) as Record<string,Value>;
+      for(const [key,value] of Object.entries(view.attributes)) Object.defineProperty(input,key,{enumerable:true,configurable:true,get:()=>evaluate(value)});
+      if(forward) Object.defineProperty(input,'class',{enumerable:true,configurable:true,get:()=>[view.attributes.class?evaluate(view.attributes.class):'',forward].filter(Boolean).join(' ')});
+      const dispose=components[view.component](parent,{mountComponent,mountCounter},input);
+      cleanups.push(dispose); updates.push(()=>dispose.refresh?.());return;
+    }
+    const element=parent.ownerDocument.createElement(view.tag);
+    const classes=[view.attributes.class?String(evaluate(view.attributes.class)):'',forward].join(' ').split(/\s+/).filter(Boolean);
+    if(classes.length) element.classList.add(...new Set(classes));
+    if(view.attributes.text) {
+      const text=parent.ownerDocument.createTextNode('');element.append(text);
+      updates.push(()=>{text.data=String(evaluate(view.attributes.text));});
+    }
+    if(view.handler) {
+      const h=view.handler;const click=()=>{const next=states[h.operand]+h.step;if(!Number.isSafeInteger(next))throw new RangeError('State exceeded safe integer range');states[h.target]=next;render();};
+      element.addEventListener('click',click);cleanups.push(()=>element.removeEventListener('click',click));
+    }
+    parent.append(element);cleanups.push(()=>element.remove());
+    view.children.forEach(child=>create(child,element));
+  }
+  const dispose:Dispose=()=>{if(disposed)return;disposed=true;for(const cleanup of cleanups.reverse())cleanup();};
+  try {model.roots.forEach(root=>create(root,target,String(supplied.class??'')));render();}
+  catch(error){dispose();throw error;}
+  dispose.refresh=render;return dispose;
+}
 export function mountCounter(target: Element, model: CounterModel): () => void {
   let value = model.initial;
   const button = target.ownerDocument.createElement('button');

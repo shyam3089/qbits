@@ -1,7 +1,61 @@
-import type { Component } from './ast.js';
+import type { Component, Expression, ElementNode, Span } from './ast.js';
 import { fail } from './diagnostics.js';
-export function validate(ast: Component, source: string, filename = '<input>'): void {
-  for (const node of [ast.button.conversion.argument, ast.button.target, ast.button.operand]) {
-    if (node.value !== ast.state.name.value) fail(source, filename, node.span, `Unknown state ${JSON.stringify(node.value)}; expected ${JSON.stringify(ast.state.name.value)}`);
+export const elements = new Set(['main','section','div','h1','h2','h3','h4','h5','h6','p','span','label','button']);
+export interface ValidationOptions { sourceExtension?:string; components?:Map<string,Component> }
+export function validate(ast:Component,source:string,filename='<input>',options:ValidationOptions={}):void {
+  const error=(span:Span,message:string):never=>fail(source,filename,span,message);
+  const names=new Map<string,string>();const imported=new Set<string>();
+  for(const entry of ast.imports) {
+    if(!/^\.\.?\//.test(entry.path.value)||/[?#\\]/.test(entry.path.value)) error(entry.path.span,'Imports must use plain relative module paths');
+    if(entry.name) {
+      if(options.sourceExtension&&!entry.path.value.endsWith(options.sourceExtension)) error(entry.path.span,`Component import must use configured extension ${options.sourceExtension}`);
+      if(imported.has(entry.name.value)||elements.has(entry.name.value)) error(entry.name.span,'Duplicate or reserved component import');
+      imported.add(entry.name.value);
+    } else if(!entry.path.value.endsWith('.css')) error(entry.path.span,'Side-effect imports support external .css files only');
   }
+  for(const declaration of [...ast.props,...ast.states]) {
+    if(names.has(declaration.name.value)||imported.has(declaration.name.value)||declaration.name.value==='class') error(declaration.name.span,'Duplicate or reserved declaration');
+    names.set(declaration.name.value,typeof declaration.initial.value);
+  }
+  function type(expression:Expression):string {
+    if(expression.kind==='literal') return typeof expression.value;
+    if(expression.kind==='reference') return names.get(expression.name)??error(expression.span,`Unknown state or prop ${JSON.stringify(expression.name)}`);
+    if(expression.kind==='str') {type(expression.argument);return 'string';}
+    const left=type(expression.left),right=type(expression.right);
+    if(left!==right||!['string','number'].includes(left)) error(expression.span,'Addition requires two strings or two numbers; use str(value) for explicit conversion');
+    return left;
+  }
+  const stateNames=new Set(ast.states.map(s=>s.name.value));
+  function visit(node:ElementNode):void {
+    const native=elements.has(node.tag.value);
+    if(!native&&!imported.has(node.tag.value)) error(node.tag.span,`Unknown element or missing component import ${JSON.stringify(node.tag.value)}`);
+    const child=options.components?.get(node.tag.value);
+    if(!native&&(node.children.length||node.handler)) error(node.span,'Component instances do not accept children or click handlers');
+    for(const [key,value] of Object.entries(node.attributes)) {
+      const actual=type(value);
+      if(key==='class') {
+        if(value.kind!=='literal'||actual!=='string') error(value.span,'class requires a static string literal');
+        if(child) assertSingleRoot(child,value.span);
+      } else if(native) {
+        if(key!=='text') error(value.span,`Unsupported element attribute ${JSON.stringify(key)}`);
+        if(actual!=='string') error(value.span,'text requires a string expression; use str(value)');
+      } else if(child) {
+        const prop=child.props.find(p=>p.name.value===key);
+        if(!prop) error(value.span,`Unknown prop ${JSON.stringify(key)} on ${node.tag.value}`);
+        if(actual!==typeof prop!.initial.value) error(value.span,`Prop ${key} requires ${typeof prop!.initial.value}, received ${actual}`);
+      }
+    }
+    if(node.handler) {
+      if(node.tag.value!=='button') error(node.handler.span,'Click handlers are supported on button elements only');
+      const h=node.handler;
+      if(ast.props.some(p=>p.name.value===h.target.value)) error(h.target.span,`Cannot assign read-only prop ${h.target.value}`);
+      for(const ref of [h.target,h.operand]) if(!stateNames.has(ref.value)) error(ref.span,`Unknown state ${JSON.stringify(ref.value)}`);
+    }
+    node.children.forEach(visit);
+  }
+  // Transitive forwarding through component roots is checked by Node graph tooling.
+  function assertSingleRoot(component:Component,span:Span):void {
+    if(component.roots.length!==1) error(span,'Ambiguous class forwarding: component must have a single root element');
+  }
+  ast.roots.forEach(visit);
 }

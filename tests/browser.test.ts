@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, preview } from 'vite';
 import { chromium } from 'playwright';
+import { compile } from '../language/index.js';
 for (const production of [false, true]) test(`browser counter (${production ? 'production' : 'development'})`, async () => {
   const server = production ? await preview({preview:{host:'127.0.0.1',port:0}}) : await createServer({server:{host:'127.0.0.1',port:0}});
   if (!production) await (server as Awaited<ReturnType<typeof createServer>>).listen();
@@ -9,9 +10,19 @@ for (const production of [false, true]) test(`browser counter (${production ? 'p
   try {
     const page = await browser.newPage(); const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
     await page.goto(server.resolvedUrls!.local[0]);
-    const button = page.getByRole('button'); await button.waitFor();
-    assert.equal(await button.textContent(), 'Count: 0');
-    await button.click(); await button.click(); assert.equal(await button.textContent(), 'Count: 2');
+    const button = page.getByRole('button',{name:'First: 0',exact:true}); await button.waitFor();
+    await button.click();
+    await page.getByRole('button',{name:'First: 1',exact:true}).click();
+    assert.equal(await page.getByRole('button').nth(0).textContent(), 'First: 2');
+    assert.equal(await page.getByRole('button').nth(1).textContent(), 'Second: 0');
+    assert.equal(await page.locator('.counter').nth(0).getAttribute('class'),'counter compact');
+    assert.equal(await page.locator('.counter').nth(1).getAttribute('class'),'counter');
+    assert.equal(await page.locator('.counter').nth(0).evaluate(e=>getComputedStyle(e).padding),'4px');
+    assert.equal(await page.locator('.counter').nth(1).evaluate(e=>getComputedStyle(e).padding),'16px');
+    assert.equal(await page.getByRole('button').nth(0).evaluate(e=>getComputedStyle(e).color),'rgb(20, 80, 160)');
+    // Exercise the generated generic mount, hostile text and special identifiers,
+    // typed defaults, and teardown rather than only the legacy runtime helper.
+    const code=compile('component C(__proto__ = "safe", amount = 2, enabled = true):\n    count = 0\n    div class="base":\n        span text=__proto__ + str(amount) + str(enabled)\n        button text=str(count):\n            on click:\n                count = count + 1').code;
     if (!production) {
       const disposed = await page.evaluate(async () => {
         const { mountCounter } = await import(/* @vite-ignore */ '/runtime/index.ts');
@@ -24,6 +35,21 @@ for (const production of [false, true]) test(`browser counter (${production ? 'p
         return result;
       });
       assert.equal(disposed, true);
+      const genericDisposed=await page.evaluate(async(code)=>{
+        const runtime=await import(/* @vite-ignore */ '/runtime/index.ts');
+        const blob=URL.createObjectURL(new Blob([code],{type:'text/javascript'}));
+        try {
+          const {default:mount}=await import(/* @vite-ignore */ blob);
+          const host=document.createElement('div');document.body.append(host);
+          const dispose=mount(host,runtime,JSON.parse('{"__proto__":"<img src=x>","amount":3,"enabled":false,"class":"extra base"}'));
+          const button=host.querySelector('button')!;button.click();
+          const safe=host.textContent==='<img src=x>3false1'&&!host.querySelector('img')&&host.firstElementChild!.className==='base extra';
+          dispose();dispose();button.click();const clean=host.childNodes.length===0&&button.textContent==='1';
+          const defaultsDispose=mount(host,runtime);const defaults=host.textContent==='safe2true0';defaultsDispose();host.remove();
+          return safe&&clean&&defaults;
+        } finally {URL.revokeObjectURL(blob);}
+      },code);
+      assert.equal(genericDisposed,true);
     }
     assert.deepEqual(errors, []);
   } finally { await browser.close(); await new Promise<void>((resolve, reject) => { if ('close' in server) Promise.resolve(server.close()).then(() => resolve(), reject); else server.httpServer.close(e => e ? reject(e) : resolve()); }); }
