@@ -77,9 +77,9 @@ is the static string literal `"checkbox"`. `checked` requires a boolean expressi
 and `on change` assigns `event.checked` to boolean state. `event.checked` is
 available only as that handler assignment source.
 
-The approved conditional form references boolean state and renders exactly one
-matching branch. `else` is optional and must immediately follow its `if` block at
-the same indentation:
+The approved conditional form evaluates a boolean condition and renders exactly
+one matching branch. `else` is optional and must immediately follow its `if` block
+at the same indentation:
 
 ```text
 component NotificationSetting:
@@ -97,9 +97,33 @@ component NotificationSetting:
         p text="Notifications disabled"
 ```
 
-When the state changes, the old branch is disposed and the new branch is mounted
-at the same DOM position. Conditions cannot use props, literals, comparisons or
-boolean operators.
+When state changes, the old branch is disposed and the new branch is mounted at
+the same DOM position. Conditions reference local state and may use the approved
+`==`, `!=`, `and`, and `not` operators with string, number, and boolean literals:
+
+```text
+component Greeting:
+    name = ""
+    enabled = true
+
+    if name == "":
+        p text="Enter your name"
+    else:
+        p text="Hello, " + name
+
+    if enabled and name != "":
+        button text="Continue"
+
+    if not enabled:
+        p text="Unavailable"
+```
+
+Precedence is `not`, then `==` and `!=`, then `and`. Equality operands must have
+the same inferred type. `not` and both operands of `and` must be boolean, and the
+complete condition must evaluate to boolean. Condition names must be local state;
+unknown names, props, and invalid operand types are located errors. `or`, ordering
+comparisons, parentheses, chained comparisons, and other expression forms are not
+supported in conditions.
 
 Supported standard elements: main, section, div, h1–h6, p, span, label, button, input.
 Elements may nest using colon blocks or end at a newline when they have no children
@@ -111,7 +135,7 @@ Mixed additions require explicit `str`. Arbitrary calls and JavaScript are unsup
 Buttons accept `on click` blocks containing either one numeric state increment,
 `target = operand + integer`, or one boolean literal assignment, `target = true`
 or `target = false`. The target of a boolean assignment must be boolean state.
-No other click assignment forms or boolean operators are supported. Text inputs accept the documented `on input`
+No other click assignment forms are supported. Text inputs accept the documented `on input`
 assignment; checkbox inputs accept the documented `on change` assignment.
 Each instance owns its state, bindings and listeners.
 
@@ -144,7 +168,7 @@ lines/columns. NEWLINE covers the physical ending or is zero-width at EOF. INDEN
 covers leading spaces; DEDENT is zero-width at the next code token or EOF. Block
 spans end at their final statement, excluding trailing comments.
 
-Comparisons, boolean operators, other conditional forms, event members, controls
-and event forms, loops, routing, SSR, plugins and LSP remain deferred.
+`or`, ordering comparisons, other condition and assignment forms, event members,
+controls and event forms, loops, routing, SSR, plugins and LSP remain deferred.
 Development reloads on component/CSS edits and recovers from located errors.
 Reload resets state; state-preserving HMR and generated JavaScript source maps are deferred.

@@ -4,7 +4,7 @@ A declarative UI language and framework for building reactive web interfaces, de
 
 A small UI language compiling to browser JavaScript. Components support nested
 standard elements, numeric/string/boolean local state, read-only typed props with literal defaults,
-relative component imports, static classes, text and checkbox input binding, boolean-state conditionals and ordinary external CSS imports.
+relative component imports, static classes, text and checkbox input binding, typed state conditions and ordinary external CSS imports.
 Use `text=expression` and `str(value)` for safe text content. Button click handlers
 support numeric increments and boolean literal assignment. Blocks use spaces and colon headers; newlines end statements.
 The example mounts two independent counters. Instance classes merge into a single
@@ -66,7 +66,7 @@ See [architecture](docs/architecture.md), [renaming](docs/renaming.md),
 Packages are private. An open-source license decision is pending; no license grant
 is implied. Nothing here publishes packages or deploys a website.
 
-Phase 2B defers comparisons, boolean operators, other conditional and assignment forms, event members and controls, loops, routing, SSR, plugins,
+Phase 2B conditions support `==`, `!=`, `and`, and `not`; `or`, ordering comparisons, other conditional and assignment forms, event members and controls, loops, routing, SSR, plugins,
 LSP/editor extensions, native targets, and a registry. Numeric literals remain
 nonnegative safe integers; only documented text/class/value/type/checked properties and click/input/change handlers
 are supported. Component children/slots and state-preserving HMR are deferred.

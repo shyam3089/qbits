@@ -1,4 +1,4 @@
-import type { Component, ElementNode, Expression, ViewNode } from './ast.js';
+import type { Component, ConditionExpression, ElementNode, Expression, ViewNode } from './ast.js';
 export function generate(ast:Component):string {
   // Strip source spans so whitespace/comments never change emitted behavior.
   function expression(e:Expression):unknown {
@@ -6,6 +6,12 @@ export function generate(ast:Component):string {
     if(e.kind==='reference')return {kind:e.kind,name:e.name};
     if(e.kind==='str')return {kind:e.kind,argument:expression(e.argument)};
     return {kind:e.kind,left:expression(e.left),right:expression(e.right)};
+  }
+  function condition(e:ConditionExpression):unknown {
+    if(e.kind==='literal')return {kind:e.kind,value:e.value};
+    if(e.kind==='reference')return {kind:e.kind,name:e.name};
+    if(e.kind==='not')return {kind:e.kind,argument:condition(e.argument)};
+    return {kind:e.kind,left:condition(e.left),right:condition(e.right)};
   }
   const componentImports=ast.imports.filter(i=>i.name);
   function handler(value:NonNullable<ElementNode['handler']>):unknown {
@@ -17,7 +23,7 @@ export function generate(ast:Component):string {
     return {tag:n.tag.value,component:componentImports.findIndex(i=>i.name!.value===n.tag.value),attributes:Object.fromEntries(Object.entries(n.attributes).map(([k,v])=>[k,expression(v)])),children:n.children.map(node),...(n.handler?{handler:handler(n.handler)}:{})};
   }
   function node(value:ViewNode):unknown {
-    if(value.kind==='conditional') return {kind:value.kind,condition:value.condition.value,consequent:value.consequent.map(node),alternate:value.alternate.map(node)};
+    if(value.kind==='conditional') return {kind:value.kind,condition:condition(value.condition),consequent:value.consequent.map(node),alternate:value.alternate.map(node)};
     return element(value);
   }
   const imports=ast.imports.map(i=>i.name?`import c${componentImports.indexOf(i)} from ${JSON.stringify(i.path.value)};`:`import ${JSON.stringify(i.path.value)};`).join('\n');

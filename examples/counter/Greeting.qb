@@ -1,9 +1,23 @@
 component Greeting:
     name = ""
+    enabled = true
 
     input:
         value=name
         on input:
             name = event.value
 
-    p text="Hello, " + name
+    if name == "":
+        p text="Enter your name"
+    else:
+        p text="Hello, " + name
+
+    if enabled and name != "":
+        button text="Continue"
+
+    if not enabled:
+        p text="Unavailable"
+
+    button text="Disable greeting":
+        on click:
+            enabled = false

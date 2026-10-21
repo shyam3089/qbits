@@ -80,22 +80,51 @@ test('checkbox input binds boolean state through the approved event.checked form
   for(const [text,message] of invalid) assert.throws(()=>compile(text,'invalid.input'),(error:unknown)=>error instanceof CompileError&&message.test(error.message),text);
 });
 
-test('conditionals require boolean state and support an optional else branch',()=>{
+test('conditionals support typed equality, and, not, and an optional else branch',()=>{
   const {ast,code}=compile(notificationSettingSource());const conditional=ast.roots[2];
   assert.equal(conditional.kind,'conditional');
   if(conditional.kind!=='conditional') assert.fail('Expected conditional root');
-  assert.equal(conditional.condition.value,'enabled');assert.equal(conditional.consequent.length,1);assert.equal(conditional.alternate.length,1);
+  assert.equal(conditional.condition.kind,'reference');if(conditional.condition.kind==='reference')assert.equal(conditional.condition.name,'enabled');assert.equal(conditional.consequent.length,1);assert.equal(conditional.alternate.length,1);
   assert.match(code,/\\"kind\\":\\"conditional\\"/);assert.doesNotMatch(code,/innerHTML|eval\(/);
+  const greeting=compile(greetingSource());const [empty,available,unavailable]=greeting.ast.roots.slice(1,4);
+  assert.equal(empty.kind,'conditional');if(empty.kind==='conditional')assert.equal(empty.condition.kind,'equal');
+  assert.equal(available.kind,'conditional');if(available.kind==='conditional'){assert.equal(available.condition.kind,'and');if(available.condition.kind==='and')assert.equal(available.condition.right.kind,'notEqual');}
+  assert.equal(unavailable.kind,'conditional');if(unavailable.kind==='conditional')assert.equal(unavailable.condition.kind,'not');
+  assert.match(greeting.code,/\\"kind\\":\\"notEqual\\"/);assert.doesNotMatch(greeting.code,/innerHTML|eval\(/);
+  const precedence=compile('component C:\n    enabled = true\n    if not enabled == false and enabled:\n        p text="yes"').ast.roots[0];
+  assert.equal(precedence.kind,'conditional');if(precedence.kind==='conditional'){
+    assert.equal(precedence.condition.kind,'and');
+    if(precedence.condition.kind==='and'){assert.equal(precedence.condition.left.kind,'equal');if(precedence.condition.left.kind==='equal')assert.equal(precedence.condition.left.left.kind,'not');}
+  }
   const withoutElse=compile('component C:\n    enabled = true\n    if enabled:\n        p text="yes"').ast.roots[0];
   assert.equal(withoutElse.kind,'conditional');if(withoutElse.kind==='conditional')assert.deepEqual(withoutElse.alternate,[]);
+  const nonBoolean='component C:\n    count = 0\n    if count:\n        p text="bad"';
+  assert.throws(()=>compile(nonBoolean,'condition.qb'),(error:unknown)=>{
+    if(!(error instanceof CompileError))return false;
+    assert.equal(error.diagnostic.line,3);assert.equal(error.diagnostic.column,8);assert.equal(nonBoolean.slice(error.diagnostic.span.start,error.diagnostic.span.end),'count');
+    return /must evaluate to boolean, received number/.test(error.message);
+  });
   const invalid:[string,RegExp][]=[
-    ['component C:\n    count = 0\n    if count:\n        p text="bad"',/requires boolean state, received number/],
-    ['component C(enabled = true):\n    if enabled:\n        p text="bad"',/must reference boolean state/],
-    ['component C:\n    if missing:\n        p text="bad"',/must reference boolean state/],
-    ['component C:\n    if true:\n        p text="bad"',/must reference boolean state/],
-    ['component C:\n    enabled = true\n    if enabled == true:\n        p text="bad"',/Expected :/],
+    ['component C(enabled = true):\n    if enabled:\n        p text="bad"',/must reference local state/],
+    ['component C:\n    if true:\n        p text="bad"',/must reference local state/],
+    ['component C:\n    name = ""\n    if not name:\n        p text="bad"',/not requires a boolean operand, received string/],
+    ['component C:\n    name = ""\n    enabled = true\n    if name and enabled:\n        p text="bad"',/and requires boolean operands, received string/],
+    ['component C:\n    enabled = true\n    if enabled or enabled:\n        p text="bad"',/Expected :/],
+    ['component C:\n    count = 1\n    if count < 2:\n        p text="bad"',/Unexpected character/],
   ];
   for(const [text,message] of invalid) assert.throws(()=>compile(text,'invalid.input'),(error:unknown)=>error instanceof CompileError&&message.test(error.message),text);
+  const unknown='component C:\n    if missing == "":\n        p text="bad"';
+  assert.throws(()=>compile(unknown,'unknown.qb'),(error:unknown)=>{
+    if(!(error instanceof CompileError))return false;
+    assert.equal(error.diagnostic.line,2);assert.equal(error.diagnostic.column,8);assert.equal(unknown.slice(error.diagnostic.span.start,error.diagnostic.span.end),'missing');
+    return /Unknown name "missing" in condition/.test(error.message);
+  });
+  const mismatch='component C:\n    name = ""\n    if name == 1:\n        p text="bad"';
+  assert.throws(()=>compile(mismatch,'mismatch.qb'),(error:unknown)=>{
+    if(!(error instanceof CompileError))return false;
+    assert.equal(error.diagnostic.line,3);assert.equal(error.diagnostic.column,8);assert.equal(mismatch.slice(error.diagnostic.span.start,error.diagnostic.span.end),'name == 1');
+    return /same type, received string and number/.test(error.message);
+  });
   const misplaced='component C:\n    p text="before"\n    else:\n        p text="bad"';
   assert.throws(()=>compile(misplaced,'misplaced.qb'),(error:unknown)=>{
     if(!(error instanceof CompileError))return false;
@@ -122,6 +151,10 @@ test('module graph validates props, missing files, suffixes, cycles and transiti
     assert.ok(check(instance('amount=2 enabled=true')).code);
     await writeFile(counter,'component Counter:\n    div\n    span');
     expect(instance('class="compact"'),/Ambiguous class forwarding/);
+    await writeFile(counter,'component Counter:\n    enabled = true\n    if enabled:\n        div\n    else:\n        span');
+    assert.ok(check(instance('class="compact"')).code);
+    await writeFile(counter,'component Counter:\n    enabled = true\n    if enabled:\n        div');
+    expect(instance('class="compact"'),/single resolved root/);
     // Single component root still forwards ambiguously if its child has two roots.
     await writeFile(join(temp,'Pair'+ext),'component Pair:\n    div\n    span');
     await writeFile(counter,`import Pair from "./Pair${ext}"\ncomponent Counter:\n    Pair`);

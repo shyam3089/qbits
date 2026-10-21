@@ -1,4 +1,4 @@
-import type { Component, Expression, ElementNode, ViewNode, Span } from './ast.js';
+import type { Component, ConditionExpression, Expression, ElementNode, ViewNode, Span } from './ast.js';
 import { fail } from './diagnostics.js';
 export const elements = new Set(['main','section','div','h1','h2','h3','h4','h5','h6','p','span','label','button','input']);
 export interface ValidationOptions { sourceExtension?:string; components?:Map<string,Component> }
@@ -27,11 +27,38 @@ export function validate(ast:Component,source:string,filename='<input>',options:
   }
   const stateNames=new Set(ast.states.map(s=>s.name.value));
   const stateTypes=new Map(ast.states.map(s=>[s.name.value,typeof s.initial.value]));
+  function conditionType(expression:ConditionExpression):string {
+    if(expression.kind==='literal') return typeof expression.value;
+    if(expression.kind==='reference') {
+      if(!names.has(expression.name)) error(expression.span,`Unknown name ${JSON.stringify(expression.name)} in condition`);
+      if(!stateNames.has(expression.name)) error(expression.span,`Condition names must reference local state ${JSON.stringify(expression.name)}`);
+      return stateTypes.get(expression.name)!;
+    }
+    if(expression.kind==='not') {
+      const actual=conditionType(expression.argument);
+      if(actual!=='boolean') error(expression.argument.span,`not requires a boolean operand, received ${actual}`);
+      return 'boolean';
+    }
+    const left=conditionType(expression.left),right=conditionType(expression.right);
+    if(expression.kind==='and') {
+      if(left!=='boolean') error(expression.left.span,`and requires boolean operands, received ${left}`);
+      if(right!=='boolean') error(expression.right.span,`and requires boolean operands, received ${right}`);
+      return 'boolean';
+    }
+    if(left!==right) error(expression.span,`Comparison requires operands of the same type, received ${left} and ${right}`);
+    return 'boolean';
+  }
+  function referencesState(expression:ConditionExpression):boolean {
+    if(expression.kind==='reference') return stateNames.has(expression.name);
+    if(expression.kind==='literal') return false;
+    if(expression.kind==='not') return referencesState(expression.argument);
+    return referencesState(expression.left)||referencesState(expression.right);
+  }
   function visit(view:ViewNode):void {
     if(view.kind==='conditional') {
-      const actual=stateTypes.get(view.condition.value);
-      if(!stateNames.has(view.condition.value)) error(view.condition.span,`Conditional condition must reference boolean state ${JSON.stringify(view.condition.value)}`);
-      if(actual!=='boolean') error(view.condition.span,`Conditional condition requires boolean state, received ${actual}`);
+      const actual=conditionType(view.condition);
+      if(!referencesState(view.condition)) error(view.condition.span,'Conditional condition must reference local state');
+      if(actual!=='boolean') error(view.condition.span,`Conditional condition must evaluate to boolean, received ${actual}`);
       view.consequent.forEach(visit);view.alternate.forEach(visit);return;
     }
     visitElement(view);

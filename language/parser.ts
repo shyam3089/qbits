@@ -1,4 +1,4 @@
-import type { Component, Node, Literal, Expression, ElementNode, ConditionalNode, ViewNode, Import, Prop, State } from './ast.js';
+import type { Component, Node, Literal, Expression, ConditionExpression, ElementNode, ConditionalNode, ViewNode, Import, Prop, State } from './ast.js';
 import { tokenize, type Token } from './tokenizer.js';
 import { fail } from './diagnostics.js';
 export function parse(source:string, filename='<input>'):Component {
@@ -14,7 +14,7 @@ export function parse(source:string, filename='<input>'):Component {
   const sym=(v:string)=>take('symbol',v);
   function id():Node<string> {
     const t=take('identifier');
-    if(['component','import','from','text','class','str','on','click','if','else','var','let','const','true','false'].includes(t.value)) fail(source,filename,t.span,`Reserved word ${JSON.stringify(t.value)} cannot be an identifier`);
+    if(['component','import','from','text','class','str','on','click','if','else','and','not','var','let','const','true','false'].includes(t.value)) fail(source,filename,t.span,`Reserved word ${JSON.stringify(t.value)} cannot be an identifier`);
     return {value:t.value,span:t.span};
   }
   function literal():Node<Literal> {
@@ -32,6 +32,27 @@ export function parse(source:string, filename='<input>'):Component {
   function expression():Expression {
     let left=atom();
     while(at('+')) {cursor++;const right=atom();left={kind:'add',left,right,span:{start:left.span.start,end:right.span.end}};}
+    return left;
+  }
+  function conditionAtom():ConditionExpression {
+    const t=peek();
+    if(t.kind==='string'||t.kind==='number'||(t.kind==='identifier'&&(at('true')||at('false')))) {const value=literal();return {kind:'literal',...value};}
+    if(t.kind==='identifier') {const name=id();return {kind:'reference',name:name.value,span:name.span};}
+    fail(source,filename,t.span,'Expected a state name or literal in condition');
+  }
+  function conditionNot():ConditionExpression {
+    if(peek().kind==='identifier'&&at('not')) {const start=word('not').span.start;const argument=conditionNot();return {kind:'not',argument,span:{start,end:argument.span.end}};}
+    return conditionAtom();
+  }
+  function conditionComparison():ConditionExpression {
+    const left=conditionNot();let kind:'equal'|'notEqual'|undefined;
+    if(at('=')&&tokens[cursor+1]?.value==='=') {sym('=');sym('=');kind='equal';}
+    else if(at('!')&&tokens[cursor+1]?.value==='=') {sym('!');sym('=');kind='notEqual';}
+    if(!kind)return left;const right=conditionNot();return {kind,left,right,span:{start:left.span.start,end:right.span.end}};
+  }
+  function condition():ConditionExpression {
+    let left=conditionComparison();
+    while(peek().kind==='identifier'&&at('and')) {word('and');const right=conditionComparison();left={kind:'and',left,right,span:{start:left.span.start,end:right.span.end}};}
     return left;
   }
   const block=()=>{sym(':');take('NEWLINE');take('INDENT');};
@@ -80,14 +101,14 @@ export function parse(source:string, filename='<input>'):Component {
     return node;
   }
   function conditional():ConditionalNode {
-    const start=word('if').span.start;const token=take('identifier');const condition:Node<string>={value:token.value,span:token.span};block();const consequent:ViewNode[]=[];
+    const start=word('if').span.start;const test=condition();block();const consequent:ViewNode[]=[];
     while(peek().kind!=='DEDENT'&&peek().kind!=='eof') consequent.push(view());
     take('DEDENT');let end=consequent.at(-1)!.span.end;const alternate:ViewNode[]=[];
     if(at('else')) {
       word('else');block();while(peek().kind!=='DEDENT'&&peek().kind!=='eof') alternate.push(view());
       take('DEDENT');end=alternate.at(-1)!.span.end;
     }
-    return {kind:'conditional',condition,consequent,alternate,span:{start,end}};
+    return {kind:'conditional',condition:test,consequent,alternate,span:{start,end}};
   }
   function view():ViewNode {
     if(at('else')) fail(source,filename,peek().span,'else must immediately follow an if block at the same indentation');

@@ -36,6 +36,8 @@ component metadata through validation options; standalone source compilation can
 check a dependency's prop schema without that metadata. Generation retains normal
 ES module imports so Vite owns module loading and CSS. Runtime mounts allocate
 independent state, safe text nodes, child mounts and teardown callbacks per instance.
+Conditions are compiled to a typed data tree and interpreted by the runtime; source
+text is never evaluated as JavaScript. Branch content uses text nodes, not HTML insertion.
 Props are read-only inputs; parent state changes refresh child text without remounting.
 CSS edits also trigger a full reload. Error frames refer to the failing dependency,
 even when discovered while transforming its importer.

@@ -1,9 +1,10 @@
 export interface CounterModel { initial: number; prefix: string; step: number }
 type Value = string | number | boolean;
 type Expr = {kind:'literal';value:Value} | {kind:'reference';name:string} | {kind:'str';argument:Expr} | {kind:'add';left:Expr;right:Expr};
+type ConditionExpr = {kind:'literal';value:Value} | {kind:'reference';name:string} | {kind:'not';argument:ConditionExpr} | {kind:'equal'|'notEqual'|'and';left:ConditionExpr;right:ConditionExpr};
 type Handler = {kind?:'click';target:string;operand:string;step:number} | {kind:'clickBoolean';target:string;value:boolean} | {kind:'input';target:string} | {kind:'change';target:string};
 interface ElementView {kind?:undefined;tag:string;component:number;attributes:Record<string,Expr>;children:View[];handler?:Handler}
-interface ConditionalView {kind:'conditional';condition:string;consequent:View[];alternate:View[]}
+interface ConditionalView {kind:'conditional';condition:ConditionExpr;consequent:View[];alternate:View[]}
 type View = ElementView | ConditionalView;
 interface Model {props:Record<string,Value>;states:Record<string,Value>;roots:View[]}
 type Dispose = (()=>void) & {refresh?:()=>void};
@@ -28,6 +29,29 @@ export function mountComponent(target:Element,model:Model,components:Mount[],sup
     const left=evaluate(e.left),right=evaluate(e.right);
     return typeof left==='number'&&typeof right==='number'?left+right:String(left)+String(right);
   }
+  function evaluateCondition(e:ConditionExpr):Value {
+    if(e.kind==='literal') return e.value;
+    if(e.kind==='reference') {
+      if(!Object.hasOwn(states,e.name)) throw new TypeError(`Unknown condition state ${e.name}`);
+      return states[e.name];
+    }
+    if(e.kind==='not') {
+      const value=evaluateCondition(e.argument);
+      if(typeof value!=='boolean') throw new TypeError('not requires a boolean operand');
+      return !value;
+    }
+    const left=evaluateCondition(e.left);
+    if(e.kind==='and') {
+      if(typeof left!=='boolean') throw new TypeError('and requires boolean operands');
+      if(!left) return false;
+      const right=evaluateCondition(e.right);
+      if(typeof right!=='boolean') throw new TypeError('and requires boolean operands');
+      return right;
+    }
+    const right=evaluateCondition(e.right);
+    if(typeof left!==typeof right) throw new TypeError('Comparison requires operands of the same type');
+    return e.kind==='equal'?left===right:left!==right;
+  }
   const updates:(()=>void)[]=[];const cleanups:(()=>void)[]=[];let disposed=false;
   const render=()=>{if(!disposed){readProps();updates.forEach(update=>update());}};
   function create(view:View,parent:Element|DocumentFragment,forward='',scopeUpdates=updates,scopeCleanups=cleanups):void {
@@ -36,7 +60,7 @@ export function mountComponent(target:Element,model:Model,components:Mount[],sup
       let selected:boolean|undefined;let branchUpdates:(()=>void)[]=[];let branchCleanups:(()=>void)[]=[];
       const clear=()=>{for(const cleanup of branchCleanups.reverse())cleanup();branchUpdates=[];branchCleanups=[];};
       const update=()=>{
-        const condition=states[view.condition];if(typeof condition!=='boolean')throw new TypeError('Conditional requires boolean state');
+        const condition=evaluateCondition(view.condition);if(typeof condition!=='boolean')throw new TypeError('Conditional condition must evaluate to boolean');
         if(selected!==condition) {
           clear();selected=condition;const fragment=parent.ownerDocument.createDocumentFragment();
           for(const child of condition?view.consequent:view.alternate) create(child,fragment,forward,branchUpdates,branchCleanups);

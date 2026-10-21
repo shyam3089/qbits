@@ -17,7 +17,7 @@ export function counterSource() {
   return 'import "./Counter.css"\n\ncomponent Counter(label = "Count: "):\n    count = 0\n    div class="counter":\n        button class="counter-button" text=label + str(count):\n            on click:\n                count = count + 1\n';
 }
 export function greetingSource() {
-  return 'component Greeting:\n    name = ""\n\n    input:\n        value=name\n        on input:\n            name = event.value\n\n    p text="Hello, " + name\n';
+  return 'component Greeting:\n    name = ""\n    enabled = true\n\n    input:\n        value=name\n        on input:\n            name = event.value\n\n    if name == "":\n        p text="Enter your name"\n    else:\n        p text="Hello, " + name\n\n    if enabled and name != "":\n        button text="Continue"\n\n    if not enabled:\n        p text="Unavailable"\n\n    button text="Disable greeting":\n        on click:\n            enabled = false\n';
 }
 export function notificationSettingSource() {
   return 'component NotificationSetting:\n    enabled = false\n\n    button text="Disable notifications":\n        on click:\n            enabled = false\n\n    input:\n        type="checkbox"\n        checked=enabled\n        on change:\n            enabled = event.checked\n\n    if enabled:\n        p text="Notifications enabled"\n    else:\n        p text="Notifications disabled"\n';

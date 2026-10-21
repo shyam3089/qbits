@@ -20,10 +20,13 @@ for (const production of [false, true]) test(`browser counter (${production ? 'p
     assert.equal(await page.locator('.counter').nth(0).evaluate(e=>getComputedStyle(e).padding),'4px');
     assert.equal(await page.locator('.counter').nth(1).evaluate(e=>getComputedStyle(e).padding),'16px');
     assert.equal(await page.getByRole('button').nth(0).evaluate(e=>getComputedStyle(e).color),'rgb(20, 80, 160)');
-    const input=page.getByRole('textbox');await input.focus();await input.pressSequentially('Ada');
+    const input=page.getByRole('textbox');await page.getByText('Enter your name',{exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'Continue',exact:true}).count(),0);assert.equal(await page.getByText('Unavailable',{exact:true}).count(),0);await input.focus();await input.pressSequentially('Ada');
     assert.equal(await input.inputValue(),'Ada');
+    assert.equal(await page.getByText('Enter your name',{exact:true}).count(),0);
     assert.equal(await page.getByText('Hello, Ada',{exact:true}).textContent(),'Hello, Ada');
+    await page.getByRole('button',{name:'Continue',exact:true}).waitFor();
     assert.deepEqual(await input.evaluate(element=>({focused:element.ownerDocument.activeElement===element,start:(element as HTMLInputElement).selectionStart,end:(element as HTMLInputElement).selectionEnd})),{focused:true,start:3,end:3});
+    await page.getByRole('button',{name:'Disable greeting',exact:true}).click();await page.getByText('Unavailable',{exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'Continue',exact:true}).count(),0);assert.equal(await input.inputValue(),'Ada');assert.equal(await page.getByText('Hello, Ada',{exact:true}).count(),1);
     const checkbox=page.getByRole('checkbox');assert.equal(await checkbox.isChecked(),false);await page.getByText('Notifications disabled',{exact:true}).waitFor();
     await checkbox.click();assert.equal(await checkbox.isChecked(),true);assert.equal(await checkbox.evaluate(element=>element.ownerDocument.activeElement===element),true);await page.getByText('Notifications enabled',{exact:true}).waitFor();assert.equal(await page.getByText('Notifications disabled',{exact:true}).count(),0);
     await page.getByRole('button',{name:'Disable notifications',exact:true}).click();assert.equal(await checkbox.isChecked(),false);await page.getByText('Notifications disabled',{exact:true}).waitFor();assert.equal(await page.getByText('Notifications enabled',{exact:true}).count(),0);

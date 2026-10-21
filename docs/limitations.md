@@ -2,10 +2,10 @@
 # Limitations
 
 Phase 2B supports nested standard elements, numeric/string/boolean local states, button click increments and boolean-literal assignments,
-text and checkbox input binding, boolean-state conditionals, read-only string/number/boolean props with literal defaults, static classes, relative
+text and checkbox input binding, and state-based conditions using `==`, `!=`, `and`, and `not`; read-only string/number/boolean props with literal defaults, static classes, relative
 component imports and ordinary external CSS. One default component per file.
 class forwarding requires a single resolved root across conditional branches; no wrappers are created.
-Comparisons, boolean operators, other conditional/assignment forms, event members and controls, loops, arbitrary calls, routing, SSR, plugins,
+`or`, ordering comparisons, other conditional/assignment forms, event members and controls, loops, arbitrary calls, routing, SSR, plugins,
 LSP/editor extensions, native targets and a registry remain unsupported. Numeric literals are nonnegative safe integers.
 Only documented text/class/value/type/checked properties and click/input/change handlers are supported; component children/slots are deferred.
 Development uses automatic full reload after source edits, including error recovery.
