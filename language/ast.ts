@@ -7,6 +7,7 @@ export interface Prop { name:Node<string>; initial:Node<Literal>; span:Span }
 export interface State { name:Node<string>; initial:Node<Literal>; span:Span }
 export type Handler =
   | {kind:'click'; target:Node<string>; operand:Node<string>; step:Node<number>; span:Span}
+  | {kind:'clickBoolean'; target:Node<string>; value:Node<boolean>; span:Span}
   | {kind:'input'; target:Node<string>; eventValue:Node<'event.value'>; span:Span}
   | {kind:'change'; target:Node<string>; eventChecked:Node<'event.checked'>; span:Span};
 export interface ElementNode { tag:Node<string>; attributes:Record<string,Expression>; indentedAttributes:string[]; children:ElementNode[]; handler?:Handler; span:Span }

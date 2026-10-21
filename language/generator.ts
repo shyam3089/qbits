@@ -10,6 +10,7 @@ export function generate(ast:Component):string {
   const componentImports=ast.imports.filter(i=>i.name);
   function handler(value:NonNullable<ElementNode['handler']>):unknown {
     if(value.kind==='input'||value.kind==='change') return {kind:value.kind,target:value.target.value};
+    if(value.kind==='clickBoolean') return {kind:value.kind,target:value.target.value,value:value.value.value};
     return {kind:value.kind,target:value.target.value,operand:value.operand.value,step:value.step.value};
   }
   function node(n:ElementNode):unknown {

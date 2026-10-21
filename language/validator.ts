@@ -69,6 +69,10 @@ export function validate(ast:Component,source:string,filename='<input>',options:
           if(!stateNames.has(ref.value)) error(ref.span,`Unknown state ${JSON.stringify(ref.value)}`);
           if(stateTypes.get(ref.value)!=='number') error(ref.span,'Click increments require numeric state');
         }
+      } else if(h.kind==='clickBoolean') {
+        if(node.tag.value!=='button') error(h.span,'Click handlers are supported on button elements only');
+        if(!stateNames.has(h.target.value)) error(h.target.span,`Unknown state ${JSON.stringify(h.target.value)}`);
+        if(stateTypes.get(h.target.value)!=='boolean') error(h.target.span,'Boolean click assignments require boolean state');
       } else if(h.kind==='input') {
         if(node.tag.value!=='input'||checkbox) error(h.span,'Input handlers are supported on text inputs only');
         if(!stateNames.has(h.target.value)) error(h.target.span,`Unknown state ${JSON.stringify(h.target.value)}`);

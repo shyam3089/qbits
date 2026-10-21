@@ -52,9 +52,16 @@ export function parse(source:string, filename='<input>'):Component {
           const start=word('on').span.start;const event=take('identifier');block();const target=id();sym('=');
           if(node.handler) fail(source,filename,target.span,'Duplicate event handler');
           if(event.value==='click') {
-            const operand=id();sym('+');const value=take('number');
-            node.handler={kind:'click',target,operand,step:{value:Number(value.value),span:value.span},span:{start,end:value.span.end}};
-            take('NEWLINE');take('DEDENT');node.span.end=value.span.end;
+            if(peek().kind==='identifier'&&(at('true')||at('false'))) {
+              const value=peek();cursor++;
+              node.handler={kind:'clickBoolean',target,value:{value:value.value==='true',span:value.span},span:{start,end:value.span.end}};
+              take('NEWLINE');take('DEDENT');node.span.end=value.span.end;
+            } else {
+              if(peek().kind!=='identifier') fail(source,filename,peek().span,'Click handlers require a boolean literal assignment or numeric state increment');
+              const operand=id();sym('+');const value=take('number');
+              node.handler={kind:'click',target,operand,step:{value:Number(value.value),span:value.span},span:{start,end:value.span.end}};
+              take('NEWLINE');take('DEDENT');node.span.end=value.span.end;
+            }
           } else if(event.value==='input') {
             const sourceStart=word('event').span.start;sym('.');const sourceEnd=word('value').span.end;
             node.handler={kind:'input',target,eventValue:{value:'event.value',span:{start:sourceStart,end:sourceEnd}},span:{start,end:sourceEnd}};

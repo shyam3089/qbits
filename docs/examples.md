@@ -34,6 +34,10 @@ Save as src/NotificationSetting.qb:
 component NotificationSetting:
     enabled = false
 
+    button text="Disable notifications":
+        on click:
+            enabled = false
+
     input:
         type="checkbox"
         checked=enabled

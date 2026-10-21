@@ -50,15 +50,17 @@ test('text input binds string state through the approved event.value form',()=>{
     ['component C:\n    name = ""\n    input:\n        value=name\n        on input:\n            name = event.other',/Expected value/],
     ['component C:\n    name = ""\n    button:\n        on click:\n            name = name + 1',/numeric state/],
   ];
-  for(const [text,message] of invalid) assert.throws(()=>compile(text,'invalid.input'),(error:unknown)=>error instanceof CompileError&&message.test(error.message));
+  for(const [text,message] of invalid) assert.throws(()=>compile(text,'invalid.input'),(error:unknown)=>error instanceof CompileError&&message.test(error.message),text);
 });
 
 test('checkbox input binds boolean state through the approved event.checked form',()=>{
   const source=notificationSettingSource();
   const {ast,code}=compile(source);
   assert.equal(ast.states[0].initial.value,false);
-  assert.deepEqual(ast.roots[0].indentedAttributes,['type','checked']);
-  assert.equal(ast.roots[0].handler?.kind,'change');
+  assert.equal(ast.roots[0].handler?.kind,'clickBoolean');
+  assert.deepEqual(ast.roots[1].indentedAttributes,['type','checked']);
+  assert.equal(ast.roots[1].handler?.kind,'change');
+  assert.match(code,/\\"kind\\":\\"clickBoolean\\"/);
   assert.match(code,/\\"kind\\":\\"change\\"/);
   assert.doesNotMatch(code,/innerHTML|eval\(/);
   const invalid:[string,RegExp][]=[
@@ -71,8 +73,11 @@ test('checkbox input binds boolean state through the approved event.checked form
     ['component C:\n    enabled = ""\n    input:\n        type="checkbox"\n        checked=false\n        on change:\n            enabled = event.checked',/boolean state/],
     ['component C:\n    enabled = false\n    input:\n        type="checkbox"\n        checked=enabled\n        on change:\n            enabled = event.value',/Expected checked/],
     ['component C:\n    enabled = false\n    input:\n        type="checkbox"\n        checked=enabled\n        on input:\n            enabled = event.value',/text inputs only/],
+    ['component C:\n    count = 0\n    button:\n        on click:\n            count = false',/boolean state/],
+    ['component C:\n    button:\n        on click:\n            missing = false',/Unknown state/],
+    ['component C:\n    enabled = false\n    button:\n        on click:\n            enabled = "false"',/boolean literal assignment or numeric state increment/],
   ];
-  for(const [text,message] of invalid) assert.throws(()=>compile(text,'invalid.input'),(error:unknown)=>error instanceof CompileError&&message.test(error.message));
+  for(const [text,message] of invalid) assert.throws(()=>compile(text,'invalid.input'),(error:unknown)=>error instanceof CompileError&&message.test(error.message),text);
 });
 
 test('module graph validates props, missing files, suffixes, cycles and transitive root forwarding',async()=>{

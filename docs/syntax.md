@@ -61,6 +61,10 @@ The approved checkbox form uses boolean state, a static checkbox type, a boolean
 component NotificationSetting:
     enabled = false
 
+    button text="Disable notifications":
+        on click:
+            enabled = false
+
     input:
         type="checkbox"
         checked=enabled
@@ -80,8 +84,10 @@ and the documented indented input `value`, `type` and `checked` forms.
 `text` requires a string and creates a text node, never HTML. Expressions are literals,
 state/prop references, `str(reference)`, and addition of two strings or two numbers.
 Mixed additions require explicit `str`. Arbitrary calls and JavaScript are unsupported.
-Buttons accept `on click` blocks containing one numeric state increment:
-`target = operand + integer`. Text inputs accept the documented `on input`
+Buttons accept `on click` blocks containing either one numeric state increment,
+`target = operand + integer`, or one boolean literal assignment, `target = true`
+or `target = false`. The target of a boolean assignment must be boolean state.
+No other click assignment forms or boolean operators are supported. Text inputs accept the documented `on input`
 assignment; checkbox inputs accept the documented `on change` assignment.
 Each instance owns its state, bindings and listeners.
 

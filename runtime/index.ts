@@ -1,7 +1,7 @@
 export interface CounterModel { initial: number; prefix: string; step: number }
 type Value = string | number | boolean;
 type Expr = {kind:'literal';value:Value} | {kind:'reference';name:string} | {kind:'str';argument:Expr} | {kind:'add';left:Expr;right:Expr};
-type Handler = {kind?:'click';target:string;operand:string;step:number} | {kind:'input';target:string} | {kind:'change';target:string};
+type Handler = {kind?:'click';target:string;operand:string;step:number} | {kind:'clickBoolean';target:string;value:boolean} | {kind:'input';target:string} | {kind:'change';target:string};
 interface View {tag:string;component:number;attributes:Record<string,Expr>;children:View[];handler?:Handler}
 interface Model {props:Record<string,Value>;states:Record<string,Value>;roots:View[]}
 type Dispose = (()=>void) & {refresh?:()=>void};
@@ -54,7 +54,10 @@ export function mountComponent(target:Element,model:Model,components:Mount[],sup
     }
     if(view.handler) {
       const h=view.handler;
-      if(h.kind!=='input'&&h.kind!=='change') {
+      if(h.kind==='clickBoolean') {
+        const click=()=>{if(typeof states[h.target]!=='boolean'||typeof h.value!=='boolean')throw new TypeError('Boolean click assignments require boolean state and value');states[h.target]=h.value;render();};
+        element.addEventListener('click',click);cleanups.push(()=>element.removeEventListener('click',click));
+      } else if(h.kind!=='input'&&h.kind!=='change') {
         const click=()=>{const current=states[h.operand];if(typeof current!=='number')throw new TypeError('Click increments require numeric state');const next=current+h.step;if(!Number.isSafeInteger(next))throw new RangeError('State exceeded safe integer range');states[h.target]=next;render();};
         element.addEventListener('click',click);cleanups.push(()=>element.removeEventListener('click',click));
       } else if(h.kind==='input') {
