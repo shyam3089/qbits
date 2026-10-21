@@ -10,8 +10,10 @@ export type Handler =
   | {kind:'clickBoolean'; target:Node<string>; value:Node<boolean>; span:Span}
   | {kind:'input'; target:Node<string>; eventValue:Node<'event.value'>; span:Span}
   | {kind:'change'; target:Node<string>; eventChecked:Node<'event.checked'>; span:Span};
-export interface ElementNode { tag:Node<string>; attributes:Record<string,Expression>; indentedAttributes:string[]; children:ElementNode[]; handler?:Handler; span:Span }
+export interface ElementNode { kind:'element'; tag:Node<string>; attributes:Record<string,Expression>; indentedAttributes:string[]; children:ViewNode[]; handler?:Handler; span:Span }
+export interface ConditionalNode { kind:'conditional'; condition:Node<string>; consequent:ViewNode[]; alternate:ViewNode[]; span:Span }
+export type ViewNode = ElementNode | ConditionalNode;
 export interface Component {
-  kind:'Component'; name:Node<string>; span:Span; imports:Import[]; props:Prop[]; states:State[]; roots:ElementNode[];
+  kind:'Component'; name:Node<string>; span:Span; imports:Import[]; props:Prop[]; states:State[]; roots:ViewNode[];
 }
 export interface Diagnostic { filename: string; line: number; column: number; span: Span; message: string }

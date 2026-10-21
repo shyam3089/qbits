@@ -77,6 +77,30 @@ is the static string literal `"checkbox"`. `checked` requires a boolean expressi
 and `on change` assigns `event.checked` to boolean state. `event.checked` is
 available only as that handler assignment source.
 
+The approved conditional form references boolean state and renders exactly one
+matching branch. `else` is optional and must immediately follow its `if` block at
+the same indentation:
+
+```text
+component NotificationSetting:
+    enabled = false
+
+    input:
+        type="checkbox"
+        checked=enabled
+        on change:
+            enabled = event.checked
+
+    if enabled:
+        p text="Notifications enabled"
+    else:
+        p text="Notifications disabled"
+```
+
+When the state changes, the old branch is disposed and the new branch is mounted
+at the same DOM position. Conditions cannot use props, literals, comparisons or
+boolean operators.
+
 Supported standard elements: main, section, div, h1–h6, p, span, label, button, input.
 Elements may nest using colon blocks or end at a newline when they have no children
 or handler. Properties are `text=expression`, static `class="space separated classes"`,
@@ -120,7 +144,7 @@ lines/columns. NEWLINE covers the physical ending or is zero-width at EOF. INDEN
 covers leading spaces; DEDENT is zero-width at the next code token or EOF. Block
 spans end at their final statement, excluding trailing comments.
 
-Boolean operators, other event members, controls and event forms,
-conditionals, loops, routing, SSR, plugins and LSP remain deferred.
+Comparisons, boolean operators, other conditional forms, event members, controls
+and event forms, loops, routing, SSR, plugins and LSP remain deferred.
 Development reloads on component/CSS edits and recovers from located errors.
 Reload resets state; state-preserving HMR and generated JavaScript source maps are deferred.

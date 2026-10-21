@@ -1,4 +1,4 @@
-import type { Component, Expression, ElementNode, Span } from './ast.js';
+import type { Component, Expression, ElementNode, ViewNode, Span } from './ast.js';
 import { fail } from './diagnostics.js';
 export const elements = new Set(['main','section','div','h1','h2','h3','h4','h5','h6','p','span','label','button','input']);
 export interface ValidationOptions { sourceExtension?:string; components?:Map<string,Component> }
@@ -27,7 +27,16 @@ export function validate(ast:Component,source:string,filename='<input>',options:
   }
   const stateNames=new Set(ast.states.map(s=>s.name.value));
   const stateTypes=new Map(ast.states.map(s=>[s.name.value,typeof s.initial.value]));
-  function visit(node:ElementNode):void {
+  function visit(view:ViewNode):void {
+    if(view.kind==='conditional') {
+      const actual=stateTypes.get(view.condition.value);
+      if(!stateNames.has(view.condition.value)) error(view.condition.span,`Conditional condition must reference boolean state ${JSON.stringify(view.condition.value)}`);
+      if(actual!=='boolean') error(view.condition.span,`Conditional condition requires boolean state, received ${actual}`);
+      view.consequent.forEach(visit);view.alternate.forEach(visit);return;
+    }
+    visitElement(view);
+  }
+  function visitElement(node:ElementNode):void {
     const native=elements.has(node.tag.value);
     if(!native&&!imported.has(node.tag.value)) error(node.tag.span,`Unknown element or missing component import ${JSON.stringify(node.tag.value)}`);
     const child=options.components?.get(node.tag.value);
@@ -87,7 +96,17 @@ export function validate(ast:Component,source:string,filename='<input>',options:
   }
   // Transitive forwarding through component roots is checked by Node graph tooling.
   function assertSingleRoot(component:Component,span:Span):void {
-    if(component.roots.length!==1) error(span,'Ambiguous class forwarding: component must have a single root element');
+    if(staticRootCount(component.roots)!==1) error(span,'Ambiguous class forwarding: component must have a single resolved root element');
+  }
+  function staticRootCount(nodes:ViewNode[]):number|null {
+    let count=0;
+    for(const node of nodes) {
+      if(node.kind==='element') {count++;continue;}
+      const consequent=staticRootCount(node.consequent),alternate=node.alternate.length?staticRootCount(node.alternate):0;
+      if(consequent===null||alternate===null||consequent!==alternate)return null;
+      count+=consequent;
+    }
+    return count;
   }
   ast.roots.forEach(visit);
 }

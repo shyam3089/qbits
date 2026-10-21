@@ -80,6 +80,30 @@ test('checkbox input binds boolean state through the approved event.checked form
   for(const [text,message] of invalid) assert.throws(()=>compile(text,'invalid.input'),(error:unknown)=>error instanceof CompileError&&message.test(error.message),text);
 });
 
+test('conditionals require boolean state and support an optional else branch',()=>{
+  const {ast,code}=compile(notificationSettingSource());const conditional=ast.roots[2];
+  assert.equal(conditional.kind,'conditional');
+  if(conditional.kind!=='conditional') assert.fail('Expected conditional root');
+  assert.equal(conditional.condition.value,'enabled');assert.equal(conditional.consequent.length,1);assert.equal(conditional.alternate.length,1);
+  assert.match(code,/\\"kind\\":\\"conditional\\"/);assert.doesNotMatch(code,/innerHTML|eval\(/);
+  const withoutElse=compile('component C:\n    enabled = true\n    if enabled:\n        p text="yes"').ast.roots[0];
+  assert.equal(withoutElse.kind,'conditional');if(withoutElse.kind==='conditional')assert.deepEqual(withoutElse.alternate,[]);
+  const invalid:[string,RegExp][]=[
+    ['component C:\n    count = 0\n    if count:\n        p text="bad"',/requires boolean state, received number/],
+    ['component C(enabled = true):\n    if enabled:\n        p text="bad"',/must reference boolean state/],
+    ['component C:\n    if missing:\n        p text="bad"',/must reference boolean state/],
+    ['component C:\n    if true:\n        p text="bad"',/must reference boolean state/],
+    ['component C:\n    enabled = true\n    if enabled == true:\n        p text="bad"',/Expected :/],
+  ];
+  for(const [text,message] of invalid) assert.throws(()=>compile(text,'invalid.input'),(error:unknown)=>error instanceof CompileError&&message.test(error.message),text);
+  const misplaced='component C:\n    p text="before"\n    else:\n        p text="bad"';
+  assert.throws(()=>compile(misplaced,'misplaced.qb'),(error:unknown)=>{
+    if(!(error instanceof CompileError))return false;
+    assert.equal(error.diagnostic.line,3);assert.equal(error.diagnostic.column,5);assert.equal(misplaced.slice(error.diagnostic.span.start,error.diagnostic.span.end),'else');
+    return /immediately follow an if block/.test(error.message);
+  });
+});
+
 test('module graph validates props, missing files, suffixes, cycles and transitive root forwarding',async()=>{
   const temp=await mkdtemp(join(tmpdir(),'qubits-modules-'));const ext=identity.sourceExtension;
   const counter=join(temp,'Counter'+ext),app=join(temp,'App'+ext);

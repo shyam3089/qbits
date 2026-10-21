@@ -1,4 +1,4 @@
-import type { Component, ElementNode, Expression } from './ast.js';
+import type { Component, ElementNode, Expression, ViewNode } from './ast.js';
 export function generate(ast:Component):string {
   // Strip source spans so whitespace/comments never change emitted behavior.
   function expression(e:Expression):unknown {
@@ -13,8 +13,12 @@ export function generate(ast:Component):string {
     if(value.kind==='clickBoolean') return {kind:value.kind,target:value.target.value,value:value.value.value};
     return {kind:value.kind,target:value.target.value,operand:value.operand.value,step:value.step.value};
   }
-  function node(n:ElementNode):unknown {
+  function element(n:ElementNode):unknown {
     return {tag:n.tag.value,component:componentImports.findIndex(i=>i.name!.value===n.tag.value),attributes:Object.fromEntries(Object.entries(n.attributes).map(([k,v])=>[k,expression(v)])),children:n.children.map(node),...(n.handler?{handler:handler(n.handler)}:{})};
+  }
+  function node(value:ViewNode):unknown {
+    if(value.kind==='conditional') return {kind:value.kind,condition:value.condition.value,consequent:value.consequent.map(node),alternate:value.alternate.map(node)};
+    return element(value);
   }
   const imports=ast.imports.map(i=>i.name?`import c${componentImports.indexOf(i)} from ${JSON.stringify(i.path.value)};`:`import ${JSON.stringify(i.path.value)};`).join('\n');
   const model={props:Object.fromEntries(ast.props.map(p=>[p.name.value,p.initial.value])),states:Object.fromEntries(ast.states.map(s=>[s.name.value,s.initial.value])),roots:ast.roots.map(node)};

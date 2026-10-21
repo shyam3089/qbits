@@ -20,7 +20,7 @@ export function greetingSource() {
   return 'component Greeting:\n    name = ""\n\n    input:\n        value=name\n        on input:\n            name = event.value\n\n    p text="Hello, " + name\n';
 }
 export function notificationSettingSource() {
-  return 'component NotificationSetting:\n    enabled = false\n\n    button text="Disable notifications":\n        on click:\n            enabled = false\n\n    input:\n        type="checkbox"\n        checked=enabled\n        on change:\n            enabled = event.checked\n';
+  return 'component NotificationSetting:\n    enabled = false\n\n    button text="Disable notifications":\n        on click:\n            enabled = false\n\n    input:\n        type="checkbox"\n        checked=enabled\n        on change:\n            enabled = event.checked\n\n    if enabled:\n        p text="Notifications enabled"\n    else:\n        p text="Notifications disabled"\n';
 }
 export function appSource(identity) {
   return `import Counter from "./Counter${identity.sourceExtension}"\nimport Greeting from "./Greeting${identity.sourceExtension}"\nimport NotificationSetting from "./NotificationSetting${identity.sourceExtension}"\n\ncomponent App:\n    main class="page":\n        h1 text="Two independent counters"\n        Counter label="First: " class="compact"\n        Counter label="Second: "\n        Greeting\n        NotificationSetting\n`;

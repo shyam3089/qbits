@@ -19,6 +19,8 @@ become JS identifiers. Literal text uses JSON serialization and DOM text nodes.
 Safe-integer overflow throws without changing state. Controlled text inputs update
 their existing DOM value only when it differs, preserving focus and caret while typing.
 Checkbox state is synchronized through the DOM `checked` property.
+Conditionals use comment anchors and branch-local update/cleanup scopes. Switching
+state disposes the inactive branch before mounting the active branch at that anchor.
 
 `tooling/` owns identity validation, CLI filesystem access, and Vite transformation.
 The Vite plugin compiles configured suffixes and appends identity metadata; the

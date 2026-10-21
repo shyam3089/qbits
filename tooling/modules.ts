@@ -4,7 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { parse, validate, generate, fail, type Component } from '../language/index.js';
 import { identity } from './config.js';
 export function compileFile(filename:string,source=readFileSync(filename,'utf8'),watch?:(path:string)=>void) {
-  const active=new Set<string>();const done=new Map<string,Component>();const rootCounts=new Map<Component,number>();
+  const active=new Set<string>();const done=new Map<string,Component>();const rootCounts=new Map<Component,number|null>();
   function visit(file:string,text:string):Component {
     const key=realpathSync(file);active.add(key);watch?.(key);
     const ast=parse(text,file);const components=new Map<string,Component>();
@@ -23,13 +23,28 @@ export function compileFile(filename:string,source=readFileSync(filename,'utf8')
     validate(ast,text,file,{sourceExtension:identity.sourceExtension,components});
     function check(nodes:Component['roots']):void {
       for(const node of nodes) {
+        if(node.kind==='conditional') {check(node.consequent);check(node.alternate);continue;}
         const child=components.get(node.tag.value);
-        if(child&&node.attributes.class&&(rootCounts.get(child)??child.roots.length)!==1) fail(text,file,node.attributes.class.span,'Ambiguous class forwarding: component must resolve to a single root element');
+        if(child&&node.attributes.class&&rootCounts.get(child)!==1) fail(text,file,node.attributes.class.span,'Ambiguous class forwarding: component must resolve to a single root element');
         check(node.children);
       }
     }
+    function count(nodes:Component['roots']):number|null {
+      let total=0;
+      for(const node of nodes) {
+        if(node.kind==='conditional') {
+          const consequent=count(node.consequent),alternate=node.alternate.length?count(node.alternate):0;
+          if(consequent===null||alternate===null||consequent!==alternate)return null;
+          total+=consequent;continue;
+        }
+        const child=components.get(node.tag.value),resolved=child?rootCounts.get(child):1;
+        if(resolved===undefined||resolved===null)return null;
+        total+=resolved;
+      }
+      return total;
+    }
     check(ast.roots);
-    rootCounts.set(ast,ast.roots.reduce((sum,node)=>sum+(components.has(node.tag.value)?rootCounts.get(components.get(node.tag.value)!)!:1),0));
+    rootCounts.set(ast,count(ast.roots));
     active.delete(key);done.set(key,ast);return ast;
   }
   const ast=visit(resolve(filename),source);return {ast,code:generate(ast)};

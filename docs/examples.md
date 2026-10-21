@@ -43,6 +43,11 @@ component NotificationSetting:
         checked=enabled
         on change:
             enabled = event.checked
+
+    if enabled:
+        p text="Notifications enabled"
+    else:
+        p text="Notifications disabled"
 ```
 
 Save as src/App.qb:
