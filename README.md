@@ -1,12 +1,13 @@
 # qubits
 A declarative UI language and framework for building reactive web interfaces, designed for simplicity, extensibility, and excellent developer tooling.
-# Qubits UI — Phase 2B
+# Qubits UI — Phase 2D
 
 A small UI language compiling to browser JavaScript. Components support nested
 standard elements, numeric/string/boolean local state, read-only typed props with literal defaults,
 relative component imports, static classes, text and checkbox input binding, typed state conditions and ordinary external CSS imports.
-Use `text=expression` and `str(value)` for safe text content. Button click handlers
-support numeric increments and boolean literal assignment. Blocks use spaces and colon headers; newlines end statements.
+Phase 2D adds file-local data classes, computed values, typed keyed lists, closed
+event actions, and component initialization/cleanup. Use `text=expression` and
+`str(value)` for safe text content. Blocks use spaces and colon headers; newlines end statements.
 The example mounts two independent counters. Instance classes merge into a single
 root element's defaults; ambiguous forwarding is an error.
 See the [grammar](docs/syntax.md) and [identity reference](docs/identity.md).
@@ -66,7 +67,10 @@ See [architecture](docs/architecture.md), [renaming](docs/renaming.md),
 Packages are private. An open-source license decision is pending; no license grant
 is implied. Nothing here publishes packages or deploys a website.
 
-Phase 2B conditions support `==`, `!=`, `and`, and `not`; `or`, ordering comparisons, other conditional and assignment forms, event members and controls, loops, routing, SSR, plugins,
-LSP/editor extensions, native targets, and a registry. Numeric literals remain
-nonnegative safe integers; only documented text/class/value/type/checked properties and click/input/change handlers
-are supported. Component children/slots and state-preserving HMR are deferred.
+Conditions support `==`, `!=`, `and`, and `not`. Classes omit inheritance, custom
+constructors, access modifiers, static members, action parameters, and unrestricted
+methods. Lists require a non-empty homogeneous literal for type inference. `or`,
+ordering comparisons, filtering/sorting/index expressions, additional controls,
+routing, SSR, plugins, LSP/editor extensions, native targets, and a registry are
+deferred. Component children/slots and state-preserving HMR are also deferred.
+No performance claim is made without a benchmark.

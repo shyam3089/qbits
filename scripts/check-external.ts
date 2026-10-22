@@ -127,6 +127,10 @@ try {
   await first.click(); assert.equal(await first.textContent(),'First: 1');assert.equal(await second.textContent(),'Second: 0');
   assert.equal(await page.locator('.counter').nth(0).getAttribute('class'),'counter compact');
   assert.equal(await first.evaluate(e=>getComputedStyle(e).color),'rgb(20, 80, 160)');
+  const catalog=page.locator('.catalog'),products=catalog.getByRole('listitem');await catalog.getByText('Products: 2',{exact:true}).waitFor();
+  await products.nth(0).evaluate((element:any)=>element.identity='tea');await products.nth(1).evaluate((element:any)=>element.identity='coffee');
+  await products.nth(0).getByRole('button',{name:'Increase'}).click();await catalog.getByText('Tea x 2',{exact:true}).waitFor();
+  await products.nth(1).getByRole('button',{name:'Move first'}).click();assert.equal(await products.nth(0).evaluate((element:any)=>element.identity),'coffee');assert.equal(await products.nth(1).evaluate((element:any)=>element.identity),'tea');
   // Editing source, not the config or process: this must refresh and reset local state.
   await writeFile(sourcePath,original.replace('text=label','text="Updated: " + label'));
   await page.getByRole('button',{name:'Updated: First: 0',exact:true}).waitFor(); assert.equal(server!.pid,pid);
@@ -171,6 +175,7 @@ try {
   await page.getByRole('button',{name:'First: 0',exact:true}).waitFor(); await first.click();
   assert.equal(await first.textContent(),'First: 1');assert.equal(await second.textContent(),'Second: 0');
   assert.equal(await first.evaluate(e=>getComputedStyle(e).color),'rgb(20, 80, 160)');
+  await catalog.getByText('Products: 2',{exact:true}).waitFor();await products.nth(0).getByRole('button',{name:'Increase'}).click();await catalog.getByText('Tea x 2',{exact:true}).waitFor();
   assert.deepEqual(pageErrors,[],'Generated app must have no uncaught browser exceptions');
   console.log(`External ${manager} tarball app passed: ${identity.createPackageName}, local ${identity.cliName}, installed docs/init, full reload, located errors/recovery, production and browser bundle boundaries.`);
 } catch (error) {

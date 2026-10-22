@@ -64,12 +64,57 @@ component NotificationSetting:
         p text="Notifications disabled"
 ```
 
+Save as src/Catalog.qb:
+
+```qubits
+class Product:
+    id = 0
+    name = ""
+    quantity = 0
+    computed label = name + " x " + str(quantity)
+    action increment:
+        quantity = quantity + 1
+
+component Catalog:
+    initialized = false
+    products = [Product(1, "Tea", 1), Product(2, "Coffee", 1)]
+    computed productCount = len(products)
+    on init:
+        initialized = true
+    on cleanup:
+        initialized = false
+
+    section class="catalog":
+        h2 text="Products: " + str(productCount)
+        ul:
+            for product in products key=product.id:
+                li class="product":
+                    input:
+                        value=product.name
+                        on input:
+                            product.name = event.value
+                    span text=product.label
+                    button text="Increase":
+                        on click:
+                            product.increment()
+                    button text="Move first":
+                        on click:
+                            products.move(product, 0)
+                    button text="Remove":
+                        on click:
+                            products.remove(product)
+        button text="Add Cocoa":
+            on click:
+                products.append(Product(3, "Cocoa", 1))
+```
+
 Save as src/App.qb:
 
 ```qubits
 import Counter from "./Counter.qb"
 import Greeting from "./Greeting.qb"
 import NotificationSetting from "./NotificationSetting.qb"
+import Catalog from "./Catalog.qb"
 
 component App:
     main class="page":
@@ -78,6 +123,7 @@ component App:
         Counter label="Second: "
         Greeting
         NotificationSetting
+        Catalog
 ```
 
 Mount App from main.ts with the browser runtime. The starter includes Counter.css:

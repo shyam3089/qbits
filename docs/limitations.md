@@ -1,14 +1,8 @@
 <!-- Generated for Qubits 0.1.0 by npm run sync. -->
 # Limitations
 
-Phase 2B supports nested standard elements, numeric/string/boolean local states, button click increments and boolean-literal assignments,
-text and checkbox input binding, and state-based conditions using `==`, `!=`, `and`, and `not`; read-only string/number/boolean props with literal defaults, static classes, relative
-component imports and ordinary external CSS. One default component per file.
-class forwarding requires a single resolved root across conditional branches; no wrappers are created.
-`or`, ordering comparisons, other conditional/assignment forms, event members and controls, loops, arbitrary calls, routing, SSR, plugins,
-LSP/editor extensions, native targets and a registry remain unsupported. Numeric literals are nonnegative safe integers.
-Only documented text/class/value/type/checked properties and click/input/change handlers are supported; component children/slots are deferred.
-Development uses automatic full reload after source edits, including error recovery.
-Component HMR and state preservation do not exist; state resets on reload.
-Diagnostics preserve source locations; generated JavaScript source maps are deferred.
-Packages remain private/unpublished; license selection and external names are pending.
+Phase 2D supports the Phase 2B component, prop, form and conditional syntax plus file-local classes with literal fields, computed values and parameterless actions; typed non-empty list state; keyed iteration; append/remove/move operations; and component init/cleanup blocks. Reactive DOM bindings subscribe to the state, computed values, or instance fields they read. Keyed list records retain DOM identity during reorder.
+
+Classes have no inheritance, access modifiers, custom constructors, static members or arbitrary methods. List item types are inferred from a non-empty literal; empty typed lists, filtering, sorting expressions, indexes and nested collection mutation are deferred. Actions and handlers accept only validated assignments, class actions and list operations. Lifecycle blocks are synchronous and accept the same closed statements.
+
+`or`, ordering comparisons, broader operators, additional event members and controls, arbitrary calls, component children/slots, routing, SSR, plugins, LSP/editor extensions, native targets and a registry remain unsupported. Numeric literals are nonnegative safe integers. Development uses full reload after source edits; state-preserving HMR and generated JavaScript source maps are deferred. Packages remain private/unpublished. No performance claims are made without benchmarks.

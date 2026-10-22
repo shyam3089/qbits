@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { compile, CompileError } from '../language/index.js';
 import { compileFile } from '../tooling/modules.js';
 import { identity } from '../tooling/config.js';
-import { counterSource, greetingSource, notificationSettingSource, appSource, counterCSS } from '../tooling/project.mjs';
+import { counterSource, greetingSource, notificationSettingSource, catalogSource, appSource, counterCSS } from '../tooling/project.mjs';
 
 test('nested elements, typed defaults, imports and class spans',()=>{
   const source='import "./view.css"\ncomponent View(title = "Hello", amount = 2, enabled = true):\n    main class="one two":\n        section:\n            h1 text=title\n            p text=str(amount)\n            span text=str(enabled)\n            label text="safe <b>text</b>"';
@@ -140,7 +140,7 @@ test('module graph validates props, missing files, suffixes, cycles and transiti
   const expect=(text:string,pattern:RegExp)=>assert.throws(()=>check(text),(e:unknown)=>e instanceof CompileError&&e.diagnostic.filename.startsWith(temp)&&pattern.test(e.message));
   const instance=(attributes:string)=>`import Counter from "./Counter${ext}"\ncomponent App:\n    Counter ${attributes}\n`;
   try {
-    await writeFile(join(temp,'Counter.css'),counterCSS);await writeFile(counter,counterSource());await writeFile(join(temp,'Greeting'+ext),greetingSource());await writeFile(join(temp,'NotificationSetting'+ext),notificationSettingSource());await writeFile(app,appSource(identity));
+    await writeFile(join(temp,'Counter.css'),counterCSS);await writeFile(counter,counterSource());await writeFile(join(temp,'Greeting'+ext),greetingSource());await writeFile(join(temp,'NotificationSetting'+ext),notificationSettingSource());await writeFile(join(temp,'Catalog'+ext),catalogSource());await writeFile(app,appSource(identity));
     assert.ok(compileFile(app).code);
     expect(instance('unknown="bad"'),/Unknown prop/);
     expect(instance('label=2'),/requires string/);

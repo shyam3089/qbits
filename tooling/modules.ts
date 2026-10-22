@@ -24,6 +24,7 @@ export function compileFile(filename:string,source=readFileSync(filename,'utf8')
     function check(nodes:Component['roots']):void {
       for(const node of nodes) {
         if(node.kind==='conditional') {check(node.consequent);check(node.alternate);continue;}
+        if(node.kind==='iteration') {check(node.children);continue;}
         const child=components.get(node.tag.value);
         if(child&&node.attributes.class&&rootCounts.get(child)!==1) fail(text,file,node.attributes.class.span,'Ambiguous class forwarding: component must resolve to a single root element');
         check(node.children);
@@ -32,6 +33,7 @@ export function compileFile(filename:string,source=readFileSync(filename,'utf8')
     function count(nodes:Component['roots']):number|null {
       let total=0;
       for(const node of nodes) {
+        if(node.kind==='iteration') return null;
         if(node.kind==='conditional') {
           const consequent=count(node.consequent),alternate=node.alternate.length?count(node.alternate):0;
           if(consequent===null||alternate===null||consequent!==alternate)return null;

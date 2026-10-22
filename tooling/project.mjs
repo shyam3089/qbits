@@ -22,8 +22,11 @@ export function greetingSource() {
 export function notificationSettingSource() {
   return 'component NotificationSetting:\n    enabled = false\n\n    button text="Disable notifications":\n        on click:\n            enabled = false\n\n    input:\n        type="checkbox"\n        checked=enabled\n        on change:\n            enabled = event.checked\n\n    if enabled:\n        p text="Notifications enabled"\n    else:\n        p text="Notifications disabled"\n';
 }
+export function catalogSource() {
+  return 'class Product:\n    id = 0\n    name = ""\n    quantity = 0\n    computed label = name + " x " + str(quantity)\n    action increment:\n        quantity = quantity + 1\n\ncomponent Catalog:\n    initialized = false\n    products = [Product(1, "Tea", 1), Product(2, "Coffee", 1)]\n    computed productCount = len(products)\n    on init:\n        initialized = true\n    on cleanup:\n        initialized = false\n\n    section class="catalog":\n        h2 text="Products: " + str(productCount)\n        ul:\n            for product in products key=product.id:\n                li class="product":\n                    input:\n                        value=product.name\n                        on input:\n                            product.name = event.value\n                    span text=product.label\n                    button text="Increase":\n                        on click:\n                            product.increment()\n                    button text="Move first":\n                        on click:\n                            products.move(product, 0)\n                    button text="Remove":\n                        on click:\n                            products.remove(product)\n        button text="Add Cocoa":\n            on click:\n                products.append(Product(3, "Cocoa", 1))\n';
+}
 export function appSource(identity) {
-  return `import Counter from "./Counter${identity.sourceExtension}"\nimport Greeting from "./Greeting${identity.sourceExtension}"\nimport NotificationSetting from "./NotificationSetting${identity.sourceExtension}"\n\ncomponent App:\n    main class="page":\n        h1 text="Two independent counters"\n        Counter label="First: " class="compact"\n        Counter label="Second: "\n        Greeting\n        NotificationSetting\n`;
+  return `import Counter from "./Counter${identity.sourceExtension}"\nimport Greeting from "./Greeting${identity.sourceExtension}"\nimport NotificationSetting from "./NotificationSetting${identity.sourceExtension}"\nimport Catalog from "./Catalog${identity.sourceExtension}"\n\ncomponent App:\n    main class="page":\n        h1 text="Two independent counters"\n        Counter label="First: " class="compact"\n        Counter label="Second: "\n        Greeting\n        NotificationSetting\n        Catalog\n`;
 }
 export const counterCSS = '.counter { padding: 16px; }\n.counter-button { color: rgb(20, 80, 160); }\n.counter.compact { padding: 4px; }\n';
 export function applicationFiles(identity, version, frameworkSpec, viteSpec, manager = 'npm') {
@@ -35,6 +38,7 @@ export function applicationFiles(identity, version, frameworkSpec, viteSpec, man
     [`src/Counter${identity.sourceExtension}`]: counterSource(),
     [`src/Greeting${identity.sourceExtension}`]: greetingSource(),
     [`src/NotificationSetting${identity.sourceExtension}`]: notificationSettingSource(),
+    [`src/Catalog${identity.sourceExtension}`]: catalogSource(),
     [`src/App${identity.sourceExtension}`]: appSource(identity),
     'src/Counter.css': counterCSS,
     'src/main.ts': `import mount from './App${identity.sourceExtension}';\nimport * as runtime from '${identity.packageName}/runtime';\nconst target = document.querySelector('#app');\nif (!target) throw new Error('Missing application target');\nmount(target, runtime);\n`,

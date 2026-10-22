@@ -8,7 +8,9 @@ No stage evaluates source or resolves application imports.
 
 The lexer emits NEWLINE/INDENT/DEDENT from space-indented logical lines, ignoring
 blank/comment-only lines. The parser accepts only colon-headed blocks and an
-explicit expression AST nodes for literals, references, addition and `str(value)`. Runtime
+explicit expression AST nodes for literals, references, members, typed construction,
+lists, addition, `str(value)`, and `len(list)`. Class actions, event handlers, and
+lifecycle hooks compile to a closed statement model rather than JavaScript. Runtime
 rendering uses `String(value)`; old brace syntax is rejected. See docs/syntax.md.
 
 `runtime/` owns DOM creation, local state, click/input/change listeners, property updates,
@@ -19,8 +21,13 @@ become JS identifiers. Literal text uses JSON serialization and DOM text nodes.
 Safe-integer overflow throws without changing state. Controlled text inputs update
 their existing DOM value only when it differs, preserving focus and caret while typing.
 Checkbox state is synchronized through the DOM `checked` property.
-Conditionals use comment anchors and branch-local update/cleanup scopes. Switching
-state disposes the inactive branch before mounting the active branch at that anchor.
+Each state or instance field is a small signal. A DOM binding effect dynamically
+subscribes to only the signals it reads; writes rerun those subscribers. Component
+computed values propagate through signals, while class computed members evaluate
+lazily inside their consuming effect. Conditionals use comment anchors and branch-local
+cleanup scopes. Keyed iteration uses item range anchors and moves retained ranges;
+insertion/removal creates or disposes only the corresponding scope. Duplicate runtime
+keys are rejected. No benchmark-based performance claim is currently made.
 
 `tooling/` owns identity validation, CLI filesystem access, and Vite transformation.
 The Vite plugin compiles configured suffixes and appends identity metadata; the
@@ -38,7 +45,9 @@ ES module imports so Vite owns module loading and CSS. Runtime mounts allocate
 independent state, safe text nodes, child mounts and teardown callbacks per instance.
 Conditions are compiled to a typed data tree and interpreted by the runtime; source
 text is never evaluated as JavaScript. Branch content uses text nodes, not HTML insertion.
-Props are read-only inputs; parent state changes refresh child text without remounting.
+Props are read-only inputs; parent state changes notify child bindings without remounting.
+Component disposal runs its closed cleanup statements once, then removes listeners,
+DOM nodes, child instances, conditional/list scopes, and reactive subscriptions.
 CSS edits also trigger a full reload. Error frames refer to the failing dependency,
 even when discovered while transforming its importer.
 

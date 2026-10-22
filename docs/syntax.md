@@ -1,4 +1,4 @@
-# Phase 2B syntax
+# Phase 2D syntax
 
 One default component is declared per file. Imports precede the component.
 The Phase 1 counter remains valid:
@@ -139,6 +139,83 @@ No other click assignment forms are supported. Text inputs accept the documented
 assignment; checkbox inputs accept the documented `on change` assignment.
 Each instance owns its state, bindings and listeners.
 
+## Classes, computed values, and keyed lists
+
+Classes are file-local data models. Fields have literal defaults; their declaration
+order defines the values required by construction. `computed` members derive values
+from fields, and parameterless `action` blocks contain validated assignments. There
+are no constructor declarations, inheritance, access modifiers, static members, or
+arbitrary method bodies.
+
+```text
+class Product:
+    id = 0
+    name = ""
+    quantity = 0
+    computed label = name + " x " + str(quantity)
+    action increment:
+        quantity = quantity + 1
+
+component Catalog:
+    products = [Product(1, "Tea", 1), Product(2, "Coffee", 1)]
+    computed productCount = len(products)
+
+    section:
+        h2 text="Products: " + str(productCount)
+        ul:
+            for product in products key=product.id:
+                li:
+                    span text=product.label
+                    button text="Increase":
+                        on click:
+                            product.increment()
+                    button text="Move first":
+                        on click:
+                            products.move(product, 0)
+                    button text="Remove":
+                        on click:
+                            products.remove(product)
+        button text="Add Cocoa":
+            on click:
+                products.append(Product(3, "Cocoa", 1))
+```
+
+List literals must be non-empty and homogeneous so their item type can be inferred.
+An iteration key must be a string, number, or boolean derived from its item. Duplicate
+keys are rejected at runtime because they can arise after state changes. `append`
+inserts a typed item, `remove` removes the identical item instance when present, and
+`move(item, index)` reorders it. Reconciliation preserves the DOM range and component
+instances for retained keys and creates or disposes only inserted and removed records.
+
+Computed values may depend on state, other computed values, list length, or class
+fields. Dependency cycles are errors. Runtime evaluation records the signals read by
+each DOM binding and reruns only subscribed bindings. Class computed members are lazy,
+so removing a list record leaves no class-level subscription behind.
+
+## Events and lifecycle
+
+`click`, text-input `input`, and checkbox `change` handlers accept one or more closed,
+typed statements: state/field assignment, a parameterless class action, or a list
+`append`, `remove`, or `move`. `event.value` is a string available only to input
+handlers; `event.checked` is a boolean available only to change handlers. Calls,
+members, and values outside the documented forms are compile errors.
+
+```text
+component LifecycleExample:
+    ready = false
+    on init:
+        ready = true
+    on cleanup:
+        ready = false
+
+    input:
+        value=""
+```
+
+`on init` runs once before DOM mounting. `on cleanup` runs once when the component
+disposer is called. Disposal is idempotent and removes DOM nodes, event listeners,
+conditional/list scopes, child instances, and reactive subscriptions.
+
 `class` on a component instance forwards to its single resolved root element,
 merging with existing classes and retaining defaults. Duplicate classes are removed.
 Multiple roots are allowed without forwarding; ambiguous forwarding is diagnosed,
@@ -168,7 +245,8 @@ lines/columns. NEWLINE covers the physical ending or is zero-width at EOF. INDEN
 covers leading spaces; DEDENT is zero-width at the next code token or EOF. Block
 spans end at their final statement, excluding trailing comments.
 
-`or`, ordering comparisons, other condition and assignment forms, event members,
-controls and event forms, loops, routing, SSR, plugins and LSP remain deferred.
+`or`, ordering comparisons, broader expression/assignment forms, event members and
+controls, class inheritance/custom constructors/action parameters, empty typed lists,
+filter/sort/index expressions, routing, SSR, plugins and LSP remain deferred.
 Development reloads on component/CSS edits and recovers from located errors.
 Reload resets state; state-preserving HMR and generated JavaScript source maps are deferred.
