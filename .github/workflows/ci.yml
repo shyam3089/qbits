@@ -17,7 +17,8 @@ concurrency:
 
 jobs:
   fast:
-    if: github.event_name == 'pull_request'
+    # Disabled while private; preserve the event condition for future review.
+    if: ${{ false && github.event_name == 'pull_request' }}
     name: Fast checks
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -38,7 +39,8 @@ jobs:
       - run: npm run test:unit
 
   integration:
-    if: github.event_name != 'pull_request'
+    # Disabled while private; preserve the event condition for future review.
+    if: ${{ false && github.event_name != 'pull_request' }}
     name: Full integration
     runs-on: ubuntu-latest
     timeout-minutes: 15

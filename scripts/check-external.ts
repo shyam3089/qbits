@@ -38,6 +38,12 @@ function appRun(cwd: string, args: string[], success = true) {
 async function pack(directory: string) {
   const result = run(directory,['pack','--ignore-scripts','--json','--pack-destination',temp]);
   const info = JSON.parse(result.stdout)[0];
+  if (directory === root || directory === join(root,'packages/create')) {
+    for (const notice of ['LICENSE','NOTICE','TRADEMARKS.md','THIRD_PARTY_NOTICES.md']) {
+      assert.ok(info.files.some((file: {path:string}) => file.path === notice),`Packed package must retain ${notice}`);
+    }
+    assert.equal(JSON.parse(await readFile(join(directory,'package.json'),'utf8')).license,'Apache-2.0');
+  }
   if (directory === root) {
     assert.ok(!info.files.some((file: {path:string}) => /(^|\/)(tests|fixtures|scripts|node_modules)(\/|$)/.test(file.path)));
     assert.ok(info.files.some((file: {path:string}) => file.path === 'docs/agent.md'));

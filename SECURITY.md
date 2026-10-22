@@ -22,8 +22,9 @@ and symlink instruction files. No postinstall modifies user projects or installs
 agent integrations. These filesystem checks do not promise protection from
 concurrent malicious filesystem changes.
 
+GitHub Actions jobs are disabled in the retained CI configuration.
 CI uses read-only repository permissions, no publishing credentials, and ordinary
 pull_request events, never pull_request_target. Untrusted PR code must not receive
 secrets or privileged runners. Security-sensitive changes require independent
 human review. Policy documents do not enforce hosting permissions. Use the lockfile
-and review dependency updates. Only Phase 1 is maintained; no public support SLA.
+and review dependency updates. Phase 2E hardening is in progress; no public support SLA.

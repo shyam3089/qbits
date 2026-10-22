@@ -10,5 +10,7 @@ human review by someone other than the author. These are project policies, not
 technical enforcement of GitHub permissions. Maintainers must configure branch
 protection and access separately. This implementation changes neither.
 
-Packages remain private; an open-source license decision is pending founder approval.
-Publishing, deployment, and registry governance are outside Phase 1.
+Software is licensed under Apache-2.0; see LICENSE and NOTICE. The Qubits name,
+logo and official identity are addressed separately in TRADEMARKS.md. Packages
+remain private and unpublished. Publishing, deployment and visibility changes
+require separate authorization. GitHub Actions jobs remain disabled.

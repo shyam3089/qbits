@@ -20,5 +20,7 @@ Keep changes small and explain observable behavior and validation in your PR.
 Discuss syntax changes with the founder before implementation. Security-sensitive
 changes require an independent reviewer. Do not add speculative language features.
 
-The open-source license is pending. Until selected, contributions require explicit
-agreement with the maintainer about terms; do not assume an open-source license.
+Software is licensed under Apache-2.0. Unless explicitly stated otherwise,
+contributions intentionally submitted for inclusion are under that license, as
+described in section 5 of LICENSE. Retain applicable copyright and attribution
+notices. See TRADEMARKS.md for contributor and fork use of the project identity.

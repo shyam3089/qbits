@@ -13,4 +13,4 @@ Application JavaScript, Vite configs, npm dependencies and build tooling run wit
 normal host permissions. Recommended: review source/config/dependencies, use a lockfile,
 keep development servers local, and require independent review for security-sensitive
 changes. Recommendations and founder approval policies do not enforce GitHub permissions.
-No agent integration is automatically installed or activated. License selection is pending.
+No agent integration is automatically installed or activated. Software is licensed under Apache-2.0; see LICENSE and NOTICE.

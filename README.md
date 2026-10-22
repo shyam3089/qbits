@@ -64,8 +64,11 @@ error recovery, installed docs, CLI, onboarding, production and browser boundari
 
 See [architecture](docs/architecture.md), [renaming](docs/renaming.md),
 [contributing](CONTRIBUTING.md), [governance](GOVERNANCE.md), and [security](SECURITY.md).
-Packages are private. An open-source license decision is pending; no license grant
-is implied. Nothing here publishes packages or deploys a website.
+Software is licensed under [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for
+creator attribution, [third-party notices](THIRD_PARTY_NOTICES.md), and
+[brand guidance](TRADEMARKS.md) for the Qubits name and logo. Packages remain private
+and unpublished. GitHub Actions jobs are disabled; their configuration is retained
+for future review. Nothing here publishes packages or deploys a website.
 
 Conditions support `==`, `!=`, `and`, and `not`. Classes omit inheritance, custom
 constructors, access modifiers, static members, action parameters, and unrestricted
@@ -74,3 +77,8 @@ ordering comparisons, filtering/sorting/index expressions, additional controls,
 routing, SSR, plugins, LSP/editor extensions, native targets, and a registry are
 deferred. Component children/slots and state-preserving HMR are also deferred.
 No performance claim is made without a benchmark.
+
+Phase 2E begins with nested dynamic-range correctness and fewer DOM writes.
+Conditions and keyed lists resolve insertion parents from their live anchors after
+fragment mounting or reordering. Text bindings skip writes when the result is unchanged.
+See [hardening validation](docs/performance.md) for measured scope and remaining work.

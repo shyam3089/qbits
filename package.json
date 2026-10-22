@@ -2,7 +2,7 @@
   "name": "qubits",
   "version": "0.1.0",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "type": "module",
   "exports": {
     "./compiler": "./dist/lib/language/index.js",
@@ -16,7 +16,11 @@
     "SECURITY.md",
     "GOVERNANCE.md",
     "CONTRIBUTING.md",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "NOTICE",
+    "TRADEMARKS.md",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
     "sync": "node scripts/sync.mjs",
@@ -25,7 +29,7 @@
     "build": "tsc && vite build",
     "test": "tsx --test tests/*.test.ts",
     "test:unit": "tsx --test tests/compiler.test.ts tests/phase2.test.ts tests/phase2d.test.ts tests/tooling.test.ts",
-    "test:browser": "tsx --test tests/browser.test.ts",
+    "test:browser": "tsx --test tests/browser.test.ts tests/runtime.test.ts",
     "test:rename": "tsx scripts/check-rename.ts",
     "cli": "node dist/lib/tooling/cli.js",
     "test:docs": "tsx scripts/check-docs.ts",
