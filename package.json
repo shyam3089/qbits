@@ -24,6 +24,8 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc && vite build",
     "test": "tsx --test tests/*.test.ts",
+    "test:unit": "tsx --test tests/compiler.test.ts tests/phase2.test.ts tests/phase2d.test.ts tests/tooling.test.ts",
+    "test:browser": "tsx --test tests/browser.test.ts",
     "test:rename": "tsx scripts/check-rename.ts",
     "cli": "node dist/lib/tooling/cli.js",
     "test:docs": "tsx scripts/check-docs.ts",
