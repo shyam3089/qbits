@@ -120,8 +120,11 @@ component Greeting:
 
 Precedence is `not`, then `==` and `!=`, then `and`. Equality operands must have
 the same inferred type. `not` and both operands of `and` must be boolean, and the
-complete condition must evaluate to boolean. Condition names must be local state;
-unknown names, props, and invalid operand types are located errors. `or`, ordering
+complete condition must evaluate to boolean and depend on local state, a computed
+value, or an instance member. Props may participate in a reactive condition, but
+prop-only and literal-only conditions are rejected. Unknown names and invalid
+operand types are located errors. Lists and instances compare by identity when
+both operands have the same inferred type. `or`, ordering
 comparisons, parentheses, chained comparisons, and other expression forms are not
 supported in conditions.
 
@@ -130,14 +133,26 @@ Elements may nest using colon blocks or end at a newline when they have no child
 or handler. Properties are `text=expression`, static `class="space separated classes"`,
 and the documented indented input `value`, `type` and `checked` forms.
 `text` requires a string and creates a text node, never HTML. Expressions are literals,
-state/prop references, `str(reference)`, and addition of two strings or two numbers.
+state/prop/computed references, instance members, typed class construction, list
+literals, `str(reference)` (also accepting a member), `len(list)`, and addition of
+two strings or two numbers.
 Mixed additions require explicit `str`. Arbitrary calls and JavaScript are unsupported.
-Buttons accept `on click` blocks containing either one numeric state increment,
-`target = operand + integer`, or one boolean literal assignment, `target = true`
-or `target = false`. The target of a boolean assignment must be boolean state.
-No other click assignment forms are supported. Text inputs accept the documented `on input`
-assignment; checkbox inputs accept the documented `on change` assignment.
+Buttons accept `on click` blocks with one or more typed state/field assignments,
+parameterless class actions, or the supported list operations. Assignments must
+retain the target's inferred type; numeric increments, boolean assignments and
+string updates are examples. Props, computed values and iteration-item bindings
+are read-only (an instance item's fields remain writable). Text inputs accept
+`on input`; checkbox inputs accept `on change`. Their closed statements follow the
+same typing rules, with `event.value` and `event.checked` available only in their
+respective handlers. See Events and lifecycle below.
 Each instance owns its state, bindings and listeners.
+
+Numbers are safe integers in the inclusive range -9007199254740991 to
+9007199254740991. Literals remain nonnegative; no unary minus or subtraction is
+introduced. Host-supplied numeric props may be negative safe integers. Literal-only
+arithmetic overflow is a located compile error. Runtime arithmetic and numeric
+writes reject unsafe integers (including fractional/nonfinite host values) with a
+`RangeError`, before committing invalid state.
 
 ## Classes, computed values, and keyed lists
 
@@ -182,15 +197,21 @@ component Catalog:
 
 List literals must be non-empty and homogeneous so their item type can be inferred.
 An iteration key must be a string, number, or boolean derived from its item. Duplicate
-keys are rejected at runtime because they can arise after state changes. `append`
-inserts a typed item, `remove` removes the identical item instance when present, and
-`move(item, index)` reorders it. Reconciliation preserves the DOM range and component
+keys are rejected at runtime because they can arise after state changes. The only
+mutation receivers are existing writable list-state names. Computed lists,
+literal/temporary lists, members and iteration-item bindings cannot be mutated.
+`append(item)` inserts a matching typed item, `remove(item)` removes the identical
+instance (or equal primitive) when present, and `move(item, index)` reorders it.
+Remove/move of an absent item is a no-op. Move requires a safe-integer index and
+clamps it to the list bounds. All three operations validate targets, argument
+counts and types at compile time and again at runtime. Reconciliation preserves the DOM range and component
 instances for retained keys and creates or disposes only inserted and removed records.
 
 Computed values may depend on state, other computed values, list length, or class
 fields. Dependency cycles are errors. Runtime evaluation records the signals read by
-each DOM binding and reruns only subscribed bindings. Class computed members are lazy,
-so removing a list record leaves no class-level subscription behind.
+each DOM binding and reruns only subscribed bindings. Class computed members
+evaluate on read and are also validated when their instance changes. They create
+no permanent class-level subscriptions, so removing a list record releases its bindings.
 
 ## Events and lifecycle
 
@@ -199,6 +220,13 @@ typed statements: state/field assignment, a parameterless class action, or a lis
 `append`, `remove`, or `move`. `event.value` is a string available only to input
 handlers; `event.checked` is a boolean available only to change handlers. Calls,
 members, and values outside the documented forms are compile errors.
+
+Synchronous handlers and their nested class actions form a validation batch.
+Invalid mutations or arithmetic, including overflow in affected computed values,
+restore earlier signal writes and subscriptions in that batch before DOM updates.
+Valid statements still see preceding writes in order. This is not a general DOM
+transaction: reconciliation errors such as duplicate keys keep the existing
+behavior (reject structural changes without rolling back the list-state write).
 
 ```text
 component LifecycleExample:

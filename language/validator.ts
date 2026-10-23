@@ -24,8 +24,16 @@ export function validate(ast:Component,source:string,filename='<input>',options:
     return env;
   }
   const classEnvs=new Map([...classes].map(([name,value])=>[name,classEnvironment(value)]));
+  const constants=new WeakMap<Expression,number|undefined>();
+  function constantNumber(expression:Expression):number|undefined {
+    if(constants.has(expression))return constants.get(expression);
+    let value:number|undefined;
+    if(expression.kind==='literal'&&typeof expression.value==='number')value=expression.value;
+    if(expression.kind==='add'){const left=constantNumber(expression.left),right=constantNumber(expression.right);if(left!==undefined&&right!==undefined)value=left+right;}
+    constants.set(expression,value);return value;
+  }
   function type(expression:Expression,env:Map<string,Type>):Type {
-    if(expression.kind==='literal')return primitive(expression.value);
+    if(expression.kind==='literal'){if(typeof expression.value==='number'&&!Number.isSafeInteger(expression.value))error(expression.span,'Numeric values must be safe integers');return primitive(expression.value);}
     if(expression.kind==='reference')return env.get(expression.name)??error(expression.span,`Unknown state or prop ${JSON.stringify(expression.name)}`);
     if(expression.kind==='member'){
       const owner=type(expression.object,env);if(!owner.startsWith('class:'))error(expression.object.span,'Member access requires a class instance');
@@ -41,7 +49,7 @@ export function validate(ast:Component,source:string,filename='<input>',options:
     }
     if(expression.kind==='str'){if(expression.argument.kind!=='reference'&&expression.argument.kind!=='member')error(expression.argument.span,'str requires a state, prop, computed value, or instance member');type(expression.argument,env);return 'string';}
     if(expression.kind==='len'){const actual=type(expression.argument,env);if(!actual.startsWith('list:'))error(expression.argument.span,'len requires a list');return 'number';}
-    if(expression.kind==='add'){const left=type(expression.left,env),right=type(expression.right,env);if(left!==right||!['string','number'].includes(left))error(expression.span,'Addition requires two strings or two numbers; use str(value) for explicit conversion');return left;}
+    if(expression.kind==='add'){const left=type(expression.left,env),right=type(expression.right,env);if(left!==right||!['string','number'].includes(left))error(expression.span,'Addition requires two strings or two numbers; use str(value) for explicit conversion');const constant=constantNumber(expression);if(constant!==undefined&&!Number.isSafeInteger(constant))error(expression.span,'Constant arithmetic result exceeds the safe integer range');return left;}
     return error(expression.span,'Unsupported expression');
   }
   function validateComputed(items:Component['computed'],env:Map<string,Type>):void {
@@ -75,6 +83,7 @@ export function validate(ast:Component,source:string,filename='<input>',options:
       } else {
         const owner=type(statement.target,scope);
         if(owner.startsWith('list:')){
+          if(statement.target.kind!=='reference'||!write.has(statement.target.name))error(statement.target.span,'List mutations require existing writable list state');
           const item=owner.slice(5) as Type;if(!['append','remove','move'].includes(statement.method.value))error(statement.method.span,`Unsupported list operation ${statement.method.value}`);
           const expected=statement.method.value==='move'?2:1;if(statement.arguments.length!==expected)error(statement.span,`${statement.method.value} requires ${expected} argument(s)`);
           if(statement.arguments[0]&&type(statement.arguments[0],scope)!==item)error(statement.arguments[0].span,`List operation requires ${item}`);
@@ -101,7 +110,7 @@ export function validate(ast:Component,source:string,filename='<input>',options:
   function visit(view:ViewNode,scope=env,scopeWritable=writable):void {
     if(view.kind==='conditional'){const actual=conditionType(view.condition,scope),reactive=new Set([...scopeWritable,...ast.computed.map(item=>item.name.value)]);if(!reactiveConditionReference(view.condition,reactive))error(view.condition.span,'Conditional condition must reference local state or a computed value');if(actual!=='boolean')error(view.condition.span,`Conditional condition must evaluate to boolean, received ${actual}`);view.consequent.forEach(child=>visit(child,scope,scopeWritable));view.alternate.forEach(child=>visit(child,scope,scopeWritable));return;}
     if(view.kind==='iteration'){
-      const collection=type(view.collection,scope);if(!collection.startsWith('list:'))error(view.collection.span,'Iteration source must be a list');const itemType=collection.slice(5) as Type;const childScope=new Map(scope);childScope.set(view.item.value,itemType);const keyType=type(view.key,childScope);if(!['string','number','boolean'].includes(keyType))error(view.key.span,'Iteration key must be a string, number, or boolean');if(!references(view.key,view.item.value))error(view.key.span,'Iteration key must reference the iteration item');const childWritable=new Set(scopeWritable);view.children.forEach(child=>visit(child,childScope,childWritable));return;
+      const collection=type(view.collection,scope);if(!collection.startsWith('list:'))error(view.collection.span,'Iteration source must be a list');const itemType=collection.slice(5) as Type;const childScope=new Map(scope);childScope.set(view.item.value,itemType);const keyType=type(view.key,childScope);if(!['string','number','boolean'].includes(keyType))error(view.key.span,'Iteration key must be a string, number, or boolean');if(!references(view.key,view.item.value))error(view.key.span,'Iteration key must reference the iteration item');const childWritable=new Set(scopeWritable);childWritable.delete(view.item.value);view.children.forEach(child=>visit(child,childScope,childWritable));return;
     }
     const node=view,native=elements.has(node.tag.value);if(!native&&!imported.has(node.tag.value))error(node.tag.span,`Unknown element or missing component import ${JSON.stringify(node.tag.value)}`);const child=options.components?.get(node.tag.value);if(!native&&(node.children.length||node.handler))error(node.span,'Component instances do not accept children or event handlers');if(!native&&node.indentedAttributes.length)error(node.attributes[node.indentedAttributes[0]].span,'Indented properties are supported on standard elements only');const checkbox=node.attributes.type?.kind==='literal'&&node.attributes.type.value==='checkbox';
     for(const [key,value] of Object.entries(node.attributes)){const actual=type(value,scope);if(key==='class'){if(value.kind!=='literal'||actual!=='string')error(value.span,'class requires a static string literal');if(child&&staticRootCount(child.roots)!==1)error(value.span,'Ambiguous class forwarding: component must have a single resolved root element');}else if(native){if(key==='text'){if(actual!=='string')error(value.span,'text requires a string expression; use str(value)');}else if(key==='value'){if(node.tag.value!=='input'||!node.indentedAttributes.includes(key))error(value.span,'value is supported only as an indented input property');if(checkbox)error(value.span,'value is supported on text inputs only');if(actual!=='string')error(value.span,'input value requires a string expression');}else if(key==='type'){if(node.tag.value!=='input'||!node.indentedAttributes.includes(key))error(value.span,'type is supported only as an indented input property');if(value.kind!=='literal'||value.value!=='checkbox')error(value.span,'input type requires the static string literal "checkbox"');}else if(key==='checked'){if(node.tag.value!=='input'||!node.indentedAttributes.includes(key))error(value.span,'checked is supported only as an indented input property');if(!checkbox)error(value.span,'checked requires input type="checkbox"');if(actual!=='boolean')error(value.span,'input checked requires a boolean expression');}else error(value.span,`Unsupported element attribute ${JSON.stringify(key)}`);}else if(child){const prop=child.props.find(item=>item.name.value===key);if(!prop)error(value.span,`Unknown prop ${JSON.stringify(key)} on ${node.tag.value}`);const resolvedProp=prop!;if(actual!==primitive(resolvedProp.initial.value))error(value.span,`Prop ${key} requires ${primitive(resolvedProp.initial.value)}, received ${actual}`);}}

@@ -18,7 +18,13 @@ and disposal. Its
 serialized component model is the boundary with generated code. The legacy
 `mountCounter` runtime export remains available. User names never
 become JS identifiers. Literal text uses JSON serialization and DOM text nodes.
-Safe-integer overflow throws without changing state. Controlled text inputs update
+Safe-integer overflow throws before invalid numeric writes. Handler validation
+batches journal signal values, derived dirty flags and subscriptions so validation
+failures restore earlier writes before any DOM effects run. Child prop propagation
+settles with computed values during preparation; DOM reconciliation errors retain
+their existing semantics. List methods require registered writable list-state
+signals and validate argument counts, types and safe-integer move indexes before
+copying/committing a new list. Controlled text inputs update
 their existing DOM value only when it differs, preserving focus and caret while typing.
 Checkbox state is synchronized through the DOM `checked` property.
 Each state or instance field is a small signal. A DOM binding effect dynamically
@@ -27,7 +33,9 @@ computed values invalidate derived descendants and settle before queued DOM effe
 Sets deduplicate scheduled effects; equality checks suppress unchanged derived outputs.
 Reads inside actions refresh dirty computed values immediately. Component computed
 values propagate through signals, while class computed members evaluate lazily inside
-their consuming effect, including references to other class computed members. Conditionals use comment anchors and branch-local
+their consuming effect, including references to other class computed members;
+instance updates also preflight these expressions for arithmetic failures.
+Conditionals use comment anchors and branch-local
 cleanup scopes. Keyed iteration tracks only collection/key reads; record construction
 is untracked. A longest increasing subsequence identifies retained ranges that stay
 in place; only other ranges move. Focus and input selection survive moves. Item

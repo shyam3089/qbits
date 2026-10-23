@@ -29,7 +29,11 @@ in place; other ranges move once. Ordered updates avoid that search. One reusabl
 key scope replaces per-item key-evaluation scopes. Moves restore focused elements
 and input selection when DOM detachment would otherwise lose them. No retained
 DOM element is recreated for reordering. Duplicate keys are checked before
-structural changes; runtime errors do not roll back state writes.
+structural changes and retain the existing non-rollback behavior for list state.
+Validation and arithmetic failures during synchronous update preparation now roll
+back signal writes/subscriptions before DOM updates. This adds validation/journal
+work; the measurements below predate those correctness guards and do not establish
+their performance impact. No new performance improvement is claimed.
 
 Disposal removes effects from signal subscriptions and scheduler queues, clears
 listeners and nested scopes, runs cleanup once, and releases state, supplied props

@@ -5,6 +5,146 @@ import { firefox } from 'playwright';
 import { compile } from '../language/index.js';
 import { reactiveFixtures } from './helpers/reactivity-fixtures.js';
 
+test('runtime rejects invalid list mutations atomically and retains bindings and keyed DOM', async () => {
+  const code=compile(`class Item:
+    id = 0
+    computed values = [id]
+component Lists:
+    items = [1, 2]
+    n = 0
+    item = Item(1)
+    computed derived = items
+    computed size = len(items)
+    button text="Run":
+        on click:
+            items.append(3)
+    p text=str(items)
+    p text=str(derived)
+    p text=str(size)
+    for item in items key=item:
+        span text=str(item)
+`).code;
+  const runtime=await readFile('dist/lib/runtime/index.js','utf8');const browser=await firefox.launch({headless:true});
+  try {
+    const page=await browser.newPage();
+    const helper=await readFile('tests/helpers/phase2d-safety-browser.mjs','utf8');
+    const result=await page.evaluate(async({runtime,code,helper})=>{
+      const url=URL.createObjectURL(new Blob([helper],{type:'text/javascript'}));
+      try {const checks=await import(url);return await checks.verifyLists({runtime,code});}
+      finally {URL.revokeObjectURL(url);}
+    },{runtime,code,helper});
+    assert.equal(result.checked,30);assert.deepEqual(result.failures,[]);
+  }finally{await browser.close();}
+});
+
+test('safe-integer errors roll back state, list writes and computed dependencies in Firefox', async()=>{
+  const source=`component Numbers(start = 0, step = 1):
+    n = start
+    items = [1]
+    computed echo = n + 0
+    button text="Update":
+        on click:
+            items.append(2)
+            n = n + step
+    button text="Reset":
+        on click:
+            n = 0
+            items.remove(2)
+    p text=str(n)
+    p text=str(echo)
+    p text=str(items)
+    for item in items key=item:
+        span text=str(item)
+`;
+  const derived=`component Derived(start = 0, step = 1):
+    n = start
+    computed total = n + step
+    button text="Update":
+        on click:
+            n = n + step
+    button text="Reset":
+        on click:
+            n = 0
+    p text=str(n)
+    p text=str(total)
+`;
+  const instance=`class Meter:
+    value = 0
+    step = 1
+    computed next = value + step
+    action increase:
+        value = value + step
+component ClassNumbers(start = 0, step = 1):
+    meter = Meter(start, step)
+    button text="Update":
+        on click:
+            meter.increase()
+    button text="Reset":
+        on click:
+            meter.value = 0
+    p text=str(meter.value)
+    p text=str(meter.next)
+`;
+  const codes=[source,derived,instance].map(text=>compile(text).code),runtime=await readFile('dist/lib/runtime/index.js','utf8');
+  const browser=await firefox.launch({headless:true});
+  try {
+    const page=await browser.newPage();
+    const helper=await readFile('tests/helpers/phase2d-safety-browser.mjs','utf8');
+    const result=await page.evaluate(async({runtime,codes,helper})=>{
+      const url=URL.createObjectURL(new Blob([helper],{type:'text/javascript'}));
+      try {const checks=await import(url);return await checks.verifyNumbers({runtime,codes});}
+      finally {URL.revokeObjectURL(url);}
+    },{runtime,codes,helper});
+    assert.deepEqual(result,{checked:6,failures:[]});
+  }finally{await browser.close();}
+});
+
+test('overflow validation preserves child props and iteration keys before DOM changes',async()=>{
+  const child=compile(`component Child(amount = 0, step = 1):
+    computed total = amount + step
+    p text=str(amount)
+    span text=str(total)
+`).code;
+  const parent=compile(`import Child from "./Child.qb"
+component Parent(start = 0, step = 1):
+    n = start
+    button text="Update":
+        on click:
+            n = n + step
+    button text="Reset":
+        on click:
+            n = 0
+    p text=str(n)
+    Child amount=n step=step
+`).code;
+  const keyed=compile(`class Item:
+    id = 0
+component Keyed(start = 0, step = 1):
+    item = Item(start)
+    items = [item]
+    button text="Update":
+        on click:
+            item.id = item.id + step
+    button text="Reset":
+        on click:
+            item.id = 0
+    p text=str(item.id)
+    for entry in items key=entry.id + step:
+        span text=str(entry.id)
+`).code;
+  const runtime=await readFile('dist/lib/runtime/index.js','utf8'),helper=await readFile('tests/helpers/phase2d-safety-browser.mjs','utf8');
+  const browser=await firefox.launch({headless:true});
+  try {
+    const page=await browser.newPage();
+    const result=await page.evaluate(async(payload)=>{
+      const url=URL.createObjectURL(new Blob([payload.helper],{type:'text/javascript'}));
+      try {const checks=await import(url);return await checks.verifyDependentOverflow(payload);}
+      finally {URL.revokeObjectURL(url);}
+    },{runtime,helper,child,parent,keyed});
+    assert.deepEqual(result,{checked:4,failures:[]});
+  }finally{await browser.close();}
+});
+
 test('computed reads, same-key replacement, conditional subscriptions and failed ownership cleanups', async () => {
   const [runtime, helper] = await Promise.all([
     readFile('dist/lib/runtime/index.js', 'utf8'), readFile('tests/helpers/reactivity-browser.mjs', 'utf8'),

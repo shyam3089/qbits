@@ -6,7 +6,7 @@ literals; the runtime uses DOM text nodes, not HTML insertion; no community plug
 execution or postinstall exists. init runs only explicitly, rejects symlink instruction
 files, preserves unmanaged instructions and conflicting scripts, and refuses malformed
 managed markers. The scaffolder refuses existing targets and never runs installation.
-Check skips symlinks, hidden directories, node_modules and dist.
+Check skips symlinks, hidden directories, node_modules and dist. List mutations validate writable state targets and argument types in the compiler and runtime; safe-integer arithmetic guards reject invalid numeric writes. Synchronous validation batches restore signal state on failure before DOM effects.
 
 These controls are not a sandbox. Resource limits for hostile input are not implemented.
 Application JavaScript, Vite configs, npm dependencies and build tooling run with their
