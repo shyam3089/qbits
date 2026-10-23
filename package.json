@@ -33,7 +33,8 @@
     "test:rename": "tsx scripts/check-rename.ts",
     "cli": "node dist/lib/tooling/cli.js",
     "test:docs": "tsx scripts/check-docs.ts",
-    "test:external": "tsx scripts/check-external.ts"
+    "test:external": "tsx scripts/check-external.ts",
+    "bench:reactivity": "tsx scripts/benchmark-reactivity.ts"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

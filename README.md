@@ -78,7 +78,9 @@ routing, SSR, plugins, LSP/editor extensions, native targets, and a registry are
 deferred. Component children/slots and state-preserving HMR are also deferred.
 No performance claim is made without a benchmark.
 
-Phase 2E begins with nested dynamic-range correctness and fewer DOM writes.
-Conditions and keyed lists resolve insertion parents from their live anchors after
-fragment mounting or reordering. Text bindings skip writes when the result is unchanged.
-See [hardening validation](docs/performance.md) for measured scope and remaining work.
+Phase 2E adds synchronous reactive batching, computed dependency ordering, tracked
+child prop updates, and keyed reconciliation that minimizes retained range moves.
+DOM identity, child state, focus and selection are preserved; unchanged values skip
+DOM writes. Disposal releases subscriptions, listeners and retained state, including
+failed mounts. Run `npm run bench:reactivity` after building. See
+[measurements and validation](docs/performance.md) for the baseline comparison and limitations.

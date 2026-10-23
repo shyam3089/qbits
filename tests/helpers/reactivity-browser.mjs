@@ -1,0 +1,223 @@
+// Browser-only harness, shared by correctness tests and the optional benchmark.
+// Imported as a module; neither application source nor this file is evaluated by
+// the compiler. Instrumentation is confined to the benchmark's isolated page.
+export async function measure(runtimeSource, modules, {size = 1000, samples = 9, cycles = 30} = {}) {
+  const urls = [];
+  const url = source => {
+    const value = URL.createObjectURL(new Blob([source], {type: 'text/javascript'}));
+    urls.push(value); return value;
+  };
+  const runtime = await import(url(runtimeSource));
+  const rowURL = url(modules['./Row.qb']);
+  const list = await import(url(modules['./List.qb'].replace(JSON.stringify('./Row.qb'), JSON.stringify(rowURL))));
+  const batch = await import(url(modules['./Batch.qb']));
+  const counts = {elements: 0, texts: 0, comments: 0, fragments: 0, adds: 0, removes: 0};
+  const restores = [];
+  for (const [name, counter] of [['createElement','elements'],['createTextNode','texts'],['createComment','comments'],['createDocumentFragment','fragments']]) {
+    const original = Document.prototype[name];
+    Document.prototype[name] = function (...args) { counts[counter]++; return original.apply(this, args); };
+    restores.push(() => { Document.prototype[name] = original; });
+  }
+  for (const [name, counter] of [['addEventListener','adds'],['removeEventListener','removes']]) {
+    const original = EventTarget.prototype[name];
+    EventTarget.prototype[name] = function (...args) { if (this instanceof Element) counts[counter]++; return original.apply(this, args); };
+    restores.push(() => { EventTarget.prototype[name] = original; });
+  }
+  const host = document.createElement('main'); document.body.append(host);
+  const observer = new MutationObserver(() => {});
+  observer.observe(host, {subtree: true, childList: true, characterData: true, characterDataOldValue: true});
+  const delta = (before, after) => Object.fromEntries(Object.keys(before).map(key => [key, after[key] - before[key]]));
+  const capture = action => {
+    observer.takeRecords(); const before = {...counts}, started = performance.now();
+    action(); const ms = performance.now() - started;
+    const records = observer.takeRecords();
+    return {...delta(before, counts), ms,
+      inserted: records.reduce((n, record) => n + record.addedNodes.length, 0),
+      removed: records.reduce((n, record) => n + record.removedNodes.length, 0),
+      textWrites: records.filter(record => record.type === 'characterData').length};
+  };
+  const click = (root, text) => {
+    const button = [...root.querySelectorAll('button')].find(node => node.textContent === text);
+    if (!button) throw new Error(`Missing ${text}`);
+    button.click();
+  };
+  const median = rows => {
+    const sorted = rows.map(row => row.ms).sort((a,b) => a-b);
+    return {...rows[rows.length - 1], ms: sorted[Math.floor(sorted.length / 2)]};
+  };
+  let dispose;
+  try {
+    dispose = batch.default(host, runtime);
+    const batchInitial = host.querySelector('p').textContent;
+    const batchUpdate = capture(() => click(host, 'Update'));
+    const batchValue = host.querySelector('p').textContent;
+    dispose();
+    const mount = capture(() => { dispose = list.default(host, runtime); });
+    const rows = [...host.querySelectorAll('li')];
+    const last = rows[size - 1], first = rows[0];
+    const childButton = last.querySelector('section button'); childButton.click();
+    const isolated = capture(() => click(first, 'Increment'));
+    const input = last.querySelector('input'); input.focus(); input.setSelectionRange(1, 3);
+    const propUpdate = capture(() => {input.value = 'Changed'; input.dispatchEvent(new Event('input'));});
+    const childProp = last.querySelector('section span').textContent;
+    const unrelated = first.querySelector('span').textContent;
+    input.setSelectionRange(1, 3);
+    // Warm up and restore outside the measured interval. No correctness timing thresholds.
+    for (let i = 0; i < 2; i++) {click(last, 'First'); click(last, 'Last');}
+    const moves = [];
+    for (let i = 0; i < samples; i++) {
+      moves.push(capture(() => click(last, 'First')));
+      click(last, 'Last');
+    }
+    const focus = document.activeElement === input && input.selectionStart === 1 && input.selectionEnd === 3;
+    const identity = [...host.querySelectorAll('li')].every((node, index) => node === rows[index]);
+    const childState = childButton.textContent;
+    const noop = capture(() => click(host, 'Noop'));
+    const append = capture(() => click(host, 'Append'));
+    const appended = host.querySelector('li:last-child');
+    const removedInput = appended.querySelector('input');
+    const removedIncrement = [...appended.querySelectorAll('button')].find(node => node.textContent === 'Increment');
+    const remove = capture(() => click(appended, 'Remove'));
+    const detached = capture(() => {removedInput.value = 'Detached'; removedInput.dispatchEvent(new Event('input')); removedIncrement.click();});
+    const retained = rows[0].querySelector('input');
+    const retainedIncrement = [...rows[0].querySelectorAll('button')].find(node => node.textContent === 'Increment');
+    dispose(); dispose();
+    const afterDispose = capture(() => {retained.value = 'Disposed'; retained.dispatchEvent(new Event('input')); retainedIncrement.click();});
+    const empty = host.childNodes.length === 0;
+    const cycleTimes = [];
+    for (let i = 0; i < cycles; i++) {
+      const started = performance.now(); dispose = list.default(host, runtime); dispose();
+      cycleTimes.push(performance.now() - started);
+    }
+    return {size, samples, cycles, mount, batchInitial, batchUpdate, batchValue,
+      isolated, propUpdate, childProp, unrelated, move: median(moves), focus, identity, childState,
+      noop, append, remove, detached, afterDispose, empty,
+      cycleMedianMs: cycleTimes.sort((a,b) => a-b)[Math.floor(cycles / 2)],
+      liveListeners: counts.adds - counts.removes, remainingNodes: host.childNodes.length,
+      heapBytes: typeof performance.memory?.usedJSHeapSize === 'number' ? performance.memory.usedJSHeapSize : null};
+  } finally {
+    dispose?.(); observer.disconnect(); host.remove(); restores.reverse().forEach(restore => restore());
+    urls.forEach(value => URL.revokeObjectURL(value));
+  }
+}
+
+export async function verifyEdges(runtimeSource, modules) {
+  const urls = [];
+  const url = source => {const value = URL.createObjectURL(new Blob([source], {type: 'text/javascript'})); urls.push(value); return value;};
+  const host = document.createElement('main'); document.body.append(host);
+  const originalAdd = EventTarget.prototype.addEventListener, originalRemove = EventTarget.prototype.removeEventListener;
+  let listeners = 0;
+  EventTarget.prototype.addEventListener = function (...args) {if (this instanceof Element) listeners++; return originalAdd.apply(this,args);};
+  EventTarget.prototype.removeEventListener = function (...args) {if (this instanceof Element) listeners--; return originalRemove.apply(this,args);};
+  const disposers = [];
+  const duplicateErrors = [];
+  const onError = event => {if(event.message.includes('Duplicate iteration key')){duplicateErrors.push(event.message);event.preventDefault();}};
+  window.addEventListener('error',onError);
+  try {
+    const runtime = await import(url(runtimeSource));
+    const rowURL = url(modules['./Row.qb']), row = await import(rowURL);
+    // Use the compiler-produced model with the real child mount. A wrapper also
+    // lets us inject a host-JavaScript mounting/cleanup failure, without accepting
+    // arbitrary JavaScript in the Qubits language.
+    const edges = await import(url(modules['./Edges.qb'].replace(JSON.stringify('./Row.qb'), JSON.stringify(rowURL))));
+    const click = text => [...host.querySelectorAll('button')].find(node => node.textContent === text).click();
+    const dispose = runtime.mountComponent(host, edges.model, [row.default]); disposers.push(dispose);
+    const root = host.querySelector('div'), childButton = root.querySelector('button'); childButton.click();
+    click('Replace');
+    const retained = host.querySelector('div') === root && root.querySelector('button') === childButton;
+    const replaced = root.querySelector('span').textContent;
+    const childLabel = root.querySelector('section span').textContent;
+    const childState = childButton.textContent;
+    click('Duplicate'); const duplicateRetained = host.querySelector('div') === root;
+    click('Recover'); const recovered = host.querySelector('div') === root;
+    click('Update'); const sequential = host.querySelector('p').textContent;
+    const removedText = root.querySelector('span').firstChild;
+    click('Hide'); click('Rename');
+    const inactiveText = removedText.textContent;
+    click('Show'); const remounted = host.querySelector('div > span').textContent;
+    const retainedRow = host.querySelector('div'), observer = new MutationObserver(()=>{});
+    observer.observe(host,{childList:true}); click('Prepend');
+    const insertions = observer.takeRecords(); observer.disconnect();
+    const prepend = {inserted:insertions.reduce((n,record)=>n+record.addedNodes.length,0),
+      removed:insertions.reduce((n,record)=>n+record.removedNodes.length,0), retained:host.querySelectorAll('div')[1]===retainedRow};
+    dispose(); dispose.refresh();
+    let initMounts = 0, mountFailure = '', cleanupFailure = '';
+    // Failure after a previous record was mounted must unwind that record too.
+    const list = await import(url(modules['./List.qb'].replace(JSON.stringify('./Row.qb'), JSON.stringify(rowURL))));
+    try {runtime.mountComponent(host, list.model, [(...args) => {
+      if (++initMounts === 2) throw new Error('Expected child mount failure');
+      return row.default(...args);
+    }]);} catch (error) {mountFailure = error.message;}
+    const afterFailedMount = {nodes: host.childNodes.length, listeners};
+    const cleanup = runtime.mountComponent(host, edges.model, [(...args) => {
+      const childDispose = row.default(...args);
+      return () => {childDispose(); throw new Error('Expected child cleanup failure');};
+    }]); disposers.push(cleanup);
+    try {cleanup();} catch (error) {cleanupFailure = error.message;}
+    cleanup();
+    return {retained, replaced, childLabel, childState, sequential, inactiveText, remounted,
+      duplicateErrors: duplicateErrors.length, duplicateRetained, recovered, prepend,
+      mountFailure, afterFailedMount, cleanupFailure, remainingNodes: host.childNodes.length, listeners};
+  } finally {
+    for (const dispose of disposers) try {dispose();} catch {}
+    EventTarget.prototype.addEventListener = originalAdd; EventTarget.prototype.removeEventListener = originalRemove;
+    window.removeEventListener('error',onError);
+    host.remove(); urls.forEach(value => URL.revokeObjectURL(value));
+  }
+}
+
+export async function verifyReorders(runtimeSource, modules) {
+  const urls = [];
+  const url = source => {const value = URL.createObjectURL(new Blob([source], {type:'text/javascript'})); urls.push(value); return value;};
+  const host = document.createElement('main'); document.body.append(host);
+  let dispose;
+  const observer = new MutationObserver(()=>{});
+  try {
+    const runtime = await import(url(runtimeSource)), rowURL = url(modules['./Row.qb']);
+    const root = await import(url(modules['./Permutations.qb'].replace(JSON.stringify('./Row.qb'),JSON.stringify(rowURL))));
+    dispose = root.default(host,runtime);
+    const list = host.querySelector('ul'), originals = [...list.children];
+    originals.forEach(node=>node.querySelector('button').click());
+    const input = originals[1].querySelector('input'); input.focus(); input.setSelectionRange(1,2);
+    observer.observe(list,{childList:true});
+    let before = [...originals], checked = 0, focused = true;
+    const failures = [];
+    for(const button of host.querySelectorAll('main > button')) {
+      observer.takeRecords(); button.click();
+      const after = [...list.children];
+      const removed = observer.takeRecords().reduce((n,record)=>n+record.removedNodes.length,0);
+      // Independent small reference: enumerate every subsequence, rather than
+      // using the runtime's binary-search reconciliation algorithm.
+      let longest = 0;
+      for(let mask=0;mask<(1<<before.length);mask++) {
+        const subsequence = before.filter((_,index)=>mask&(1<<index));
+        const positions = subsequence.map(node=>after.indexOf(node));
+        if(positions.every((position,index)=>index===0||position>positions[index-1]))longest=Math.max(longest,subsequence.length);
+      }
+      const desired = button.textContent.split(',').map(Number);
+      const actual = after.map(node=>originals.indexOf(node));
+      if(JSON.stringify(desired)!==JSON.stringify(actual)||removed!==3*(before.length-longest)||after.some(node=>node.querySelector('button').textContent!=='1')) failures.push({desired,actual,removed,longest});
+      focused &&= document.activeElement===input&&input.selectionStart===1&&input.selectionEnd===2;
+      before=after;checked++;
+    }
+    dispose();return {checked,failures,focused,remainingNodes:host.childNodes.length};
+  } finally {dispose?.();observer.disconnect();host.remove();urls.forEach(value=>URL.revokeObjectURL(value));}
+}
+
+// A memory observation, not a GC guarantee: keep disposed handles alive and use
+// WeakRefs to see whether their supplied-prop objects and DOM remain reachable.
+export async function retentionProbe(runtimeSource, modules) {
+  const urls = [runtimeSource, modules['./Row.qb']].map(source => URL.createObjectURL(new Blob([source], {type: 'text/javascript'})));
+  try {
+    const runtime = await import(urls[0]), row = await import(urls[1]);
+    const handles = [], props = [], nodes = [];
+    for (let i = 0; i < 30; i++) {
+      const supplied = {label: 'Probe'}, host = document.createElement('main');
+      document.body.append(host);
+      const dispose = row.default(host, runtime, supplied);
+      props.push(new WeakRef(supplied)); nodes.push(new WeakRef(host.firstChild));
+      dispose(); host.remove(); handles.push(dispose);
+    }
+    globalThis.__qubitsRetentionProbe = {handles, props, nodes};
+  } finally {urls.forEach(value => URL.revokeObjectURL(value));}
+}

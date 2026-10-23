@@ -127,6 +127,14 @@ try {
   const pageErrors: string[] = [];
   page.on('pageerror',error => pageErrors.push(error.message));
   page.on('console',message=>browserLog.push(message.text()));
+  const reloadAfterEdit=async (path:string,source:string)=>{
+    // Each edit triggers a full reload. Wait for that navigation and the new
+    // websocket before sending another edit, including CSS restoration.
+    const navigated=page.waitForEvent('framenavigated',{predicate:frame=>frame===page.mainFrame()});
+    const connected=page.waitForEvent('console',{predicate:message=>message.text()==='[vite] connected.'});
+    await Promise.all([navigated,connected,writeFile(path,source)]);
+    await page.waitForLoadState('load');
+  };
   const url = await startServer(app,false); const pid = server!.pid;
   const first=page.getByRole('button').nth(0),second=page.getByRole('button').nth(1);
   await page.goto(url); await page.getByRole('button',{name:'First: 0',exact:true}).waitFor();
@@ -138,16 +146,16 @@ try {
   await products.nth(0).getByRole('button',{name:'Increase'}).click();await catalog.getByText('Tea x 2',{exact:true}).waitFor();
   await products.nth(1).getByRole('button',{name:'Move first'}).click();assert.equal(await products.nth(0).evaluate((element:any)=>element.identity),'coffee');assert.equal(await products.nth(1).evaluate((element:any)=>element.identity),'tea');
   // Editing source, not the config or process: this must refresh and reset local state.
-  await writeFile(sourcePath,original.replace('text=label','text="Updated: " + label'));
+  await reloadAfterEdit(sourcePath,original.replace('text=label','text="Updated: " + label'));
   await page.getByRole('button',{name:'Updated: First: 0',exact:true}).waitFor(); assert.equal(server!.pid,pid);
   assert.equal(await second.textContent(),'Updated: Second: 0');
   console.log('Source edit triggered browser reload and reset state.');
   const cssPath=join(app,'src/Counter.css');const css=await readFile(cssPath,'utf8');
-  await writeFile(cssPath,css.replace('20, 80, 160','160, 40, 20'));
-  await page.waitForFunction(()=>getComputedStyle(document.querySelector('button')!).color==='rgb(160, 40, 20)');
-  await writeFile(cssPath,css);
+  await reloadAfterEdit(cssPath,css.replace('20, 80, 160','160, 40, 20'));
+  await page.waitForFunction(()=>{const button=document.querySelector('button');return button&&getComputedStyle(button).color==='rgb(160, 40, 20)';});
+  await reloadAfterEdit(cssPath,css);
   const broken = original.replace('str(count)','str(missing)');
-  await writeFile(sourcePath,broken);
+  await reloadAfterEdit(sourcePath,broken);
   await page.waitForFunction(() => {
     const text = document.querySelector('vite-error-overlay')?.shadowRoot?.textContent ?? '';
     return text.includes('Unknown state') && /Counter[^\n]*:6:56/.test(text);
@@ -155,21 +163,23 @@ try {
   console.log('Located syntax error appeared in the browser overlay.');
   const failed = appRun(app,['exec','--offline','--',identity.cliName,'check','src','--json'],false);
   assert.equal(failed.status,1); assert.equal(JSON.parse(failed.stdout).diagnostics[0].line,6);
-  await writeFile(sourcePath,original.replace('text=label','text="Recovered: " + label'));
+  await reloadAfterEdit(sourcePath,original.replace('text=label','text="Recovered: " + label'));
   await page.getByRole('button',{name:'Recovered: First: 0',exact:true}).waitFor();
   await page.waitForFunction(() => !document.querySelector('vite-error-overlay'));
   await first.click(); assert.equal(await first.textContent(),'Recovered: First: 1');assert.equal(await second.textContent(),'Recovered: Second: 0');
   assert.equal(server!.pid,pid,'Error recovery must not restart the server');
   // Also recover when the very first request begins with a syntax error.
+  // Start with broken source before serving the initial page, rather than racing
+  // a manual reload against the hot-update reload from writing the file.
+  await page.goto('about:blank'); await stopServer();
   await writeFile(sourcePath,broken);
-  // A failed dependency can finish before Vite's websocket connects. Wait for
-  // the fresh page's connection before asking it to receive an edit notification.
-  const connected = page.waitForEvent('websocket').then(socket=>socket.waitForEvent('framereceived'));
-  await page.reload();
+  const initialURL=await startServer(app,false),initialPid=server!.pid;
+  const connected=page.waitForEvent('console',{predicate:message=>message.text()==='[vite] connected.'});
+  await Promise.all([connected,page.goto(initialURL)]);
   await page.waitForFunction(() => !!document.querySelector('vite-error-overlay'));
-  await connected;
-  await writeFile(sourcePath,original);
+  await reloadAfterEdit(sourcePath,original);
   await page.getByRole('button',{name:'First: 0',exact:true}).waitFor();
+  assert.equal(server!.pid,initialPid,'Initial-error recovery must not restart the server');
   await page.goto('about:blank'); await stopServer();
   appRun(app,['run','check']); appRun(app,['run','build']);
   const assets = await readdir(join(app,'dist/assets'));

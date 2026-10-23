@@ -1,7 +1,7 @@
 <!-- Generated for Qubits 0.1.0 by npm run sync. -->
 # Limitations
 
-Phase 2D supports the Phase 2B component, prop, form and conditional syntax plus file-local classes with literal fields, computed values and parameterless actions; typed non-empty list state; keyed iteration; append/remove/move operations; and component init/cleanup blocks. Reactive DOM bindings subscribe to the state, computed values, or instance fields they read. Keyed list records retain DOM identity during reorder.
+Phase 2D supports the Phase 2B component, prop, form and conditional syntax plus file-local classes with literal fields, computed values and parameterless actions; typed non-empty list state; keyed iteration; append/remove/move operations; and component init/cleanup blocks. Reactive DOM bindings subscribe to the state, computed values, or instance fields they read. Synchronous event batches settle computed dependencies before updating affected bindings. Child prop signals refresh without remounting; keyed list records retain identity, focus and selection during reorder.
 
 Classes have no inheritance, access modifiers, custom constructors, static members or arbitrary methods. List item types are inferred from a non-empty literal; empty typed lists, filtering, sorting expressions, indexes and nested collection mutation are deferred. Actions and handlers accept only validated assignments, class actions and list operations. Lifecycle blocks are synchronous and accept the same closed statements.
 

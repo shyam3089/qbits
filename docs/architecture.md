@@ -22,12 +22,18 @@ Safe-integer overflow throws without changing state. Controlled text inputs upda
 their existing DOM value only when it differs, preserving focus and caret while typing.
 Checkbox state is synchronized through the DOM `checked` property.
 Each state or instance field is a small signal. A DOM binding effect dynamically
-subscribes to only the signals it reads; writes rerun those subscribers. Component
-computed values propagate through signals, while class computed members evaluate
-lazily inside their consuming effect. Conditionals use comment anchors and branch-local
-cleanup scopes. Keyed iteration uses item range anchors and moves retained ranges;
-insertion/removal creates or disposes only the corresponding scope. Duplicate runtime
-keys are rejected. No benchmark-based performance claim is currently made.
+subscribes to only the signals it reads. Closed handlers batch writes synchronously;
+computed values invalidate derived descendants and settle before queued DOM effects.
+Sets deduplicate scheduled effects; equality checks suppress unchanged derived outputs.
+Reads inside actions refresh dirty computed values immediately. Component computed
+values propagate through signals, while class computed members evaluate lazily inside
+their consuming effect, including references to other class computed members. Conditionals use comment anchors and branch-local
+cleanup scopes. Keyed iteration tracks only collection/key reads; record construction
+is untracked. A longest increasing subsequence identifies retained ranges that stay
+in place; only other ranges move. Focus and input selection survive moves. Item
+signals support same-key replacement without recreating child instances. Duplicate
+runtime keys are rejected before structural mutation. Insertion/removal creates or
+disposes only the corresponding scope. See performance.md for measured results.
 
 `tooling/` owns identity validation, CLI filesystem access, and Vite transformation.
 The Vite plugin compiles configured suffixes and appends identity metadata; the
@@ -46,8 +52,11 @@ independent state, safe text nodes, child mounts and teardown callbacks per inst
 Conditions are compiled to a typed data tree and interpreted by the runtime; source
 text is never evaluated as JavaScript. Branch content uses text nodes, not HTML insertion.
 Props are read-only inputs; parent state changes notify child bindings without remounting.
-Component disposal runs its closed cleanup statements once, then removes listeners,
-DOM nodes, child instances, conditional/list scopes, and reactive subscriptions.
+Component disposal stops effects, removes listeners, DOM nodes, child instances and
+conditional/list scopes, then runs its closed cleanup statements once and releases
+state and supplied-prop references. Cleanup failures do not skip other owned resources.
+Ownership callbacks are registered before dynamic scope mounting so failed mounts
+also unwind. Parent prop effects refresh child signals without reading child state.
 CSS edits also trigger a full reload. Error frames refer to the failing dependency,
 even when discovered while transforming its importer.
 
