@@ -1,108 +1,94 @@
-# Fine-grained reactive rendering
+# Firefox performance observations
 
-The compiler still validates the existing grammar and emits a small readable module
-containing a serialized, typed component model and a mount function. No application
-source is executed during compilation. This milestone changes the runtime, not the
-grammar, compiler boundary, public mount signature, or generated module format.
+Phase 3A preserves the approved grammar and public mount API. See
+[reactivity](reactivity.md) for dependency metadata, caching, transactional rendering
+and failure semantics. This report compares measured Qubits implementations only.
+No React, Angular or Vue numbers are inferred.
 
-An event follows this path:
+## Method
 
-1. Generated handler statements execute against state/instance-field signals.
-2. Signal writes mark dependent computed values dirty and enqueue affected effects.
-3. Nested class actions share the enclosing synchronous batch. Reads inside an action
-   refresh dirty computed dependencies immediately, preserving sequential statement values.
-4. At the end of the handler, computed dependencies settle before DOM effects run.
-   Sets deduplicate queued effects; unchanged computed outputs do not notify DOM bindings.
-5. Each text/value/checked binding tracks only the signals it actually reads and
-   compares the rendered value before writing. Class/type attributes remain static
-   under the approved grammar. Conditional scopes track their condition, and list
-   scopes track their collection and item keys, without subscribing to construction
-   reads from child props or init statements.
-6. A parent-owned effect refreshes only child prop signals. Child DOM, local state,
-   and listeners remain mounted. Class computed chains remain lazy and subscribe
-   their consuming bindings directly to fields.
+[Raw observations](benchmarks/phase3a-2026-10-24.json) were captured on 24 October
+2026 local time (23 October UTC): Windows 10.0.26200, Intel Core i3-1115G4,
+Node 22.16.0, Firefox 157.0. Runtime/fixture hashes, individual samples and baseline
+provenance are in the report. Historical runtime snapshots are confined to
+`tests/benchmarks`; their original revisions and TypeScript settings are recorded
+in `tests/benchmarks/provenance.json`. Both snapshots reproduce from those revisions.
 
-Keyed reconciliation reuses records by key, including when an action removes and
-appends a new instance with the same key in one batch. New ranges attach once at their final position. The longest increasing
-subsequence of old record positions identifies the retained ranges that can stay
-in place; other ranges move once. Ordered updates avoid that search. One reusable
-key scope replaces per-item key-evaluation scopes. Moves restore focused elements
-and input selection when DOM detachment would otherwise lose them. No retained
-DOM element is recreated for reordering. Duplicate keys are checked before
-structural changes and retain the existing non-rollback behavior for list state.
-Validation and arithmetic failures during synchronous update preparation now roll
-back signal writes/subscriptions before DOM updates. This adds validation/journal
-work; the measurements below predate those correctness guards and do not establish
-their performance impact. No new performance improvement is claimed.
+Each runtime receives the same current compiler-generated fixture. It contains
+1,000 or 10,000 keyed `li` row elements, class-computed text, a stateful child and
+controls. Actual element counts are 1,010/10,010; including text/comments there are
+4,019/40,019 DOM nodes. This is a row-update workload, not a complete commerce app.
 
-Disposal removes effects from signal subscriptions and scheduler queues, clears
-listeners and nested scopes, runs cleanup once, and releases state, supplied props
-and component references. Cleanup failures do not skip other owned resources.
-Ownership is registered before mounting dynamic scopes, so failed child mounts
-also unwind already-created records. Repeated disposal and refresh after disposal
-are harmless. No production debug counters or new dependencies were introduced.
+Three trials alternate runtime order, using fresh Firefox pages. Each trial warms
+up 30 updates, then records seven batches of 1,000 synchronous events and seven
+last-to-first moves (reset moves excluded). Update/reorder columns use medians of
+all 21 samples; mount uses three single observations. Timing includes event
+execution, safety checks, synchronous reconciliation and MutationObserver recording,
+not subsequent paint/layout. Firefox's coarse timer resolution limits small-operation
+precision. There are no timing thresholds in correctness tests.
 
-## Measurements
+## Before and after
 
-[Recorded observations](benchmarks/reactivity-2026-10-23.json), recorded 23 October 2026:
-Windows, Intel Core i3-1115G4, Node 22.16.0, Firefox 157.0, Playwright 1.64.1.
-Baseline: commit `306aa84ccc15ea73fe8bbd25dea542b688cbf8b7`.
-The same compiler-generated fixture was run sequentially against baseline and
-optimized built runtimes, in separate Firefox pages.
+| Rows | Implementation | Mount, ms | Isolated update, microseconds/event | Events/second | Reorder, ms |
+| ---: | --- | ---: | ---: | ---: | ---: |
+| 1,000 | Before Phase 2D guards (`d845f2d`) | 25 | 44 | 22,727 | 1 |
+| 1,000 | Phase 2D baseline (`ab4d8b7`) | 28 | 26 | 38,462 | 1 |
+| 1,000 | Phase 3A | 36 | 34 | 29,412 | 1 |
+| 10,000 | Before Phase 2D guards (`d845f2d`) | 146 | 61 | 16,393 | 7 |
+| 10,000 | Phase 2D baseline (`ab4d8b7`) | 152 | 40 | 25,000 | 8 |
+| 10,000 | Phase 3A | 188 | 40 | 25,000 | 9 |
 
-The fixture mounts 1,000 keyed rows with controlled inputs, class-computed text,
-handlers and stateful child components. Reorder times are medians of nine measured
-last-to-first moves after two warmup cycles. Button lookup, dependency tracking,
-DOM instrumentation and focus restoration are included. Reset moves are excluded.
-The computed fixture has a forward-declared diamond and two writes in one handler.
-For the even-sized mount/dispose cycle sample, the upper middle observation is reported.
+The historical safety comparison records mount increases of 3/6 ms and an emitted
+runtime increase from 24,297 to 31,518 bytes (gzip 5,528 to 6,892). Measured update
+times decreased in that comparison. It compares complete historical implementations,
+not an isolated guard-only ablation: JIT behavior, allocation and noise also affect
+these numbers. It does not establish that safety checks are free or improve speed.
+No safety checks were disabled in the delivered runtime for benchmarking.
 
-| Observation | Baseline | Optimized |
-| --- | ---: | ---: |
-| Last-to-first retained ranges moved | 999 | 1 |
-| Nodes removed / inserted during that reorder | 2,997 / 2,997 | 3 / 3 |
-| Elements created / text writes during reorder | 0 / 0 | 0 / 0 |
-| Median last-to-first update | 40 ms | 5 ms |
-| Text writes for the computed event batch | 4 | 1 |
-| Text writes for one isolated field edit | 1 | 1 |
-| Nested child prop label after parent field edit | Stale | Updated |
-| Input focus and selection after moves | Lost | Preserved |
-| Single instrumented 1,000-row mount observation | 216 ms | 198 ms |
-| Median mount + dispose, 30 cycles | 168 ms | 156 ms |
-| Live listeners / attached nodes after those cycles | 0 / 0 | 0 / 0 |
-| Reachable supplied-prop objects after GC, 30 retained disposed handles | 30 | 0 |
-| Reachable rendered nodes in that GC probe | 0 | 0 |
-| Example app JS, minified / gzip | 17.83 / 4.44 kB | 19.67 / 5.23 kB |
+Phase 3A introduces transactional preparation/rollback, caches and dependency
+connectors. Compared with Phase 2D, the 1,000-row update measurement is slower;
+10,000-row throughput is unchanged at this resolution. Mount and larger reorders
+are slower. Median mount/dispose cycle observations are 15/150 ms for 1,000/10,000
+rows, versus 15/99 ms in Phase 2D. Correctness takes priority; no overall speedup
+is claimed. Emitted runtime size is 42,106 bytes, gzip 8,836, versus Phase 2D's
+31,518/6,892. These are standalone emitted-module sizes, not minified app bundle
+sizes. The current example's Vite JS build is about 27.70 kB (gzip 7.79 kB).
 
-These are actual observations from this machine, not universal speed guarantees.
-The single mount observation is not a startup benchmark. Reorder and cycle times have different
-sample counts; very small operations hit Firefox's timer resolution. DOM counts,
-not time thresholds, are asserted in regression tests. Runtime capability adds
-bundle bytes; the generated component module format itself is unchanged.
+All three runtimes produced two isolated text writes (row and child label), zero
+structural writes for that update, and one moved three-node range per reorder
+(three removals/insertions, zero text writes). All retained row and child identities.
+Phase 3A regression tests separately prove one class-computed evaluation across
+validation and multiple consumers, one committed render per binding per batch,
+key/DOM failure rollback, and no recreation of unrelated nodes or instances.
 
-Firefox did not expose a heap-byte measurement. The memory probe keeps 30 disposer
-handles alive, drops other strong references and uses WeakRefs after Playwright's
-requestGC. The table reports observed reachable objects, not byte savings or a
-guarantee of garbage collection. Listener balance and empty mount targets are
-separate resource checks, not a proof that every possible leak is absent.
+The retention probe keeps five disposed handles alive after repeated mounts and
+uses WeakRefs plus Playwright `requestGC`. Every run observed zero reachable sampled
+props/nodes, zero attached owned nodes and balanced listeners. This is evidence for
+these workloads, not heap-byte measurement or proof that every leak is impossible.
+Firefox does not expose a portable heap-byte reading here. Failed-transaction
+retention has a separate Firefox regression test.
 
-## Reproduce and validate
+## Reproduce
 
-Run `npm run build`, then `npm run bench:reactivity`. For a comparison, build the
-baseline commit in a separate checkout and save its `dist/lib/runtime/index.js`,
-then run `npm run bench:reactivity -- --baseline <saved-runtime.js>`. The benchmark
-script uses the existing compiler and Firefox. Its fixtures and instrumentation
-are confined to tests/scripts and excluded from production modules and packages.
+```sh
+npm ci
+npm run build
+npm run bench:phase3
+npm run bench:phase3 -- --sizes 1000,10000 --trials 3 --samples 7 --events 1000 --output phase3-results.json
+npm run test:browser
+```
 
-`npm run test:browser` covers existing dev/production behavior plus computed
-read-after-write, same-key replacement, nested props/state, conditional teardown,
-duplicate-key recovery, failed mount/cleanup, 1,000-row isolation, repeated mounts,
-focus/selection, and prepend insertion without temporary removal. Every four-row permutation is checked against an independent
-exhaustive subsequence reference for the minimum number of retained range moves.
+Default output is `.tools/phase3a/latest.json`. Use `--runtimes` with comma-separated
+runtime paths for other saved comparisons. Baseline snapshots are test-only framework
+runtimes, not production inputs; builds never decode or execute them. Tests, scripts
+and snapshots are excluded from production modules and packed packages. Only Firefox
+is launched. The older `npm run bench:reactivity` and its
+[historical report](benchmarks/reactivity-2026-10-23.json) remain available for the
+richer 1,000-row form/component workload; those earlier numbers predate safety guards.
 
-The next target is startup: mounting took 198 ms and created 10,003 elements and
-7,002 text nodes. Static text/default-prop paths still create effect machinery.
-Profile state/effect allocations and static bindings before claiming faster startup
-or lower heap usage. Compiler resource limits and specialized generated
-bindings remain future work. Security-sensitive changes require independent human
-review before merging, per AGENTS.md and GOVERNANCE.md.
+Next priorities are profiling transactional journal/plan allocations, list map/range
+snapshots and startup closures; specializing generated static/binding code; and
+repeating measurements on more machines and browser versions. Key validation remains
+linear in list length, as does general keyed reconciliation. No virtualization,
+async scheduler, external batching API, state-preserving HMR or resource sandbox is
+introduced. Keep rollback, typed validation and subscription integrity when optimizing.

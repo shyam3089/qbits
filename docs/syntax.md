@@ -208,9 +208,9 @@ counts and types at compile time and again at runtime. Reconciliation preserves 
 instances for retained keys and creates or disposes only inserted and removed records.
 
 Computed values may depend on state, other computed values, list length, or class
-fields. Dependency cycles are errors. Runtime evaluation records the signals read by
-each DOM binding and reruns only subscribed bindings. Class computed members
-evaluate on read and are also validated when their instance changes. They create
+fields. Dependency cycles are errors. The compiler records binding dependency paths; the runtime connects them to each
+mounted scope and reruns only affected bindings. Class computed members cache their
+results against input values and are validated when their instance changes. They create
 no permanent class-level subscriptions, so removing a list record releases its bindings.
 
 ## Events and lifecycle
@@ -224,9 +224,11 @@ members, and values outside the documented forms are compile errors.
 Synchronous handlers and their nested class actions form a validation batch.
 Invalid mutations or arithmetic, including overflow in affected computed values,
 restore earlier signal writes and subscriptions in that batch before DOM updates.
-Valid statements still see preceding writes in order. This is not a general DOM
-transaction: reconciliation errors such as duplicate keys keep the existing
-behavior (reject structural changes without rolling back the list-state write).
+Valid statements still see preceding writes in order. Duplicate keys also roll back
+the batch, including writes that preceded the invalid list change. DOM changes are
+staged before commit; recoverable rendering failures restore owned nodes and state.
+Cleanup errors finish releasing owned resources and report the error after the
+rendering commit. See [reactivity](reactivity.md) for host failure boundaries.
 
 ```text
 component LifecycleExample:

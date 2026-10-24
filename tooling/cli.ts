@@ -43,7 +43,7 @@ try {
   else if (command === 'init') { if (rest.length) throw new Error(usage); await initialize(); }
   else if (command === 'docs') {
     const topic = rest[0] === '--agent' ? 'agent' : rest[0] ?? 'agent';
-    if (rest.length > 1 || !['agent','syntax','examples','security','commands','limitations','package-managers'].includes(topic)) throw new Error(usage);
+    if (rest.length > 1 || !['agent','syntax','examples','security','commands','limitations','package-managers','reactivity'].includes(topic)) throw new Error(usage);
     const manifest = JSON.parse(await readFile(new URL('manifest.json',docsRoot),'utf8'));
     console.log(`${identity.displayName} ${manifest.version} — installed docs: ${fileURLToPath(docsRoot)}\n` + await readFile(new URL(`${topic}.md`,docsRoot),'utf8'));
   } else {

@@ -1,0 +1,1013 @@
+{
+  "schemaVersion": 1,
+  "baselineProvenance": {
+    "typescript": "5.8.3",
+    "compilerOptions": {
+      "target": "ES2022",
+      "module": "ESNext"
+    },
+    "baselines": [
+      {
+        "path": "tests/benchmarks/pre-guards-runtime.js",
+        "revision": "d845f2dbd7d9c4c08905dccbd9b8e24422ff21b8",
+        "source": "runtime/index.ts",
+        "sourceSha256": "7386a519874c05863274ef90cbf64b9effb0f7a3cfd98b88b6afdc500cd240bb",
+        "runtimeSha256": "eefccda112525ca51388f4549640194e2a5236512a9b4f6cf91d80c9144f45e5",
+        "reproducedByTypeScriptTranspileModule": true
+      },
+      {
+        "path": "tests/benchmarks/phase2d-runtime.js",
+        "revision": "ab4d8b7a582cbb5cb9205fd5a4f30ab994915d4d",
+        "source": "runtime/index.ts",
+        "sourceSha256": "d8e8c816cc08d80fb9df64e75af4c6f47c74f853ef113baa9cd0dac8543559ad",
+        "runtimeSha256": "d95abddaeb5a2be98cdcc25a9ac54c0caf02e5ce5d93bd853b04f2c4573017e5",
+        "reproducedByTypeScriptTranspileModule": true
+      }
+    ]
+  },
+  "date": "2026-10-23T18:59:50.688Z",
+  "environment": {
+    "node": "v22.16.0",
+    "firefox": "157.0",
+    "platform": "win32",
+    "release": "10.0.26200",
+    "cpu": "11th Gen Intel(R) Core(TM) i3-1115G4 @ 3.00GHz"
+  },
+  "samples": 7,
+  "events": 1000,
+  "trials": 3,
+  "results": [
+    {
+      "path": "tests/benchmarks/pre-guards-runtime.js",
+      "trial": 0,
+      "runtimeBytes": 24297,
+      "runtimeGzipBytes": 5528,
+      "runtimeSha256": "eefccda112525ca51388f4549640194e2a5236512a9b4f6cf91d80c9144f45e5",
+      "fixtureSha256": "3ee0fb1b353f9f242d7100966aa071da17036e993da0164de6c0f2d6009beb31",
+      "size": 1000,
+      "elementCount": 1010,
+      "domNodeCount": 4019,
+      "samples": 7,
+      "eventsPerBatch": 1000,
+      "mountMs": 35,
+      "updateBatchMs": [
+        52,
+        63,
+        60,
+        55,
+        40,
+        42,
+        36
+      ],
+      "updateBatchMedianMs": 52,
+      "updateMicroseconds": 52,
+      "updatesPerSecond": 19230.76923076923,
+      "reorderMs": [
+        2,
+        1,
+        1,
+        1,
+        1,
+        2,
+        1
+      ],
+      "reorderMedianMs": 1,
+      "cycleMedianMs": 26,
+      "isolatedMutations": {
+        "text": 2,
+        "structural": 0
+      },
+      "reorderMutations": {
+        "inserted": 3,
+        "removed": 3,
+        "text": 0
+      },
+      "identity": true,
+      "disposedNodes": 0,
+      "liveListeners": 0,
+      "retention": {
+        "retainedHandles": 5,
+        "reachableProps": 0,
+        "reachableNodes": 0
+      }
+    },
+    {
+      "path": "tests/benchmarks/phase2d-runtime.js",
+      "trial": 0,
+      "runtimeBytes": 31518,
+      "runtimeGzipBytes": 6892,
+      "runtimeSha256": "d95abddaeb5a2be98cdcc25a9ac54c0caf02e5ce5d93bd853b04f2c4573017e5",
+      "fixtureSha256": "3ee0fb1b353f9f242d7100966aa071da17036e993da0164de6c0f2d6009beb31",
+      "size": 1000,
+      "elementCount": 1010,
+      "domNodeCount": 4019,
+      "samples": 7,
+      "eventsPerBatch": 1000,
+      "mountMs": 22,
+      "updateBatchMs": [
+        26,
+        27,
+        21,
+        23,
+        22,
+        21,
+        24
+      ],
+      "updateBatchMedianMs": 23,
+      "updateMicroseconds": 23,
+      "updatesPerSecond": 43478.260869565216,
+      "reorderMs": [
+        1,
+        1,
+        1,
+        1,
+        2,
+        1,
+        0
+      ],
+      "reorderMedianMs": 1,
+      "cycleMedianMs": 18,
+      "isolatedMutations": {
+        "text": 2,
+        "structural": 0
+      },
+      "reorderMutations": {
+        "inserted": 3,
+        "removed": 3,
+        "text": 0
+      },
+      "identity": true,
+      "disposedNodes": 0,
+      "liveListeners": 0,
+      "retention": {
+        "retainedHandles": 5,
+        "reachableProps": 0,
+        "reachableNodes": 0
+      }
+    },
+    {
+      "path": "dist/lib/runtime/index.js",
+      "trial": 0,
+      "runtimeBytes": 42106,
+      "runtimeGzipBytes": 8836,
+      "runtimeSha256": "00a93fd5d4562ff4f6f5d804bd9edc376d5cc06e378751663eefcd34b8428cd1",
+      "fixtureSha256": "3ee0fb1b353f9f242d7100966aa071da17036e993da0164de6c0f2d6009beb31",
+      "size": 1000,
+      "elementCount": 1010,
+      "domNodeCount": 4019,
+      "samples": 7,
+      "eventsPerBatch": 1000,
+      "mountMs": 36,
+      "updateBatchMs": [
+        38,
+        34,
+        41,
+        34,
+        26,
+        30,
+        29
+      ],
+      "updateBatchMedianMs": 34,
+      "updateMicroseconds": 34,
+      "updatesPerSecond": 29411.764705882353,
+      "reorderMs": [
+        2,
+        2,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "reorderMedianMs": 1,
+      "cycleMedianMs": 13,
+      "isolatedMutations": {
+        "text": 2,
+        "structural": 0
+      },
+      "reorderMutations": {
+        "inserted": 3,
+        "removed": 3,
+        "text": 0
+      },
+      "identity": true,
+      "disposedNodes": 0,
+      "liveListeners": 0,
+      "retention": {
+        "retainedHandles": 5,
+        "reachableProps": 0,
+        "reachableNodes": 0
+      }
+    },
+    {
+      "path": "tests/benchmarks/pre-guards-runtime.js",
+      "trial": 0,
+      "runtimeBytes": 24297,
+      "runtimeGzipBytes": 5528,
+      "runtimeSha256": "eefccda112525ca51388f4549640194e2a5236512a9b4f6cf91d80c9144f45e5",
+      "fixtureSha256": "dfe2155acaef5190a7dd41f18ad485e6c690ce74ca7321286694cd9c8191107b",
+      "size": 10000,
+      "elementCount": 10010,
+      "domNodeCount": 40019,
+      "samples": 7,
+      "eventsPerBatch": 1000,
+      "mountMs": 133,
+      "updateBatchMs": [
+        44,
+        47,
+        122,
+        173,
+        47,
+        45,
+        64
+      ],
+      "updateBatchMedianMs": 47,
+      "updateMicroseconds": 47,
+      "updatesPerSecond": 21276.59574468085,
+      "reorderMs": [
+        7,
+        7,
+        7,
+        6,
+        7,
+        8,
+        7
+      ],
+      "reorderMedianMs": 7,
+      "cycleMedianMs": 88,
+      "isolatedMutations": {
+        "text": 2,
+        "structural": 0
+      },
+      "reorderMutations": {
+        "inserted": 3,
+        "removed": 3,
+        "text": 0
+      },
+      "identity": true,
+      "disposedNodes": 0,
+      "liveListeners": 0,
+      "retention": {
+        "retainedHandles": 5,
+        "reachableProps": 0,
+        "reachableNodes": 0
+      }
+    },
+    {
+      "path": "tests/benchmarks/phase2d-runtime.js",
+      "trial": 0,
+      "runtimeBytes": 31518,
+      "runtimeGzipBytes": 6892,
+      "runtimeSha256": "d95abddaeb5a2be98cdcc25a9ac54c0caf02e5ce5d93bd853b04f2c4573017e5",
+      "fixtureSha256": "dfe2155acaef5190a7dd41f18ad485e6c690ce74ca7321286694cd9c8191107b",
+      "size": 10000,
+      "elementCount": 10010,
+      "domNodeCount": 40019,
+      "samples": 7,
+      "eventsPerBatch": 1000,
+      "mountMs": 156,
+      "updateBatchMs": [
+        38,
+        40,
+        46,
+        55,
+        28,
+        30,
+        28
+      ],
+      "updateBatchMedianMs": 38,
+      "updateMicroseconds": 38,
+      "updatesPerSecond": 26315.78947368421,
+      "reorderMs": [
+        6,
+        13,
+        7,
+        7,
+        8,
+        7,
+        7
+      ],
+      "reorderMedianMs": 7,
+      "cycleMedianMs": 99,
+      "isolatedMutations": {
+        "text": 2,
+        "structural": 0
+      },
+      "reorderMutations": {
+        "inserted": 3,
+        "removed": 3,
+        "text": 0
+      },
+      "identity": true,
+      "disposedNodes": 0,
+      "liveListeners": 0,
+      "retention": {
+        "retainedHandles": 5,
+        "reachableProps": 0,
+        "reachableNodes": 0
+      }
+    },
+    {
+      "path": "dist/lib/runtime/index.js",
+      "trial": 0,
+      "runtimeBytes": 42106,
+      "runtimeGzipBytes": 8836,
+      "runtimeSha256": "00a93fd5d4562ff4f6f5d804bd9edc376d5cc06e378751663eefcd34b8428cd1",
+      "fixtureSha256": "dfe2155acaef5190a7dd41f18ad485e6c690ce74ca7321286694cd9c8191107b",
+      "size": 10000,
+      "elementCount": 10010,
+      "domNodeCount": 40019,
+      "samples": 7,
+      "eventsPerBatch": 1000,
+      "mountMs": 188,
+      "updateBatchMs": [
+        45,
+        53,
+        56,
+        36,
+        37,
+        39,
+        31
+      ],
+      "updateBatchMedianMs": 39,
+      "updateMicroseconds": 39,
+      "updatesPerSecond": 25641.02564102564,
+      "reorderMs": [
+        9,
+        12,
+        8,
+        9,
+        11,
+        8,
+        9
+      ],
+      "reorderMedianMs": 9,
+      "cycleMedianMs": 150,
+      "isolatedMutations": {
+        "text": 2,
+        "structural": 0
+      },
+      "reorderMutations": {
+        "inserted": 3,
+        "removed": 3,
+        "text": 0
+      },
+      "identity": true,
+      "disposedNodes": 0,
+      "liveListeners": 0,
+      "retention": {
+        "retainedHandles": 5,
+        "reachableProps": 0,
+        "reachableNodes": 0
+      }
+    },
+    {
+      "path": "dist/lib/runtime/index.js",
+      "trial": 1,
+      "runtimeBytes": 42106,
+      "runtimeGzipBytes": 8836,
+      "runtimeSha256": "00a93fd5d4562ff4f6f5d804bd9edc376d5cc06e378751663eefcd34b8428cd1",
+      "fixtureSha256": "3ee0fb1b353f9f242d7100966aa071da17036e993da0164de6c0f2d6009beb31",
+      "size": 1000,
+      "elementCount": 1010,
+      "domNodeCount": 4019,
+      "samples": 7,
+      "eventsPerBatch": 1000,
+      "mountMs": 36,
+      "updateBatchMs": [
+        44,
+        42,
+        39,
+        31,
+        31,
+        27,
+        28
+      ],
+      "updateBatchMedianMs": 31,
+      "updateMicroseconds": 31,
+      "updatesPerSecond": 32258.064516129034,
+      "reorderMs": [
+        2,
+        2,
+        1,
+        1,
+        1,
+        1,
+        2
+      ],
+      "reorderMedianMs": 1,
+      "cycleMedianMs": 16,
+      "isolatedMutations": {
+        "text": 2,
+        "structural": 0
+      },
+      "reorderMutations": {
+        "inserted": 3,
+        "removed": 3,
+        "text": 0
+      },
+      "identity": true,
+      "disposedNodes": 0,
+      "liveListeners": 0,
+      "retention": {
+        "retainedHandles": 5,
+        "reachableProps": 0,
+        "reachableNodes": 0
+      }
+    },
+    {
+      "path": "tests/benchmarks/phase2d-runtime.js",
+      "trial": 1,
+      "runtimeBytes": 31518,
+      "runtimeGzipBytes": 6892,
+      "runtimeSha256": "d95abddaeb5a2be98cdcc25a9ac54c0caf02e5ce5d93bd853b04f2c4573017e5",
+      "fixtureSha256": "3ee0fb1b353f9f242d7100966aa071da17036e993da0164de6c0f2d6009beb31",
+      "size": 1000,
+      "elementCount": 1010,
+      "domNodeCount": 4019,
+      "samples": 7,
+      "eventsPerBatch": 1000,
+      "mountMs": 36,
+      "updateBatchMs": [
+        44,
+        32,
+        23,
+        22,
+        32,
+        33,
+        31
+      ],
+      "updateBatchMedianMs": 32,
+      "updateMicroseconds": 32,
+      "updatesPerSecond": 31250,
+      "reorderMs": [
+        0,
+        1,
+        1,
+        0,
+        1,
+        0,
+        1
+      ],
+      "reorderMedianMs": 1,
+      "cycleMedianMs": 15,
+      "isolatedMutations": {
+        "text": 2,
+        "structural": 0
+      },
+      "reorderMutations": {
+        "inserted": 3,
+        "removed": 3,
+        "text": 0
+      },
+      "identity": true,
+      "disposedNodes": 0,
+      "liveListeners": 0,
+      "retention": {
+        "retainedHandles": 5,
+        "reachableProps": 0,
+        "reachableNodes": 0
+      }
+    },
+    {
+      "path": "tests/benchmarks/pre-guards-runtime.js",
+      "trial": 1,
+      "runtimeBytes": 24297,
+      "runtimeGzipBytes": 5528,
+      "runtimeSha256": "eefccda112525ca51388f4549640194e2a5236512a9b4f6cf91d80c9144f45e5",
+      "fixtureSha256": "3ee0fb1b353f9f242d7100966aa071da17036e993da0164de6c0f2d6009beb31",
+      "size": 1000,
+      "elementCount": 1010,
+      "domNodeCount": 4019,
+      "samples": 7,
+      "eventsPerBatch": 1000,
+      "mountMs": 22,
+      "updateBatchMs": [
+        45,
+        46,
+        38,
+        29,
+        54,
+        27,
+        24
+      ],
+      "updateBatchMedianMs": 38,
+      "updateMicroseconds": 38,
+      "updatesPerSecond": 26315.78947368421,
+      "reorderMs": [
+        1,
+        1,
+        0,
+        1,
+        1,
+        1,
+        1
+      ],
+      "reorderMedianMs": 1,
+      "cycleMedianMs": 14,
+      "isolatedMutations": {
+        "text": 2,
+        "structural": 0
+      },
+      "reorderMutations": {
+        "inserted": 3,
+        "removed": 3,
+        "text": 0
+      },
+      "identity": true,
+      "disposedNodes": 0,
+      "liveListeners": 0,
+      "retention": {
+        "retainedHandles": 5,
+        "reachableProps": 0,
+        "reachableNodes": 0
+      }
+    },
+    {
+      "path": "dist/lib/runtime/index.js",
+      "trial": 1,
+      "runtimeBytes": 42106,
+      "runtimeGzipBytes": 8836,
+      "runtimeSha256": "00a93fd5d4562ff4f6f5d804bd9edc376d5cc06e378751663eefcd34b8428cd1",
+      "fixtureSha256": "dfe2155acaef5190a7dd41f18ad485e6c690ce74ca7321286694cd9c8191107b",
+      "size": 10000,
+      "elementCount": 10010,
+      "domNodeCount": 40019,
+      "samples": 7,
+      "eventsPerBatch": 1000,
+      "mountMs": 136,
+      "updateBatchMs": [
+        32,
+        78,
+        55,
+        52,
+        40,
+        42,
+        39
+      ],
+      "updateBatchMedianMs": 42,
+      "updateMicroseconds": 42,
+      "updatesPerSecond": 23809.52380952381,
+      "reorderMs": [
+        9,
+        9,
+        7,
+        9,
+        7,
+        9,
+        9
+      ],
+      "reorderMedianMs": 9,
+      "cycleMedianMs": 168,
+      "isolatedMutations": {
+        "text": 2,
+        "structural": 0
+      },
+      "reorderMutations": {
+        "inserted": 3,
+        "removed": 3,
+        "text": 0
+      },
+      "identity": true,
+      "disposedNodes": 0,
+      "liveListeners": 0,
+      "retention": {
+        "retainedHandles": 5,
+        "reachableProps": 0,
+        "reachableNodes": 0
+      }
+    },
+    {
+      "path": "tests/benchmarks/phase2d-runtime.js",
+      "trial": 1,
+      "runtimeBytes": 31518,
+      "runtimeGzipBytes": 6892,
+      "runtimeSha256": "d95abddaeb5a2be98cdcc25a9ac54c0caf02e5ce5d93bd853b04f2c4573017e5",
+      "fixtureSha256": "dfe2155acaef5190a7dd41f18ad485e6c690ce74ca7321286694cd9c8191107b",
+      "size": 10000,
+      "elementCount": 10010,
+      "domNodeCount": 40019,
+      "samples": 7,
+      "eventsPerBatch": 1000,
+      "mountMs": 152,
+      "updateBatchMs": [
+        40,
+        40,
+        58,
+        43,
+        46,
+        62,
+        26
+      ],
+      "updateBatchMedianMs": 43,
+      "updateMicroseconds": 43,
+      "updatesPerSecond": 23255.81395348837,
+      "reorderMs": [
+        7,
+        9,
+        8,
+        8,
+        8,
+        8,
+        8
+      ],
+      "reorderMedianMs": 8,
+      "cycleMedianMs": 114,
+      "isolatedMutations": {
+        "text": 2,
+        "structural": 0
+      },
+      "reorderMutations": {
+        "inserted": 3,
+        "removed": 3,
+        "text": 0
+      },
+      "identity": true,
+      "disposedNodes": 0,
+      "liveListeners": 0,
+      "retention": {
+        "retainedHandles": 5,
+        "reachableProps": 0,
+        "reachableNodes": 0
+      }
+    },
+    {
+      "path": "tests/benchmarks/pre-guards-runtime.js",
+      "trial": 1,
+      "runtimeBytes": 24297,
+      "runtimeGzipBytes": 5528,
+      "runtimeSha256": "eefccda112525ca51388f4549640194e2a5236512a9b4f6cf91d80c9144f45e5",
+      "fixtureSha256": "dfe2155acaef5190a7dd41f18ad485e6c690ce74ca7321286694cd9c8191107b",
+      "size": 10000,
+      "elementCount": 10010,
+      "domNodeCount": 40019,
+      "samples": 7,
+      "eventsPerBatch": 1000,
+      "mountMs": 185,
+      "updateBatchMs": [
+        61,
+        55,
+        118,
+        89,
+        138,
+        56,
+        51
+      ],
+      "updateBatchMedianMs": 61,
+      "updateMicroseconds": 61,
+      "updatesPerSecond": 16393.44262295082,
+      "reorderMs": [
+        13,
+        12,
+        10,
+        11,
+        11,
+        11,
+        12
+      ],
+      "reorderMedianMs": 11,
+      "cycleMedianMs": 148,
+      "isolatedMutations": {
+        "text": 2,
+        "structural": 0
+      },
+      "reorderMutations": {
+        "inserted": 3,
+        "removed": 3,
+        "text": 0
+      },
+      "identity": true,
+      "disposedNodes": 0,
+      "liveListeners": 0,
+      "retention": {
+        "retainedHandles": 5,
+        "reachableProps": 0,
+        "reachableNodes": 0
+      }
+    },
+    {
+      "path": "tests/benchmarks/pre-guards-runtime.js",
+      "trial": 2,
+      "runtimeBytes": 24297,
+      "runtimeGzipBytes": 5528,
+      "runtimeSha256": "eefccda112525ca51388f4549640194e2a5236512a9b4f6cf91d80c9144f45e5",
+      "fixtureSha256": "3ee0fb1b353f9f242d7100966aa071da17036e993da0164de6c0f2d6009beb31",
+      "size": 1000,
+      "elementCount": 1010,
+      "domNodeCount": 4019,
+      "samples": 7,
+      "eventsPerBatch": 1000,
+      "mountMs": 25,
+      "updateBatchMs": [
+        42,
+        45,
+        52,
+        45,
+        31,
+        44,
+        36
+      ],
+      "updateBatchMedianMs": 44,
+      "updateMicroseconds": 44,
+      "updatesPerSecond": 22727.272727272728,
+      "reorderMs": [
+        2,
+        1,
+        5,
+        1,
+        1,
+        4,
+        3
+      ],
+      "reorderMedianMs": 2,
+      "cycleMedianMs": 22,
+      "isolatedMutations": {
+        "text": 2,
+        "structural": 0
+      },
+      "reorderMutations": {
+        "inserted": 3,
+        "removed": 3,
+        "text": 0
+      },
+      "identity": true,
+      "disposedNodes": 0,
+      "liveListeners": 0,
+      "retention": {
+        "retainedHandles": 5,
+        "reachableProps": 0,
+        "reachableNodes": 0
+      }
+    },
+    {
+      "path": "tests/benchmarks/phase2d-runtime.js",
+      "trial": 2,
+      "runtimeBytes": 31518,
+      "runtimeGzipBytes": 6892,
+      "runtimeSha256": "d95abddaeb5a2be98cdcc25a9ac54c0caf02e5ce5d93bd853b04f2c4573017e5",
+      "fixtureSha256": "3ee0fb1b353f9f242d7100966aa071da17036e993da0164de6c0f2d6009beb31",
+      "size": 1000,
+      "elementCount": 1010,
+      "domNodeCount": 4019,
+      "samples": 7,
+      "eventsPerBatch": 1000,
+      "mountMs": 28,
+      "updateBatchMs": [
+        37,
+        31,
+        31,
+        26,
+        21,
+        22,
+        23
+      ],
+      "updateBatchMedianMs": 26,
+      "updateMicroseconds": 26,
+      "updatesPerSecond": 38461.53846153846,
+      "reorderMs": [
+        1,
+        1,
+        0,
+        1,
+        1,
+        0,
+        1
+      ],
+      "reorderMedianMs": 1,
+      "cycleMedianMs": 13,
+      "isolatedMutations": {
+        "text": 2,
+        "structural": 0
+      },
+      "reorderMutations": {
+        "inserted": 3,
+        "removed": 3,
+        "text": 0
+      },
+      "identity": true,
+      "disposedNodes": 0,
+      "liveListeners": 0,
+      "retention": {
+        "retainedHandles": 5,
+        "reachableProps": 0,
+        "reachableNodes": 0
+      }
+    },
+    {
+      "path": "dist/lib/runtime/index.js",
+      "trial": 2,
+      "runtimeBytes": 42106,
+      "runtimeGzipBytes": 8836,
+      "runtimeSha256": "00a93fd5d4562ff4f6f5d804bd9edc376d5cc06e378751663eefcd34b8428cd1",
+      "fixtureSha256": "3ee0fb1b353f9f242d7100966aa071da17036e993da0164de6c0f2d6009beb31",
+      "size": 1000,
+      "elementCount": 1010,
+      "domNodeCount": 4019,
+      "samples": 7,
+      "eventsPerBatch": 1000,
+      "mountMs": 39,
+      "updateBatchMs": [
+        49,
+        32,
+        28,
+        27,
+        38,
+        36,
+        37
+      ],
+      "updateBatchMedianMs": 36,
+      "updateMicroseconds": 36,
+      "updatesPerSecond": 27777.777777777777,
+      "reorderMs": [
+        1,
+        0,
+        2,
+        1,
+        1,
+        2,
+        0
+      ],
+      "reorderMedianMs": 1,
+      "cycleMedianMs": 15,
+      "isolatedMutations": {
+        "text": 2,
+        "structural": 0
+      },
+      "reorderMutations": {
+        "inserted": 3,
+        "removed": 3,
+        "text": 0
+      },
+      "identity": true,
+      "disposedNodes": 0,
+      "liveListeners": 0,
+      "retention": {
+        "retainedHandles": 5,
+        "reachableProps": 0,
+        "reachableNodes": 0
+      }
+    },
+    {
+      "path": "tests/benchmarks/pre-guards-runtime.js",
+      "trial": 2,
+      "runtimeBytes": 24297,
+      "runtimeGzipBytes": 5528,
+      "runtimeSha256": "eefccda112525ca51388f4549640194e2a5236512a9b4f6cf91d80c9144f45e5",
+      "fixtureSha256": "dfe2155acaef5190a7dd41f18ad485e6c690ce74ca7321286694cd9c8191107b",
+      "size": 10000,
+      "elementCount": 10010,
+      "domNodeCount": 40019,
+      "samples": 7,
+      "eventsPerBatch": 1000,
+      "mountMs": 146,
+      "updateBatchMs": [
+        45,
+        116,
+        129,
+        63,
+        58,
+        79,
+        46
+      ],
+      "updateBatchMedianMs": 63,
+      "updateMicroseconds": 63,
+      "updatesPerSecond": 15873.015873015873,
+      "reorderMs": [
+        7,
+        7,
+        7,
+        8,
+        8,
+        6,
+        6
+      ],
+      "reorderMedianMs": 7,
+      "cycleMedianMs": 94,
+      "isolatedMutations": {
+        "text": 2,
+        "structural": 0
+      },
+      "reorderMutations": {
+        "inserted": 3,
+        "removed": 3,
+        "text": 0
+      },
+      "identity": true,
+      "disposedNodes": 0,
+      "liveListeners": 0,
+      "retention": {
+        "retainedHandles": 5,
+        "reachableProps": 0,
+        "reachableNodes": 0
+      }
+    },
+    {
+      "path": "tests/benchmarks/phase2d-runtime.js",
+      "trial": 2,
+      "runtimeBytes": 31518,
+      "runtimeGzipBytes": 6892,
+      "runtimeSha256": "d95abddaeb5a2be98cdcc25a9ac54c0caf02e5ce5d93bd853b04f2c4573017e5",
+      "fixtureSha256": "dfe2155acaef5190a7dd41f18ad485e6c690ce74ca7321286694cd9c8191107b",
+      "size": 10000,
+      "elementCount": 10010,
+      "domNodeCount": 40019,
+      "samples": 7,
+      "eventsPerBatch": 1000,
+      "mountMs": 137,
+      "updateBatchMs": [
+        26,
+        54,
+        42,
+        38,
+        45,
+        29,
+        29
+      ],
+      "updateBatchMedianMs": 38,
+      "updateMicroseconds": 38,
+      "updatesPerSecond": 26315.78947368421,
+      "reorderMs": [
+        9,
+        8,
+        8,
+        8,
+        10,
+        8,
+        9
+      ],
+      "reorderMedianMs": 8,
+      "cycleMedianMs": 94,
+      "isolatedMutations": {
+        "text": 2,
+        "structural": 0
+      },
+      "reorderMutations": {
+        "inserted": 3,
+        "removed": 3,
+        "text": 0
+      },
+      "identity": true,
+      "disposedNodes": 0,
+      "liveListeners": 0,
+      "retention": {
+        "retainedHandles": 5,
+        "reachableProps": 0,
+        "reachableNodes": 0
+      }
+    },
+    {
+      "path": "dist/lib/runtime/index.js",
+      "trial": 2,
+      "runtimeBytes": 42106,
+      "runtimeGzipBytes": 8836,
+      "runtimeSha256": "00a93fd5d4562ff4f6f5d804bd9edc376d5cc06e378751663eefcd34b8428cd1",
+      "fixtureSha256": "dfe2155acaef5190a7dd41f18ad485e6c690ce74ca7321286694cd9c8191107b",
+      "size": 10000,
+      "elementCount": 10010,
+      "domNodeCount": 40019,
+      "samples": 7,
+      "eventsPerBatch": 1000,
+      "mountMs": 197,
+      "updateBatchMs": [
+        47,
+        55,
+        57,
+        36,
+        37,
+        38,
+        33
+      ],
+      "updateBatchMedianMs": 38,
+      "updateMicroseconds": 38,
+      "updatesPerSecond": 26315.78947368421,
+      "reorderMs": [
+        9,
+        32,
+        22,
+        16,
+        8,
+        8,
+        8
+      ],
+      "reorderMedianMs": 9,
+      "cycleMedianMs": 132,
+      "isolatedMutations": {
+        "text": 2,
+        "structural": 0
+      },
+      "reorderMutations": {
+        "inserted": 3,
+        "removed": 3,
+        "text": 0
+      },
+      "identity": true,
+      "disposedNodes": 0,
+      "liveListeners": 0,
+      "retention": {
+        "retainedHandles": 5,
+        "reachableProps": 0,
+        "reachableNodes": 0
+      }
+    }
+  ]
+}

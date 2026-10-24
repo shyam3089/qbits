@@ -4,6 +4,7 @@ export * from './tokenizer.js';
 export * from './parser.js';
 export * from './validator.js';
 export * from './generator.js';
+export * from './dependencies.js';
 import { parse } from './parser.js';
 import { validate } from './validator.js';
 import { generate } from './generator.js';

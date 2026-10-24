@@ -3,6 +3,7 @@
 - Read docs/syntax.md before changing grammar. Obtain founder approval for language changes.
 - Keep compiler semantics independent of identity and source suffixes. Edit identity.json and run npm run sync.
 - Keep language/, runtime/, tooling/, examples/ boundaries explicit; avoid new dependencies without need.
+- Preserve transactional state/DOM rollback and keyed identity; read docs/reactivity.md for engine changes.
 - Never execute application source during compilation. Use text nodes, not HTML injection.
 - Security-sensitive changes need independent human review before merging.
 - Run npm run sync:check, npm run build, npm run test:docs, npm test, npm run test:rename, npm run test:external.

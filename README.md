@@ -78,9 +78,11 @@ routing, SSR, plugins, LSP/editor extensions, native targets, and a registry are
 deferred. Component children/slots and state-preserving HMR are also deferred.
 No performance claim is made without a benchmark.
 
-Phase 2E adds synchronous reactive batching, computed dependency ordering, tracked
-child prop updates, and keyed reconciliation that minimizes retained range moves.
-DOM identity, child state, focus and selection are preserved; unchanged values skip
-DOM writes. Disposal releases subscriptions, listeners and retained state, including
-failed mounts. Run `npm run bench:reactivity` after building. See
-[measurements and validation](docs/performance.md) for the baseline comparison and limitations.
+Phase 3A adds compiler dependency metadata, cached class-computed chains, static
+binding elision, and transactional DOM preparation. Synchronous batches update only
+affected text/properties/regions. Keyed lists preserve nodes, child state, focus and
+selection. Duplicate keys and recoverable rendering failures roll back state and
+subscriptions. The indentation grammar and public mount API are unchanged.
+Run `npm run bench:phase3` after building for Firefox comparisons at 1,000/10,000
+rows. See [reactivity semantics](docs/reactivity.md) and [measurements](docs/performance.md)
+for correctness boundaries, measured costs and remaining optimization work.

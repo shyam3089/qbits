@@ -1,0 +1,25 @@
+{
+  "typescript": "5.8.3",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext"
+  },
+  "baselines": [
+    {
+      "path": "tests/benchmarks/pre-guards-runtime.js",
+      "revision": "d845f2dbd7d9c4c08905dccbd9b8e24422ff21b8",
+      "source": "runtime/index.ts",
+      "sourceSha256": "7386a519874c05863274ef90cbf64b9effb0f7a3cfd98b88b6afdc500cd240bb",
+      "runtimeSha256": "eefccda112525ca51388f4549640194e2a5236512a9b4f6cf91d80c9144f45e5",
+      "reproducedByTypeScriptTranspileModule": true
+    },
+    {
+      "path": "tests/benchmarks/phase2d-runtime.js",
+      "revision": "ab4d8b7a582cbb5cb9205fd5a4f30ab994915d4d",
+      "source": "runtime/index.ts",
+      "sourceSha256": "d8e8c816cc08d80fb9df64e75af4c6f47c74f853ef113baa9cd0dac8543559ad",
+      "runtimeSha256": "d95abddaeb5a2be98cdcc25a9ac54c0caf02e5ce5d93bd853b04f2c4573017e5",
+      "reproducedByTypeScriptTranspileModule": true
+    }
+  ]
+}

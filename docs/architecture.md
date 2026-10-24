@@ -21,19 +21,24 @@ become JS identifiers. Literal text uses JSON serialization and DOM text nodes.
 Safe-integer overflow throws before invalid numeric writes. Handler validation
 batches journal signal values, derived dirty flags and subscriptions so validation
 failures restore earlier writes before any DOM effects run. Child prop propagation
-settles with computed values during preparation; DOM reconciliation errors retain
-their existing semantics. List methods require registered writable list-state
+settles with computed values during preparation. DOM plans stage changes in
+detached fragments; key and mounting failures roll back the batch, and commit
+failures restore owned ranges before restoring signals and subscriptions. List methods require registered writable list-state
 signals and validate argument counts, types and safe-integer move indexes before
 copying/committing a new list. Controlled text inputs update
 their existing DOM value only when it differs, preserving focus and caret while typing.
 Checkbox state is synchronized through the DOM `checked` property.
-Each state or instance field is a small signal. A DOM binding effect dynamically
-subscribes to only the signals it reads. Closed handlers batch writes synchronously;
+Each state or instance field is a small signal. The compiler emits deduplicated dependency paths on bound expressions, and exports
+`analyzeDependencies(ast)` with one-shot initializer edges, computed edges, and
+source-located binding edges. A DOM binding connects these paths in its local scope;
+old models without metadata retain dynamic read tracking. Literal bindings and
+static child props need no subscription effects. Closed handlers batch writes synchronously;
 computed values invalidate derived descendants and settle before queued DOM effects.
 Sets deduplicate scheduled effects; equality checks suppress unchanged derived outputs.
 Reads inside actions refresh dirty computed values immediately. Component computed
 values propagate through signals, while class computed members evaluate lazily inside
-their consuming effect, including references to other class computed members;
+their consuming effect, caching results by input signal values across validation and
+multiple consumers, including references to other class computed members;
 instance updates also preflight these expressions for arithmetic failures.
 Conditionals use comment anchors and branch-local
 cleanup scopes. Keyed iteration tracks only collection/key reads; record construction

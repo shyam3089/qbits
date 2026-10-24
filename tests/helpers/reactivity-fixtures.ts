@@ -99,6 +99,7 @@ component Edges:
     button text="Recover":
         on click:
             items.remove(replacement)
+            items.append(replacement)
     button text="Prepend":
         on click:
             items.append(added)

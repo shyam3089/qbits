@@ -16,6 +16,7 @@
     "commands",
     "security",
     "limitations",
-    "package-managers"
+    "package-managers",
+    "reactivity"
   ]
 }
