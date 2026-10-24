@@ -5,7 +5,7 @@ type Expr={kind:'literal';value:Primitive}|{kind:'reference';name:string}|{kind:
 type ConditionExpr={kind:'literal';value:Primitive}|{kind:'reference';name:string}|{kind:'member';object:Expr;name:string}|{kind:'not';argument:ConditionExpr}|{kind:'equal'|'notEqual'|'and';left:ConditionExpr;right:ConditionExpr};
 type Statement={kind:'assign';target:Expr;value:Expr}|{kind:'eventAssign';target:Expr;member:'value'|'checked'}|{kind:'call';target:Expr;method:string;arguments:Expr[]};
 interface Handler {kind?:string;event:'click'|'input'|'change';statements:Statement[]}
-interface ElementView {kind:'element';tag:string;component:number;attributes:Record<string,Expr>;children:View[];handler?:Handler}
+interface ElementView {kind:'element';tag:string;component:number;attributes:Record<string,Expr>;static?:number;children:View[];handler?:Handler}
 interface ConditionalView {kind:'conditional';condition:ConditionExpr;consequent:View[];alternate:View[]}
 interface IterationView {kind:'iteration';item:string;collection:Expr;key:Expr;children:View[]}
 type View=ElementView|ConditionalView|IterationView;
@@ -20,9 +20,12 @@ type Mount=(target:Element,runtime:typeof import('./index.js'),props?:Record<str
 let activeEffect:ReactiveEffect|undefined;
 let batchDepth=0,flushing=false;
 const pendingComputed=new Set<ReactiveEffect>(),pendingEffects=new Set<ReactiveEffect>();
+let transactionDepth=0;
+const changedSignals:Signal[]=[],previousValues:Value[]=[];
 
 function signal<T=Value>(value:T):Signal<T>{return {value,subscribers:new Set()};}
 function read<T>(source:Signal<T>):T {if(source.dirty)source.derive!();if(activeEffect&&!activeEffect.disposed){source.subscribers.add(activeEffect);activeEffect.dependencies.add(source as Signal);}return source.value;}
+function rememberValue(source:Signal):void {if(!transactionDepth||source.derive||changedSignals.includes(source))return;changedSignals.push(source);previousValues.push(source.value);}
 function enqueue(effect:ReactiveEffect):void {
   if(effect.disposed)return;
   if(!effect.computed){pendingEffects.add(effect);return;}
@@ -37,9 +40,9 @@ function flush():void {
   try{while(pendingComputed.size||pendingEffects.size){while(pendingComputed.size)pendingComputed.values().next().value!();if(pendingEffects.size)pendingEffects.values().next().value!();}}
   finally{flushing=false;pendingComputed.clear();pendingEffects.clear();}
 }
-function batch<T>(run:()=>T):T {batchDepth++;try{return run();}finally{batchDepth--;flush();}}
+function batch<T>(run:()=>T):T {batchDepth++;let complete=false;try{const result=run();complete=true;return result;}finally{batchDepth--;if(complete)flush();}}
 function untracked<T>(run:()=>T):T {const previous=activeEffect;activeEffect=undefined;try{return run();}finally{activeEffect=previous;}}
-function write<T>(source:Signal<T>,value:T):void {if(Object.is(source.value,value))return;source.value=value;for(const subscriber of source.subscribers)enqueue(subscriber);flush();}
+function write<T>(source:Signal<T>,value:T):void {if(typeof value==='number'&&!Number.isSafeInteger(value))throw new RangeError('State exceeded safe integer range');if(Object.is(source.value,value))return;rememberValue(source as Signal);source.value=value;for(const subscriber of source.subscribers)enqueue(subscriber);flush();}
 function createEffect(run:()=>void,computed?:Signal):ReactiveEffect {
   const effect=(()=>{if(effect.disposed)return;pendingComputed.delete(effect);pendingEffects.delete(effect);if(computed)computed.dirty=false;for(const source of effect.dependencies)source.subscribers.delete(effect);effect.dependencies.clear();const previous=activeEffect;activeEffect=effect;try{run();}finally{activeEffect=previous;}}) as ReactiveEffect;
   effect.dependencies=new Set();effect.disposed=false;effect.computed=computed;
@@ -48,6 +51,22 @@ function createEffect(run:()=>void,computed?:Signal):ReactiveEffect {
   return effect;
 }
 function stop(effect:ReactiveEffect):void {if(effect.disposed)return;effect.disposed=true;pendingComputed.delete(effect);pendingEffects.delete(effect);for(const source of effect.dependencies)source.subscribers.delete(effect);effect.dependencies.clear();}
+
+function clearTransaction():void {changedSignals.length=previousValues.length=0;}
+function transact<T>(run:()=>T):T {
+  if(transactionDepth)return run();
+  clearTransaction();transactionDepth=1;batchDepth++;let batched=true;
+  try{const result=run();batchDepth--;batched=false;flush();transactionDepth=0;clearTransaction();return result;}
+  catch(error){
+    if(batched)batchDepth--;
+    transactionDepth=0;
+    for(let index=changedSignals.length-1;index>=0;index--)changedSignals[index].value=previousValues[index];
+    pendingComputed.clear();pendingEffects.clear();
+    const recover=[...changedSignals];clearTransaction();
+    batchDepth++;try{for(const source of recover)for(const effect of source.subscribers)enqueue(effect);}finally{batchDepth--;try{flush();}catch{/* Preserve the original transaction failure. */}}
+    throw error;
+  }
+}
 
 // Indices of the longest ordered group of retained records. Reconciliation only
 // moves records outside this group; new records use the sentinel -1.
@@ -92,7 +111,7 @@ export function mountComponent(target:Element,model:Model,components:Mount[],sup
     throw new TypeError('Invalid assignment target');
   }
   function execute(statements:Statement[],local=scope,event?:Event):void {
-    batch(()=>{for(const statement of statements){
+    transact(()=>{for(const statement of statements){
       if(statement.kind==='assign')write(resolveTarget(statement.target,local),evaluate(statement.value,local));
       else if(statement.kind==='eventAssign'){
         const element=event?.currentTarget;if(!(element instanceof HTMLInputElement))throw new TypeError('Event value requires an input element');write(resolveTarget(statement.target,local),statement.member==='value'?element.value:element.checked);
@@ -177,14 +196,14 @@ export function mountComponent(target:Element,model:Model,components:Mount[],sup
       // mounted. Each child binding independently tracks those signals.
       if(dispose.refresh)track(()=>dispose.refresh!(),effects);return;
     }
-    const element=parent.ownerDocument.createElement(view.tag);const classes=[view.attributes.class?String(evaluate(view.attributes.class,local)):'',forward].join(' ').split(/\s+/).filter(Boolean);if(classes.length)element.classList.add(...new Set(classes));if(view.attributes.type)(element as HTMLInputElement).type=String(evaluate(view.attributes.type,local));
-    if(view.attributes.text){const text=parent.ownerDocument.createTextNode('');element.append(text);effects.push(createEffect(()=>{const value=String(evaluate(view.attributes.text,local));if(text.data!==value)text.data=value;}));}
-    if(view.attributes.value){const input=element as HTMLInputElement;effects.push(createEffect(()=>{const value=String(evaluate(view.attributes.value,local));if(input.value!==value)input.value=value;}));}
-    if(view.attributes.checked){const input=element as HTMLInputElement;effects.push(createEffect(()=>{const value=evaluate(view.attributes.checked,local);if(typeof value!=='boolean')throw new TypeError('checked requires boolean');if(input.checked!==value)input.checked=value;}));}
+    const element=parent.ownerDocument.createElement(view.tag),staticBindings=view.static??0;const classValue=view.attributes.class?evaluate(view.attributes.class,local):'';const classes=[String(classValue),forward].join(' ').split(/\s+/).filter(Boolean);if(classes.length)element.classList.add(...new Set(classes));if(view.attributes.type)(element as HTMLInputElement).type=String(evaluate(view.attributes.type,local));
+    if(view.attributes.text){const fixed=Boolean(staticBindings&1);const text=parent.ownerDocument.createTextNode(fixed?String(evaluate(view.attributes.text,local)):'');element.append(text);if(!fixed)effects.push(createEffect(()=>{const value=String(evaluate(view.attributes.text,local));if(text.data!==value)text.data=value;}));}
+    if(view.attributes.value){const input=element as HTMLInputElement,fixed=Boolean(staticBindings&2);if(fixed)input.value=String(evaluate(view.attributes.value,local));else effects.push(createEffect(()=>{const value=String(evaluate(view.attributes.value,local));if(input.value!==value)input.value=value;}));}
+    if(view.attributes.checked){const input=element as HTMLInputElement,fixed=Boolean(staticBindings&4);if(fixed)input.checked=Boolean(evaluate(view.attributes.checked,local));else effects.push(createEffect(()=>{const value=evaluate(view.attributes.checked,local);if(typeof value!=='boolean')throw new TypeError('checked requires boolean');if(input.checked!==value)input.checked=value;}));}
     if(view.handler){const listener=(event:Event)=>execute(view.handler!.statements,local,event);element.addEventListener(view.handler.event,listener);callbacks.push(()=>element.removeEventListener(view.handler!.event,listener));}
-    parent.append(element);callbacks.push(()=>element.remove());for(const child of view.children)create(child,element,local,'',effects,callbacks);
+    parent.append(element);if(parent===target||parent instanceof DocumentFragment)callbacks.push(()=>element.remove());for(const child of view.children)create(child,element,local,'',effects,callbacks);
   }
-  const refresh=()=>{if(disposed)return;batch(()=>{for(const [name,initial] of Object.entries(model.props)){const value=Object.hasOwn(supplied,name)?supplied[name]:initial;if(typeof value!==typeof initial)throw new TypeError(`Invalid prop ${name}`);write(getSignal(name,scope),value);}});};
+  const refresh=()=>{if(disposed)return;transact(()=>{for(const [name,initial] of Object.entries(model.props)){const value=Object.hasOwn(supplied,name)?supplied[name]:initial;if(typeof value!==typeof initial)throw new TypeError(`Invalid prop ${name}`);write(getSignal(name,scope),value);}});};
   const dispose:Dispose=()=>{if(disposed)return;disposed=true;try{disposeBag(ownedEffects,cleanups);}finally{try{untracked(()=>execute(model.cleanup));}finally{for(const name of Object.keys(scope))delete scope[name];supplied={};components=[];}}};
   try{execute(model.init);model.roots.forEach(root=>create(root,target,scope,String(supplied.class??'')));}catch(error){try{dispose();}catch{/* Preserve the original mounting error after attempting all cleanups. */}throw error;}dispose.refresh=refresh;return dispose;
 }

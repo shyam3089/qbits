@@ -5,7 +5,7 @@ import { firefox } from 'playwright';
 import { compile } from '../language/index.js';
 import { reactiveFixtures } from './helpers/reactivity-fixtures.js';
 
-test('computed reads, same-key replacement, conditional subscriptions and failed ownership cleanups', async () => {
+test('transactions roll back duplicate keys and overflow while preserving subscriptions and cleanup', async () => {
   const [runtime, helper] = await Promise.all([
     readFile('dist/lib/runtime/index.js', 'utf8'), readFile('tests/helpers/reactivity-browser.mjs', 'utf8'),
   ]);
@@ -21,8 +21,9 @@ test('computed reads, same-key replacement, conditional subscriptions and failed
     assert.deepEqual(result, {
       retained: true, replaced: 'New!!', childLabel: 'New', childState: '1', sequential: '7:5',
       inactiveText: 'New!!', remounted: 'Renamed!!',
-      duplicateErrors: 1, duplicateRetained: true, recovered: true,
+      duplicateErrors: 1, duplicateRetained: true, duplicateRolledBack: true, recovered: true,
       prepend: {inserted: 3, removed: 0, retained: true},
+      overflowErrors: 1, overflowRetained: true,
       mountFailure: 'Expected child mount failure', afterFailedMount: {nodes: 0, listeners: 0},
       cleanupFailure: 'Expected child cleanup failure', remainingNodes: 0, listeners: 0,
     });

@@ -18,6 +18,9 @@ and disposal. Its
 serialized component model is the boundary with generated code. The legacy
 `mountCounter` runtime export remains available. User names never
 become JS identifiers. Literal text uses JSON serialization and DOM text nodes.
+Generated element records include a compact bitmask for compiler-proven literal
+text/value/checked bindings. Older runtimes ignore the additive field; newer runtimes
+skip effects and subscriptions for those static bindings while accepting older models.
 Safe-integer overflow throws without changing state. Controlled text inputs update
 their existing DOM value only when it differs, preserving focus and caret while typing.
 Checkbox state is synchronized through the DOM `checked` property.
@@ -25,6 +28,11 @@ Each state or instance field is a small signal. A DOM binding effect dynamically
 subscribes to only the signals it reads. Closed handlers batch writes synchronously;
 computed values invalidate derived descendants and settle before queued DOM effects.
 Sets deduplicate scheduled effects; equality checks suppress unchanged derived outputs.
+Handlers, lifecycle statements, and prop refreshes are synchronous transactions.
+The runtime reuses a selective journal containing only directly changed writable
+signals. If validation or a reactive effect fails, it restores those values and
+invalidates outward from the restored signals so derived state, subscriptions, and
+DOM return to the last committed state. Successful updates do not clone component state.
 Reads inside actions refresh dirty computed values immediately. Component computed
 values propagate through signals, while class computed members evaluate lazily inside
 their consuming effect, including references to other class computed members. Conditionals use comment anchors and branch-local
@@ -33,7 +41,8 @@ is untracked. A longest increasing subsequence identifies retained ranges that s
 in place; only other ranges move. Focus and input selection survive moves. Item
 signals support same-key replacement without recreating child instances. Duplicate
 runtime keys are rejected before structural mutation. Insertion/removal creates or
-disposes only the corresponding scope. See performance.md for measured results.
+disposes only the corresponding scope. Cleanup tracks owned subtree roots rather than
+allocating redundant descendant-removal callbacks. See performance.md for measured results.
 
 `tooling/` owns identity validation, CLI filesystem access, and Vite transformation.
 The Vite plugin compiles configured suffixes and appends identity metadata; the

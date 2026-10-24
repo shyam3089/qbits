@@ -1,6 +1,6 @@
 # qubits
 A declarative UI language and framework for building reactive web interfaces, designed for simplicity, extensibility, and excellent developer tooling.
-# Qubits UI — Phase 2D
+# Qubits UI — Phase 3A.1
 
 A small UI language compiling to browser JavaScript. Components support nested
 standard elements, numeric/string/boolean local state, read-only typed props with literal defaults,
@@ -8,6 +8,8 @@ relative component imports, static classes, text and checkbox input binding, typ
 Phase 2D adds file-local data classes, computed values, typed keyed lists, closed
 event actions, and component initialization/cleanup. Use `text=expression` and
 `str(value)` for safe text content. Blocks use spaces and colon headers; newlines end statements.
+Phase 3A.1 preserves that syntax while adding selective transactional rollback,
+compiler-marked static bindings, and repeatable Firefox performance measurements.
 The example mounts two independent counters. Instance classes merge into a single
 root element's defaults; ambiguous forwarding is an error.
 See the [grammar](docs/syntax.md) and [identity reference](docs/identity.md).

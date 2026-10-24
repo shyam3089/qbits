@@ -23,7 +23,10 @@ export function generate(ast:Component):string {
   function node(value:ViewNode):unknown {
     if(value.kind==='conditional')return {kind:value.kind,condition:condition(value.condition),consequent:value.consequent.map(node),alternate:value.alternate.map(node)};
     if(value.kind==='iteration')return {kind:value.kind,item:value.item.value,collection:expression(value.collection),key:expression(value.key),children:value.children.map(node)};
-    return {kind:'element',tag:value.tag.value,component:componentImports.findIndex(item=>item.name!.value===value.tag.value),attributes:Object.fromEntries(Object.entries(value.attributes).map(([key,item])=>[key,expression(item)])),children:value.children.map(node),...(value.handler?{handler:{kind:value.handler.kind,event:value.handler.event.value,statements:value.handler.statements.map(statement)}}:{})};
+    const attributes=Object.fromEntries(Object.entries(value.attributes).map(([key,item])=>[key,expression(item)]));
+    const flags:Record<string,number>={text:1,value:2,checked:4};
+    const staticBindings=Object.entries(value.attributes).reduce((mask,[key,item])=>mask|(item.kind==='literal'?(flags[key]??0):0),0);
+    return {kind:'element',tag:value.tag.value,component:componentImports.findIndex(item=>item.name!.value===value.tag.value),attributes,...(staticBindings?{static:staticBindings}:{}),children:value.children.map(node),...(value.handler?{handler:{kind:value.handler.kind,event:value.handler.event.value,statements:value.handler.statements.map(statement)}}:{})};
   }
   const classes=Object.fromEntries(ast.classes.map(declaration=>[declaration.name.value,{fields:declaration.fields.map(field=>({name:field.name.value,initial:expression(field.initial)})),computed:Object.fromEntries(declaration.computed.map(item=>[item.name.value,expression(item.expression)])),actions:Object.fromEntries(declaration.actions.map(action=>[action.name.value,action.statements.map(statement)]))}]));
   const imports=ast.imports.map(item=>item.name?`import c${componentImports.indexOf(item)} from ${JSON.stringify(item.path.value)};`:`import ${JSON.stringify(item.path.value)};`).join('\n');

@@ -58,6 +58,12 @@ component List:
             count = count + 1
     p text=str(total)
 `).code,
+    './Overflow.qb': compile(`component Overflow:
+    count = 9007199254740991
+    button text=str(count):
+        on click:
+            count = count + 1
+`).code,
     './Edges.qb': compile(`import Row from "./Row.qb"
 class Item:
     id = 0
@@ -95,6 +101,7 @@ component Edges:
             replacement.name = "Renamed"
     button text="Duplicate":
         on click:
+            count = count + 1
             items.append(replacement)
     button text="Recover":
         on click:
@@ -111,4 +118,15 @@ component Edges:
                 Row label=item.name
 `).code,
   };
+}
+
+export function mountFixture(size: number): Record<string, string> {
+  return {'./Mount.qb': compile(`class Item:
+    id = 0
+component Mount:
+    items = [${Array.from({length:size},(_,index)=>`Item(${index})`).join(', ')}]
+    ul:
+        for item in items key=item.id:
+            li text="Row"
+`).code};
 }

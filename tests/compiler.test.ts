@@ -98,6 +98,13 @@ test('untrusted text remains literal and generated output mounts via explicit ru
     assert.equal(actual,target); assert.deepEqual(model,module.model); return dispose;
   }}), dispose);
 });
+test('generator marks compiler-proven static DOM bindings without emitting executable code',()=>{
+  const fixed=compile('component C:\n    p text="Fixed"').code;
+  const dynamic=compile('component C:\n    value = "Live"\n    p text=value').code;
+  assert.match(fixed,/\\"static\\":1/);
+  assert.doesNotMatch(dynamic,/\\"static\\":/);
+  assert.doesNotMatch(fixed,/innerHTML|eval\(|Function\(/);
+});
 test('identity is validated and suffix handling is derived', () => {
   assert.equal(isSource('test' + identity.sourceExtension + '?import'), true);
   assert.equal(isSource('test.txt'), false);

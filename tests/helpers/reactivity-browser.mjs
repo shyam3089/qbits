@@ -110,8 +110,13 @@ export async function verifyEdges(runtimeSource, modules) {
   EventTarget.prototype.addEventListener = function (...args) {if (this instanceof Element) listeners++; return originalAdd.apply(this,args);};
   EventTarget.prototype.removeEventListener = function (...args) {if (this instanceof Element) listeners--; return originalRemove.apply(this,args);};
   const disposers = [];
-  const duplicateErrors = [];
-  const onError = event => {if(event.message.includes('Duplicate iteration key')){duplicateErrors.push(event.message);event.preventDefault();}};
+  const duplicateErrors = [], overflowErrors = [];
+  const onError = event => {
+    if(event.message.includes('Duplicate iteration key'))duplicateErrors.push(event.message);
+    else if(event.message.includes('State exceeded safe integer range'))overflowErrors.push(event.message);
+    else return;
+    event.preventDefault();
+  };
   window.addEventListener('error',onError);
   try {
     const runtime = await import(url(runtimeSource));
@@ -128,8 +133,10 @@ export async function verifyEdges(runtimeSource, modules) {
     const replaced = root.querySelector('span').textContent;
     const childLabel = root.querySelector('section span').textContent;
     const childState = childButton.textContent;
+    const beforeDuplicate = host.querySelector('p').textContent;
     click('Duplicate'); const duplicateRetained = host.querySelector('div') === root;
-    click('Recover'); const recovered = host.querySelector('div') === root;
+    const duplicateRolledBack = host.querySelector('p').textContent === beforeDuplicate && host.querySelectorAll('div').length === 1;
+    const recovered = host.querySelector('div') === root;
     click('Update'); const sequential = host.querySelector('p').textContent;
     const removedText = root.querySelector('span').firstChild;
     click('Hide'); click('Rename');
@@ -155,8 +162,14 @@ export async function verifyEdges(runtimeSource, modules) {
     }]); disposers.push(cleanup);
     try {cleanup();} catch (error) {cleanupFailure = error.message;}
     cleanup();
+    const overflow = await import(url(modules['./Overflow.qb']));
+    const overflowDispose = overflow.default(host,runtime);disposers.push(overflowDispose);
+    const overflowButton = host.querySelector('button'), overflowBefore = overflowButton.textContent;
+    overflowButton.click();const overflowRetained = overflowButton.textContent === overflowBefore;
+    overflowDispose();
     return {retained, replaced, childLabel, childState, sequential, inactiveText, remounted,
-      duplicateErrors: duplicateErrors.length, duplicateRetained, recovered, prepend,
+      duplicateErrors: duplicateErrors.length, duplicateRetained, duplicateRolledBack, recovered, prepend,
+      overflowErrors: overflowErrors.length, overflowRetained,
       mountFailure, afterFailedMount, cleanupFailure, remainingNodes: host.childNodes.length, listeners};
   } finally {
     for (const dispose of disposers) try {dispose();} catch {}
@@ -220,4 +233,42 @@ export async function retentionProbe(runtimeSource, modules) {
     }
     globalThis.__qubitsRetentionProbe = {handles, props, nodes};
   } finally {urls.forEach(value => URL.revokeObjectURL(value));}
+}
+
+export async function benchmarkSuite(runtimeSource, modules, mountModules, {samples=21, operations=1000, reorderSamples=15}={}) {
+  const urls=[];
+  const url=source=>{const value=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));urls.push(value);return value;};
+  const summary=values=>{const sorted=[...values].sort((a,b)=>a-b);return {median:sorted[Math.floor(sorted.length/2)],p95:sorted[Math.min(sorted.length-1,Math.ceil(sorted.length*.95)-1)],min:sorted[0],max:sorted.at(-1),samples:sorted.length};};
+  const timeOperations=(run,count=operations)=>{const values=[];for(let sample=0;sample<samples;sample++){const started=performance.now();for(let index=0;index<count;index++)run(index);values.push((performance.now()-started)*1000/count);}return summary(values);};
+  const host=document.createElement('main');document.body.append(host);let dispose;
+  try {
+    const runtime=await import(url(runtimeSource)),rowURL=url(modules['./Row.qb']);
+    const list=await import(url(modules['./List.qb'].replace(JSON.stringify('./Row.qb'),JSON.stringify(rowURL))));
+    const batch=await import(url(modules['./Batch.qb']));
+    const mounts={};
+    for(const [size,source] of Object.entries(mountModules)){
+      const module=await import(url(source['./Mount.qb']));
+      for(let index=0;index<3;index++){dispose=module.default(host,runtime);dispose();}
+      const values=[];for(let sample=0;sample<samples;sample++){const started=performance.now();dispose=module.default(host,runtime);values.push(performance.now()-started);dispose();}
+      mounts[size]=summary(values);
+    }
+    dispose=list.default(host,runtime);
+    const first=host.querySelector('li'),last=host.querySelector('li:last-child');
+    const increment=[...first.querySelectorAll('button')].find(node=>node.textContent==='Increment');
+    for(let index=0;index<100;index++)increment.click();
+    const isolatedUpdateUs=timeOperations(()=>increment.click());
+    const input=last.querySelector('input');let serial=0;
+    const updateProp=()=>{input.value=`Value ${serial++}`;input.dispatchEvent(new Event('input'));};
+    for(let index=0;index<100;index++)updateProp();
+    const nestedComponentUs=timeOperations(updateProp);
+    const firstButton=[...last.querySelectorAll('button')].find(node=>node.textContent==='First');
+    const lastButton=[...last.querySelectorAll('button')].find(node=>node.textContent==='Last');
+    for(let index=0;index<2;index++){firstButton.click();lastButton.click();}
+    const reorders=[];for(let index=0;index<reorderSamples;index++){const started=performance.now();firstButton.click();reorders.push(performance.now()-started);lastButton.click();}
+    dispose();
+    dispose=batch.default(host,runtime);const update=[...host.querySelectorAll('button')].find(node=>node.textContent==='Update');
+    for(let index=0;index<100;index++)update.click();
+    const computedChainUs=timeOperations(()=>update.click());dispose();
+    return {mountMs:mounts,isolatedUpdateUs,computedChainUs,reorderMs:summary(reorders),nestedComponentUs};
+  } finally {dispose?.();host.remove();urls.forEach(value=>URL.revokeObjectURL(value));}
 }
