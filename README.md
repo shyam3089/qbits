@@ -1,6 +1,6 @@
 # qubits
 A declarative UI language and framework for building reactive web interfaces, designed for simplicity, extensibility, and excellent developer tooling.
-# Qubits UI — Phase 3A.1
+# Qubits UI — Phase 3A.3
 
 A small UI language compiling to browser JavaScript. Components support nested
 standard elements, numeric/string/boolean local state, read-only typed props with literal defaults,
@@ -8,8 +8,9 @@ relative component imports, static classes, text and checkbox input binding, typ
 Phase 2D adds file-local data classes, computed values, typed keyed lists, closed
 event actions, and component initialization/cleanup. Use `text=expression` and
 `str(value)` for safe text content. Blocks use spaces and colon headers; newlines end statements.
-Phase 3A.1 preserves that syntax while adding selective transactional rollback,
-compiler-marked static bindings, and repeatable Firefox performance measurements.
+Phase 3A.3 preserves that syntax while adding iterative module-graph limits, shared
+runtime resource budgets, transactional rollback, compiler-marked static bindings,
+and repeatable Firefox performance measurements.
 The example mounts two independent counters. Instance classes merge into a single
 root element's defaults; ambiguous forwarding is an error.
 See the [grammar](docs/syntax.md) and [identity reference](docs/identity.md).
@@ -64,7 +65,8 @@ The external test creates an app outside this checkout using local tarballs and
 Vite dependencies from npm's cache or registry; run npm ci first. It checks reload,
 error recovery, installed docs, CLI, onboarding, production and browser boundaries.
 
-See [architecture](docs/architecture.md), [renaming](docs/renaming.md),
+See the [changelog](CHANGELOG.md), [release notes](RELEASE_NOTES.md),
+[architecture](docs/architecture.md), [renaming](docs/renaming.md),
 [contributing](CONTRIBUTING.md), [governance](GOVERNANCE.md), and [security](SECURITY.md).
 Software is licensed under [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for
 creator attribution, [third-party notices](THIRD_PARTY_NOTICES.md), and

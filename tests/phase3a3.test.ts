@@ -90,3 +90,34 @@ test('shared runtime budgets are exact and failed staged reservations roll back 
   assert.deepEqual(result.sequenceResult,result.reference);
   }finally{await browser.close();}
 });
+
+test('runtime work accounting covers initialization and rejects invalid nested numeric literals',async()=>{
+  const sources=[compile(`component Accounted:
+    first = 1
+    second = 2
+    third = 3
+    p`).code,compile(`component PropAccounted(value = 1):
+    p`).code,compile(`class Item:
+    value = 0
+component ClassAccounted:
+    item = Item(1)
+    p`).code];
+  const runtime=await readFile('dist/lib/runtime/index.js','utf8'),browser=await firefox.launch({headless:true});
+  try{const page=await browser.newPage();const result=await page.evaluate(async({runtime,sources})=>{
+    const urls=[runtime,...sources].map(value=>URL.createObjectURL(new Blob([value],{type:'text/javascript'})));
+    try{const api=await import(urls[0]),component=await import(urls[1]),prop=await import(urls[2]),classComponent=await import(urls[3]),host=document.createElement('main'),failures:string[]=[];
+      for(let attempt=0;attempt<2;attempt++)try{api.mountComponent(host,component.model,[],{},{maxWorkPerOperation:3});}catch(error){failures.push((error as Error).message);}
+      const emptyAfterFailures=!host.childNodes.length,dispose=api.mountComponent(host,component.model,[],{},{maxWorkPerOperation:4}),exactNodes=host.childNodes.length;dispose();
+      const initializationFailures:string[]=[];for(const [model,limit] of [[prop.model,1],[classComponent.model,3]] as const)try{api.mountComponent(host,model,[],{},{maxWorkPerOperation:limit});}catch(error){initializationFailures.push((error as Error).message);}
+      const invalid={props:{},classes:{},states:{items:{kind:'list',items:[{kind:'literal',value:Number.NaN}]}},computed:{},init:[],cleanup:[],roots:[]};
+      let numericFailure='';try{api.mountComponent(host,invalid,[]);}catch(error){numericFailure=(error as Error).message;}
+      const invalidCondition={props:{},classes:{},states:{},computed:{},init:[],cleanup:[],roots:[{kind:'conditional',condition:{kind:'literal',value:Number.POSITIVE_INFINITY},consequent:[],alternate:[]}]};
+      let conditionFailure='';try{api.mountComponent(host,invalidCondition,[]);}catch(error){conditionFailure=(error as Error).message;}
+      return{failures,initializationFailures,emptyAfterFailures,exactNodes,numericFailure,conditionFailure,empty:!host.childNodes.length};
+    }finally{urls.forEach(value=>URL.revokeObjectURL(value));}
+  },{runtime,sources});
+  assert.deepEqual(result.failures,['Framework work exceeds the configured limit of 3','Framework work exceeds the configured limit of 3']);
+  assert.deepEqual(result.initializationFailures,['Framework work exceeds the configured limit of 1','Framework work exceeds the configured limit of 3']);
+  assert.equal(result.emptyAfterFailures,true);assert.equal(result.exactNodes,1);assert.match(result.numericFailure,/safe integer range/);assert.match(result.conditionFailure,/safe integer range/);assert.equal(result.empty,true);
+  }finally{await browser.close();}
+});

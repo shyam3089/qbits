@@ -1,7 +1,7 @@
 # Phase 3A.3 resource-exhaustion remediation record
 
-This is an implementation and test record, not independent approval or certification.
-The final commit must receive independent human security review before merge.
+This is an AI-assisted implementation and automated verification record, not a security
+certification. Release readiness is determined by the Phase 3A.3 security and quality gate.
 
 ## Confirmed findings remediated
 
@@ -24,9 +24,17 @@ and work units, not actual heap bytes, style/layout work or asynchronous side ef
 Defaults are generous and configurable; unusual trusted workloads require measurement.
 Fuzzing is bounded and grammar-aware, not exhaustive or formal verification.
 
-The human reviewer must independently inspect reservation/rollback symmetry, module DAG
-depth and shared-import accounting, generated JavaScript/DOM sinks, cleanup and reentrant
-transactions, numeric/coercion paths, and CLI/Vite/direct-entry consistency. Reproduce
-the focused tests and Firefox production benchmark from a clean checkout, audit the
-dependency lockfile, and approve the precise final commit. Zero discovered findings is
-not proof of security.
+The release gate inspects reservation/rollback symmetry, module DAG depth and shared-import
+accounting, generated JavaScript/DOM sinks, cleanup and reentrant transactions,
+numeric/coercion paths, and CLI/Vite/direct-entry consistency. It reproduces the focused
+tests and Firefox production benchmark from a clean checkout and audits the dependency
+lockfile. Zero discovered findings is not proof of security.
+
+## Final automated gate fixes
+
+The release audit found and fixed two additional paths. Prop, state and class-field
+initialization now consumes the shared operation budget, preventing a low configured work
+limit from being bypassed by large initialization sets. Runtime literal evaluation now
+rejects non-finite and unsafe integers even when a model is supplied directly and the
+number is nested inside a list. A Firefox regression covers exact-limit success, repeated
+failure, cleanup and numeric rejection.

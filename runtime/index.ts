@@ -123,10 +123,10 @@ function mountComponentInternal(target:Element,model:Model,components:Mount[],su
   const scope=Object.create(null) as Scope;const ownedEffects:ReactiveEffect[]=[];const cleanups:(()=>void)[]=[];let disposed=false;
   const track=(run:()=>void,bag=ownedEffects)=>{const effect=createEffect(run,budget,undefined,limits.maxUpdatesPerFlush);bag.push(effect);return effect;};
   for(const key of Object.keys(supplied))if(key!=='class'&&!Object.hasOwn(model.props,key))throw new TypeError(`Unknown prop ${key}`);
-  for(const [name,initial] of Object.entries(model.props)){const value=Object.hasOwn(supplied,name)?supplied[name]:initial;if(typeof value!==typeof initial)throw new TypeError(`Invalid prop ${name}`);scope[name]=signal(value);}
+  for(const [name,initial] of Object.entries(model.props)){consumeWork(budget);const value=Object.hasOwn(supplied,name)?supplied[name]:initial;if(typeof value!==typeof initial)throw new TypeError(`Invalid prop ${name}`);scope[name]=signal(value);}
   const getSignal=(name:string,local:Scope):Signal=>{const value=local[name];if(!value||typeof value==='function'||'__class'in value)throw new TypeError(`Unknown writable value ${name}`);return value;};
   function evaluate(expression:Expr,local=scope):Value {
-    if(expression.kind==='literal')return expression.value;
+    if(expression.kind==='literal'){assertNumber(expression.value);return expression.value;}
     if(expression.kind==='reference'){const value=local[expression.name];if(!value)throw new TypeError(`Unknown value ${expression.name}`);return typeof value==='function'?value():'__class'in value?value:read(value);}
     if(expression.kind==='member'){const owner=evaluate(expression.object,local);if(!owner||typeof owner!=='object'||Array.isArray(owner)||!('__class'in owner))throw new TypeError('Member access requires a class instance');const field=owner.fields[expression.name];if(field)return read(field);const computed=owner.computed[expression.name];if(computed)return evaluate(computed,owner.scope);throw new TypeError(`Unknown member ${expression.name}`);}
     if(expression.kind==='str')return String(evaluate(expression.argument,local));
@@ -137,15 +137,15 @@ function mountComponentInternal(target:Element,model:Model,components:Mount[],su
     throw new TypeError('Unsupported expression');
   }
   function instantiate(name:string,args:Value[]):Instance {
-    const declaration=model.classes[name];if(!declaration)throw new TypeError(`Unknown class ${name}`);const instanceScope=Object.create(null) as Scope;
+    consumeWork(budget);const declaration=model.classes[name];if(!declaration)throw new TypeError(`Unknown class ${name}`);const instanceScope=Object.create(null) as Scope;
     const instance:Instance={__class:name,fields:Object.create(null),computed:declaration.computed,actions:declaration.actions,scope:instanceScope};
-    declaration.fields.forEach((field,index)=>{const value=args[index]??evaluate(field.initial,instanceScope);const source=signal(value);instance.fields[field.name]=source;instanceScope[field.name]=source;});
+    declaration.fields.forEach((field,index)=>{consumeWork(budget);const value=args[index]??evaluate(field.initial,instanceScope);const source=signal(value);instance.fields[field.name]=source;instanceScope[field.name]=source;});
     // Class derivations stay lazy: consumers subscribe directly to fields,
     // without a class-level effect that would outlive a removed list record.
     for(const [member,expression] of Object.entries(declaration.computed))instanceScope[member]=()=>evaluate(expression,instanceScope);
     return instance;
   }
-  for(const [name,initial] of Object.entries(model.states))scope[name]=signal(evaluate(initial));
+  for(const [name,initial] of Object.entries(model.states)){consumeWork(budget);scope[name]=signal(evaluate(initial));}
   for(const name of Object.keys(model.computed))scope[name]=signal('');
   try{for(const [name,expression] of Object.entries(model.computed)){const source=getSignal(name,scope);ownedEffects.push(createEffect(()=>write(source,evaluate(expression)),budget,source,limits.maxUpdatesPerFlush));}}catch(error){disposeBag(ownedEffects,cleanups);throw error;}
   function resolveTarget(target:Expr,local:Scope):Signal {
@@ -172,7 +172,7 @@ function mountComponentInternal(target:Element,model:Model,components:Mount[],su
     }},forceDisable,budget);
   }
   function evaluateCondition(expression:ConditionExpr,local:Scope):Primitive {
-    if(expression.kind==='literal')return expression.value;if(expression.kind==='reference'||expression.kind==='member')return evaluate(expression as Expr,local) as Primitive;
+    if(expression.kind==='literal'){assertNumber(expression.value);return expression.value;}if(expression.kind==='reference'||expression.kind==='member')return evaluate(expression as Expr,local) as Primitive;
     if(expression.kind==='not')return !evaluateCondition(expression.argument,local);const left=evaluateCondition(expression.left,local);if(expression.kind==='and')return Boolean(left)&&Boolean(evaluateCondition(expression.right,local));const right=evaluateCondition(expression.right,local);return expression.kind==='equal'?left===right:left!==right;
   }
   function disposeBag(effects:ReactiveEffect[],callbacks:(()=>void)[]):void {for(const effect of effects)stop(effect);effects.length=0;const failures:unknown[]=[];for(const callback of callbacks.reverse())try{untracked(callback);}catch(error){failures.push(error);}callbacks.length=0;if(failures.length===1)throw failures[0];if(failures.length)throw new AggregateError(failures,'Multiple cleanup operations failed');}

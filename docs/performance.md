@@ -1,5 +1,28 @@
 # Phase 3A.3 performance and reactivity
 
+## Release-gate hardening comparison
+
+The final security fixes were measured against the exact pre-fix Phase 3A.3 runtime
+(`0d651649d567…`) in two paired Firefox 157.0 runs. The candidate runtime is
+`e9b641f99daf…`; size changed from 41,064/8,251 to 41,292/8,273 raw/gzip bytes
+(+228 raw, +22 gzip).
+
+| Scenario | Baseline run 1 / candidate | Baseline run 2 / candidate |
+| --- | ---: | ---: |
+| 1,000-row mount, ms | 7/12 → 6/16 | 8/17 → 7/11 |
+| 10,000-row mount, ms | 45/88 → 47/100 | 53/89 → 47/66 |
+| Isolated update, us | 15/51 → 14/63 | 22/60 → 15/45 |
+| Computed chain, us | 15/31 → 18/38 | 12/39 → 19/66 |
+| Keyed reconciliation, ms | 1/1 → 1/3 | 1/6 → 1/2 |
+| Nested prop update, us | 15/54 → 19/79 | 19/63 → 21/88 |
+| Mount/dispose cycle, ms | 82/163 → 68/135 | 68/105 → 68/169 |
+
+Mount/startup and disposal showed no repeatable median regression. Computed-chain
+medians increased by 3 and 7 us because derived numeric expressions now validate their
+literals; this is the expected constant-time security cost. Nested-update medians differed
+by 2–4 us while tails varied widely, with unchanged DOM work. The remaining differences
+are treated as Firefox/JIT microbenchmark variance. No protection was removed.
+
 The Phase 3A.3 Firefox A/B record is
 [reactivity-2026-10-25-phase3a3.json](benchmarks/reactivity-2026-10-25-phase3a3.json).
 An independent repeat is
