@@ -14,13 +14,20 @@ A cleanup error after structural commit is reported as a post-commit error; it d
 roll back committed state. Component mount/cleanup functions, application JavaScript,
 prop getters and proxies, Vite configs, and npm dependencies are trusted host code with
 normal permissions. Transactions are synchronous only and do not span timers, promises,
-network activity, or other asynchronous work. These controls are not a sandbox. Resource
-limits for hostile source, values, strings, or collections are not implemented.
+network activity, or other asynchronous work. These controls are not a sandbox.
+
+Compilation defaults to 2,097,152 UTF-16 code units, 256 nesting levels, 100,000
+expression nodes, 512 recursive expression levels, and 100,000 items in one literal or
+argument list. Callers can lower or raise these positive safe-integer limits through the
+compiler options. The runtime defaults to 100,000 list items, 256 nested components, and
+100,000 effect executions per scheduler flush; optional mount limits propagate to child
+components. Limit failures are explicit and happen before the guarded allocation or
+mutation. These ceilings protect untrusted .qb source, not trusted host JavaScript.
 
 init runs only explicitly, rejects symlink instruction files, preserves unmanaged
 instructions and conflicting scripts, and refuses malformed managed markers. The
 scaffolder refuses existing targets and never runs installation. Check skips symlinks,
 hidden directories, node_modules and dist. Review source/config/dependencies, use a
 lockfile, keep development servers local, and require independent review for
-security-sensitive changes. The Phase 3A.1 checklist prepares that review but does not
+security-sensitive changes. The Phase 3A.2 record prepares that review but does not
 constitute approval. Software is licensed under Apache-2.0; see LICENSE and NOTICE.

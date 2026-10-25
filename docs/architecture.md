@@ -6,6 +6,12 @@ with structured `diagnostic`. Each stage and AST types are exported from
 `language/index.ts` for future tooling. Tokens and all AST constructs carry spans.
 No stage evaluates source or resolves application imports.
 
+The tokenizer rejects oversized source and excessive indentation before constructing a
+full token/AST graph. The parser tracks view depth, recursive expression depth, total
+expression nodes, and literal/argument collection sizes. Defaults are exported and each
+compile call may supply narrower or wider positive safe-integer limits. These checks are
+compiler policy only; identity and configured suffixes remain tooling concerns.
+
 The lexer emits NEWLINE/INDENT/DEDENT from space-indented logical lines, ignoring
 blank/comment-only lines. The parser accepts only colon-headed blocks and an
 explicit expression AST nodes for literals, references, members, typed construction,
@@ -44,7 +50,11 @@ use comment anchors and branch-local cleanup scopes. Keyed iteration tracks only
 collection/key reads; record construction is untracked. A longest increasing subsequence
 identifies retained ranges that stay in place; only other ranges move. Focus and input
 selection survive moves. Item signals support same-key replacement without recreating
-child instances. Duplicate keys are rejected during preparation.
+child instances. Duplicate keys are rejected during preparation. Loop variables are
+installed as own data properties, including names such as `__proto__`, so source
+identifiers cannot alter a scope prototype. Runtime list size, component depth, and
+scheduler-flush limits propagate through child mounts. Numeric move indexes are validated
+as safe integers before list mutation.
 
 Commit updates ranges and reconciliation maps before disposing removed scopes. Disposal
 is irreversible: a throwing removed-scope cleanup is reported after commit and does not

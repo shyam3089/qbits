@@ -1,0 +1,460 @@
+{
+  "recordedAt": "2026-10-25T06:59:35.313Z",
+  "firefox": "157.0",
+  "protocol": {
+    "warmups": 3,
+    "samples": 21,
+    "operationsPerUpdateSample": 1000,
+    "reorderSamples": 15
+  },
+  "reports": [
+    {
+      "path": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\qubits-phase3a2-f84646ee10234996beacab2a59fcf106\\compiled\\index.js",
+      "runtimeSha256": "d1b59043a03db741a94fd373a9eefc75dca021bf0d9296611c7890ab7beb9be3",
+      "runtimeBytes": 33361,
+      "runtimeGzipBytes": 6930,
+      "performance": {
+        "mountMs": {
+          "1000": {
+            "median": 6,
+            "p95": 12,
+            "min": 2,
+            "max": 12,
+            "samples": 21
+          },
+          "10000": {
+            "median": 36,
+            "p95": 71,
+            "min": 27,
+            "max": 77,
+            "samples": 21
+          }
+        },
+        "isolatedUpdateUs": {
+          "median": 26,
+          "p95": 148,
+          "min": 5,
+          "max": 163,
+          "samples": 21
+        },
+        "computedChainUs": {
+          "median": 12,
+          "p95": 34,
+          "min": 8,
+          "max": 38,
+          "samples": 21
+        },
+        "reorderMs": {
+          "median": 0,
+          "p95": 1,
+          "min": 0,
+          "max": 1,
+          "samples": 15
+        },
+        "nestedComponentUs": {
+          "median": 18,
+          "p95": 255,
+          "min": 9,
+          "max": 290,
+          "samples": 21
+        },
+        "distinctWritesUs": {
+          "4": {
+            "median": 2,
+            "p95": 4,
+            "min": 2,
+            "max": 4,
+            "samples": 21
+          },
+          "16": {
+            "median": 4,
+            "p95": 6,
+            "min": 2,
+            "max": 6,
+            "samples": 21
+          },
+          "64": {
+            "median": 14,
+            "p95": 30,
+            "min": 12,
+            "max": 32,
+            "samples": 21
+          },
+          "256": {
+            "median": 50,
+            "p95": 58,
+            "min": 44,
+            "max": 78,
+            "samples": 21
+          }
+        }
+      },
+      "instrumented": {
+        "size": 1000,
+        "samples": 9,
+        "cycles": 30,
+        "mount": {
+          "elements": 10003,
+          "texts": 7002,
+          "comments": 2001,
+          "fragments": 1000,
+          "adds": 6002,
+          "removes": 0,
+          "ms": 44,
+          "inserted": 3004,
+          "removed": 0,
+          "textWrites": 0
+        },
+        "batchInitial": "3",
+        "batchUpdate": {
+          "elements": 0,
+          "texts": 0,
+          "comments": 0,
+          "fragments": 0,
+          "adds": 0,
+          "removes": 0,
+          "ms": 0,
+          "inserted": 0,
+          "removed": 0,
+          "textWrites": 1
+        },
+        "batchValue": "7",
+        "isolated": {
+          "elements": 0,
+          "texts": 0,
+          "comments": 0,
+          "fragments": 0,
+          "adds": 0,
+          "removes": 0,
+          "ms": 0,
+          "inserted": 0,
+          "removed": 0,
+          "textWrites": 1
+        },
+        "propUpdate": {
+          "elements": 0,
+          "texts": 0,
+          "comments": 0,
+          "fragments": 0,
+          "adds": 0,
+          "removes": 0,
+          "ms": 0,
+          "inserted": 0,
+          "removed": 0,
+          "textWrites": 2
+        },
+        "childProp": "Changed",
+        "unrelated": "Row 01",
+        "move": {
+          "elements": 0,
+          "texts": 0,
+          "comments": 0,
+          "fragments": 1,
+          "adds": 0,
+          "removes": 0,
+          "ms": 3,
+          "inserted": 3,
+          "removed": 3,
+          "textWrites": 0
+        },
+        "focus": true,
+        "identity": true,
+        "childState": "1",
+        "noop": {
+          "elements": 0,
+          "texts": 0,
+          "comments": 0,
+          "fragments": 0,
+          "adds": 0,
+          "removes": 0,
+          "ms": 0,
+          "inserted": 0,
+          "removed": 0,
+          "textWrites": 0
+        },
+        "append": {
+          "elements": 10,
+          "texts": 7,
+          "comments": 2,
+          "fragments": 1,
+          "adds": 6,
+          "removes": 0,
+          "ms": 1,
+          "inserted": 3,
+          "removed": 0,
+          "textWrites": 0
+        },
+        "remove": {
+          "elements": 0,
+          "texts": 0,
+          "comments": 0,
+          "fragments": 0,
+          "adds": 0,
+          "removes": 6,
+          "ms": 0,
+          "inserted": 0,
+          "removed": 4,
+          "textWrites": 0
+        },
+        "detached": {
+          "elements": 0,
+          "texts": 0,
+          "comments": 0,
+          "fragments": 0,
+          "adds": 0,
+          "removes": 0,
+          "ms": 0,
+          "inserted": 0,
+          "removed": 0,
+          "textWrites": 0
+        },
+        "afterDispose": {
+          "elements": 0,
+          "texts": 0,
+          "comments": 0,
+          "fragments": 0,
+          "adds": 0,
+          "removes": 0,
+          "ms": 0,
+          "inserted": 0,
+          "removed": 0,
+          "textWrites": 0
+        },
+        "empty": true,
+        "cycleMedianMs": 51,
+        "liveListeners": 0,
+        "remainingNodes": 0,
+        "heapBytes": null
+      },
+      "retention": {
+        "retainedDisposedHandles": 30,
+        "reachablePropObjects": 0,
+        "reachableDOMNodes": 0
+      }
+    },
+    {
+      "path": "dist/lib/runtime/index.js",
+      "runtimeSha256": "9220e5f0544be82d4ed42f6762c48e454e9b5bb34f909007450a952472c74a6f",
+      "runtimeBytes": 35871,
+      "runtimeGzipBytes": 7435,
+      "performance": {
+        "mountMs": {
+          "1000": {
+            "median": 4,
+            "p95": 6,
+            "min": 3,
+            "max": 7,
+            "samples": 21
+          },
+          "10000": {
+            "median": 36,
+            "p95": 52,
+            "min": 28,
+            "max": 59,
+            "samples": 21
+          }
+        },
+        "isolatedUpdateUs": {
+          "median": 34,
+          "p95": 131,
+          "min": 6,
+          "max": 171,
+          "samples": 21
+        },
+        "computedChainUs": {
+          "median": 9,
+          "p95": 20,
+          "min": 6,
+          "max": 22,
+          "samples": 21
+        },
+        "reorderMs": {
+          "median": 0,
+          "p95": 3,
+          "min": 0,
+          "max": 3,
+          "samples": 15
+        },
+        "nestedComponentUs": {
+          "median": 22,
+          "p95": 594,
+          "min": 9,
+          "max": 974,
+          "samples": 21
+        },
+        "distinctWritesUs": {
+          "4": {
+            "median": 2,
+            "p95": 4,
+            "min": 0,
+            "max": 4,
+            "samples": 21
+          },
+          "16": {
+            "median": 4,
+            "p95": 6,
+            "min": 4,
+            "max": 10,
+            "samples": 21
+          },
+          "64": {
+            "median": 14,
+            "p95": 16,
+            "min": 12,
+            "max": 16,
+            "samples": 21
+          },
+          "256": {
+            "median": 50,
+            "p95": 60,
+            "min": 46,
+            "max": 64,
+            "samples": 21
+          }
+        }
+      },
+      "instrumented": {
+        "size": 1000,
+        "samples": 9,
+        "cycles": 30,
+        "mount": {
+          "elements": 10003,
+          "texts": 7002,
+          "comments": 2001,
+          "fragments": 1000,
+          "adds": 6002,
+          "removes": 0,
+          "ms": 44,
+          "inserted": 3004,
+          "removed": 0,
+          "textWrites": 0
+        },
+        "batchInitial": "3",
+        "batchUpdate": {
+          "elements": 0,
+          "texts": 0,
+          "comments": 0,
+          "fragments": 0,
+          "adds": 0,
+          "removes": 0,
+          "ms": 0,
+          "inserted": 0,
+          "removed": 0,
+          "textWrites": 1
+        },
+        "batchValue": "7",
+        "isolated": {
+          "elements": 0,
+          "texts": 0,
+          "comments": 0,
+          "fragments": 0,
+          "adds": 0,
+          "removes": 0,
+          "ms": 0,
+          "inserted": 0,
+          "removed": 0,
+          "textWrites": 1
+        },
+        "propUpdate": {
+          "elements": 0,
+          "texts": 0,
+          "comments": 0,
+          "fragments": 0,
+          "adds": 0,
+          "removes": 0,
+          "ms": 0,
+          "inserted": 0,
+          "removed": 0,
+          "textWrites": 2
+        },
+        "childProp": "Changed",
+        "unrelated": "Row 01",
+        "move": {
+          "elements": 0,
+          "texts": 0,
+          "comments": 0,
+          "fragments": 1,
+          "adds": 0,
+          "removes": 0,
+          "ms": 2,
+          "inserted": 3,
+          "removed": 3,
+          "textWrites": 0
+        },
+        "focus": true,
+        "identity": true,
+        "childState": "1",
+        "noop": {
+          "elements": 0,
+          "texts": 0,
+          "comments": 0,
+          "fragments": 0,
+          "adds": 0,
+          "removes": 0,
+          "ms": 1,
+          "inserted": 0,
+          "removed": 0,
+          "textWrites": 0
+        },
+        "append": {
+          "elements": 10,
+          "texts": 7,
+          "comments": 2,
+          "fragments": 1,
+          "adds": 6,
+          "removes": 0,
+          "ms": 1,
+          "inserted": 3,
+          "removed": 0,
+          "textWrites": 0
+        },
+        "remove": {
+          "elements": 0,
+          "texts": 0,
+          "comments": 0,
+          "fragments": 0,
+          "adds": 0,
+          "removes": 6,
+          "ms": 0,
+          "inserted": 0,
+          "removed": 4,
+          "textWrites": 0
+        },
+        "detached": {
+          "elements": 0,
+          "texts": 0,
+          "comments": 0,
+          "fragments": 0,
+          "adds": 0,
+          "removes": 0,
+          "ms": 0,
+          "inserted": 0,
+          "removed": 0,
+          "textWrites": 0
+        },
+        "afterDispose": {
+          "elements": 0,
+          "texts": 0,
+          "comments": 0,
+          "fragments": 0,
+          "adds": 0,
+          "removes": 0,
+          "ms": 0,
+          "inserted": 0,
+          "removed": 0,
+          "textWrites": 0
+        },
+        "empty": true,
+        "cycleMedianMs": 55,
+        "liveListeners": 0,
+        "remainingNodes": 0,
+        "heapBytes": null
+      },
+      "retention": {
+        "retainedDisposedHandles": 30,
+        "reachablePropObjects": 0,
+        "reachableDOMNodes": 0
+      }
+    }
+  ]
+}

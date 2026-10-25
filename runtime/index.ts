@@ -1,4 +1,6 @@
 export interface CounterModel {initial:number;prefix:string;step:number}
+export interface RuntimeLimits {maxCollectionItems:number;maxComponentDepth:number;maxUpdatesPerFlush:number}
+export const defaultRuntimeLimits:Readonly<RuntimeLimits>=Object.freeze({maxCollectionItems:100_000,maxComponentDepth:256,maxUpdatesPerFlush:100_000});
 type Primitive=string|number|boolean;
 type Value=Primitive|Instance|Value[];
 type Expr={kind:'literal';value:Primitive}|{kind:'reference';name:string}|{kind:'member';object:Expr;name:string}|{kind:'str'|'len';argument:Expr}|{kind:'add';left:Expr;right:Expr}|{kind:'construct';name:string;arguments:Expr[]}|{kind:'list';items:Expr[]};
@@ -14,9 +16,10 @@ interface Model {props:Record<string,Primitive>;classes:Record<string,ClassModel
 interface Signal<T=Value>{value:T;subscribers:Set<ReactiveEffect>;derive?:ReactiveEffect;dirty?:boolean}
 interface Instance {__class:string;fields:Record<string,Signal>;computed:Record<string,Expr>;actions:Record<string,Statement[]>;scope:Scope}
 type Scope=Record<string,Signal|Instance|(()=>Value)>;
-type ReactiveEffect=(()=>void)&{dependencies:Set<Signal>;disposed:boolean;computed?:Signal};
+type ReactiveEffect=(()=>void)&{dependencies:Set<Signal>;disposed:boolean;computed?:Signal;maxUpdates:number};
 type Dispose=(()=>void)&{refresh?:()=>void};
-type Mount=(target:Element,runtime:typeof import('./index.js'),props?:Record<string,Primitive>)=>Dispose;
+interface RuntimeApi {mountComponent:(target:Element,model:Model,components:Mount[],props?:Record<string,Primitive>)=>Dispose;mountCounter:(target:Element,model:CounterModel)=>()=>void}
+type Mount=(target:Element,runtime:RuntimeApi,props?:Record<string,Primitive>)=>Dispose;
 type CommitHook=()=>unknown[]|void;
 let activeEffect:ReactiveEffect|undefined;
 let batchDepth=0,flushing=false;
@@ -26,6 +29,7 @@ const changedSignals:Signal[]=[],previousValues:Value[]=[];
 const commitHooks:CommitHook[]=[],rollbackHooks:(()=>void)[]=[],transactionParticipants:(()=>unknown)[]=[];
 
 function assertNumber(value:unknown):void {if(typeof value==='number'&&!Number.isSafeInteger(value))throw new RangeError('State exceeded safe integer range');}
+function resolveRuntimeLimits(overrides:Partial<RuntimeLimits>):RuntimeLimits {const result={...defaultRuntimeLimits,...overrides};for(const [name,value] of Object.entries(result))if(!Number.isSafeInteger(value)||value<1)throw new TypeError(`Runtime limit ${name} must be a positive safe integer`);return result;}
 function signal<T=Value>(value:T):Signal<T>{assertNumber(value);return {value,subscribers:new Set()};}
 function read<T>(source:Signal<T>):T {if(source.dirty)source.derive!();if(activeEffect&&!activeEffect.disposed){source.subscribers.add(activeEffect);activeEffect.dependencies.add(source as Signal);}return source.value;}
 function rememberValue(source:Signal):void {
@@ -44,15 +48,16 @@ function enqueue(effect:ReactiveEffect):void {
 }
 function flush():void {
   if(batchDepth||flushing)return;flushing=true;
-  try{while(pendingComputed.size||pendingEffects.size){while(pendingComputed.size)pendingComputed.values().next().value!();if(pendingEffects.size)pendingEffects.values().next().value!();}}
+  let updates=0;
+  try{while(pendingComputed.size||pendingEffects.size){while(pendingComputed.size){const effect=pendingComputed.values().next().value!;if(++updates>effect.maxUpdates)throw new RangeError(`Reactive update limit of ${effect.maxUpdates} exceeded`);effect();}if(pendingEffects.size){const effect=pendingEffects.values().next().value!;if(++updates>effect.maxUpdates)throw new RangeError(`Reactive update limit of ${effect.maxUpdates} exceeded`);effect();}}}
   finally{flushing=false;pendingComputed.clear();pendingEffects.clear();}
 }
 function batch<T>(run:()=>T):T {batchDepth++;let complete=false;try{const result=run();complete=true;return result;}finally{batchDepth--;if(complete)flush();}}
 function untracked<T>(run:()=>T):T {const previous=activeEffect;activeEffect=undefined;try{return run();}finally{activeEffect=previous;}}
 function write<T>(source:Signal<T>,value:T):void {assertNumber(value);if(Object.is(source.value,value))return;rememberValue(source as Signal);source.value=value;for(const subscriber of source.subscribers)enqueue(subscriber);flush();}
-function createEffect(run:()=>void,computed?:Signal):ReactiveEffect {
+function createEffect(run:()=>void,computed?:Signal,maxUpdates=defaultRuntimeLimits.maxUpdatesPerFlush):ReactiveEffect {
   const effect=(()=>{if(effect.disposed)return;pendingComputed.delete(effect);pendingEffects.delete(effect);if(computed)computed.dirty=false;for(const source of effect.dependencies)source.subscribers.delete(effect);effect.dependencies.clear();const previous=activeEffect;activeEffect=effect;try{run();}finally{activeEffect=previous;}}) as ReactiveEffect;
-  effect.dependencies=new Set();effect.disposed=false;effect.computed=computed;
+  effect.dependencies=new Set();effect.disposed=false;effect.computed=computed;effect.maxUpdates=maxUpdates;
   if(computed){computed.derive=effect;computed.dirty=true;}
   else try{effect();}catch(error){stop(effect);throw error;}
   return effect;
@@ -93,9 +98,10 @@ function orderedIndices(positions:number[]):Set<number> {
   const result=new Set<number>();let index=tails[tails.length-1];while(index!==undefined&&index>=0){result.add(index);index=previous[index];}return result;
 }
 
-export function mountComponent(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>={}):Dispose {
+export function mountComponent(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>={},limitOverrides:Partial<RuntimeLimits>={},componentDepth=0):Dispose {
+  const limits=resolveRuntimeLimits(limitOverrides);if(componentDepth>=limits.maxComponentDepth)throw new RangeError(`Component nesting exceeds the configured limit of ${limits.maxComponentDepth}`);
   const scope=Object.create(null) as Scope;const ownedEffects:ReactiveEffect[]=[];const cleanups:(()=>void)[]=[];let disposed=false;
-  const track=(run:()=>void,bag=ownedEffects)=>{const effect=createEffect(run);bag.push(effect);return effect;};
+  const track=(run:()=>void,bag=ownedEffects)=>{const effect=createEffect(run,undefined,limits.maxUpdatesPerFlush);bag.push(effect);return effect;};
   for(const key of Object.keys(supplied))if(key!=='class'&&!Object.hasOwn(model.props,key))throw new TypeError(`Unknown prop ${key}`);
   for(const [name,initial] of Object.entries(model.props)){const value=Object.hasOwn(supplied,name)?supplied[name]:initial;if(typeof value!==typeof initial)throw new TypeError(`Invalid prop ${name}`);scope[name]=signal(value);}
   const getSignal=(name:string,local:Scope):Signal=>{const value=local[name];if(!value||typeof value==='function'||'__class'in value)throw new TypeError(`Unknown writable value ${name}`);return value;};
@@ -106,7 +112,7 @@ export function mountComponent(target:Element,model:Model,components:Mount[],sup
     if(expression.kind==='str')return String(evaluate(expression.argument,local));
     if(expression.kind==='len'){const value=evaluate(expression.argument,local);if(!Array.isArray(value))throw new TypeError('len requires a list');return value.length;}
     if(expression.kind==='add'){const left=evaluate(expression.left,local),right=evaluate(expression.right,local);if(typeof left==='number'&&typeof right==='number'){const result=left+right;assertNumber(result);return result;}return String(left)+String(right);}
-    if(expression.kind==='list')return expression.items.map(item=>evaluate(item,local));
+    if(expression.kind==='list'){if(expression.items.length>limits.maxCollectionItems)throw new RangeError(`Collection exceeds the configured limit of ${limits.maxCollectionItems} items`);return expression.items.map(item=>evaluate(item,local));}
     if(expression.kind==='construct')return instantiate(expression.name,expression.arguments.map(item=>evaluate(item,local)));
     throw new TypeError('Unsupported expression');
   }
@@ -121,7 +127,7 @@ export function mountComponent(target:Element,model:Model,components:Mount[],sup
   }
   for(const [name,initial] of Object.entries(model.states))scope[name]=signal(evaluate(initial));
   for(const name of Object.keys(model.computed))scope[name]=signal('');
-  for(const [name,expression] of Object.entries(model.computed)){const source=getSignal(name,scope);ownedEffects.push(createEffect(()=>write(source,evaluate(expression)),source));}
+  for(const [name,expression] of Object.entries(model.computed)){const source=getSignal(name,scope);ownedEffects.push(createEffect(()=>write(source,evaluate(expression)),source,limits.maxUpdatesPerFlush));}
   function resolveTarget(target:Expr,local:Scope):Signal {
     if(target.kind==='reference')return getSignal(target.name,local);
     if(target.kind==='member'){const owner=evaluate(target.object,local);if(!owner||typeof owner!=='object'||Array.isArray(owner)||!('__class'in owner))throw new TypeError('Member assignment requires an instance');const result=owner.fields[target.name];if(!result)throw new TypeError(`Member ${target.name} is read-only or unknown`);return result;}
@@ -136,9 +142,9 @@ export function mountComponent(target:Element,model:Model,components:Mount[],sup
         const owner=evaluate(statement.target,local);const args=statement.arguments.map(argument=>evaluate(argument,local));
         if(Array.isArray(owner)){
           const source=resolveTarget(statement.target,local);let next:Value[];
-          if(statement.method==='append')next=[...owner,args[0]];
+          if(statement.method==='append'){if(owner.length>=limits.maxCollectionItems)throw new RangeError(`Collection exceeds the configured limit of ${limits.maxCollectionItems} items`);next=[...owner,args[0]];}
           else if(statement.method==='remove'){const index=owner.indexOf(args[0]);if(index<0)continue;next=[...owner];next.splice(index,1);}
-          else if(statement.method==='move'){const index=owner.indexOf(args[0]);if(index<0)continue;const destination=Math.max(0,Math.min(owner.length-1,Math.trunc(args[1] as number)));if(index===destination)continue;next=[...owner];const [item]=next.splice(index,1);next.splice(destination,0,item);}
+          else if(statement.method==='move'){const index=owner.indexOf(args[0]);if(index<0)continue;const requested=args[1];if(typeof requested!=='number'||!Number.isSafeInteger(requested))throw new TypeError('move index must be a safe integer');const destination=Math.max(0,Math.min(owner.length-1,requested));if(index===destination)continue;next=[...owner];const [item]=next.splice(index,1);next.splice(destination,0,item);}
           else throw new TypeError(`Unsupported list operation ${statement.method}`);write(source,next);
         } else if(owner&&typeof owner==='object'&&'__class'in owner){const body=owner.actions[statement.method];if(!body)throw new TypeError(`Unknown action ${statement.method}`);execute(body,owner.scope);}
         else throw new TypeError('Unsupported call target');
@@ -163,7 +169,7 @@ export function mountComponent(target:Element,model:Model,components:Mount[],sup
         catch(error){try{disposeBag(nextEffects,nextCleanups);}catch(cleanup){throw new AggregateError([error,cleanup],'Conditional preparation and cleanup failed',{cause:error});}throw error;}
         const previousEffects=branchEffects,previousCleanups=branchCleanups;
         stageStructure(()=>{anchor.parentNode!.insertBefore(fragment,anchor);selected=next;branchEffects=nextEffects;branchCleanups=nextCleanups;try{disposeBag(previousEffects,previousCleanups);}catch(error){return [error];}},()=>disposeBag(nextEffects,nextCleanups));
-      });});effects.push(update);return;
+      });},undefined,limits.maxUpdatesPerFlush);effects.push(update);return;
     }
     if(view.kind==='iteration'){
       const document=parent.ownerDocument,anchor=document.createComment('for');parent.append(anchor);
@@ -183,7 +189,7 @@ export function mountComponent(target:Element,model:Model,components:Mount[],sup
         if(restore&&focused instanceof HTMLElement&&document.activeElement!==focused){focused.focus({preventScroll:true});if(focused instanceof HTMLInputElement&&start!==null&&end!==null)focused.setSelectionRange(start,end,direction??undefined);}
       };
       update=createEffect(()=>{
-        const collection=evaluate(view.collection,local);if(!Array.isArray(collection))throw new TypeError('Iteration requires a list');
+        const collection=evaluate(view.collection,local);if(!Array.isArray(collection))throw new TypeError('Iteration requires a list');if(collection.length>limits.maxCollectionItems)throw new RangeError(`Collection exceeds the configured limit of ${limits.maxCollectionItems} items`);
         const desired:{key:Primitive;item:Value}[]=[],seen=new Set<Primitive>();
         for(const item of collection){keyItem.value=item;const key=evaluate(view.key,keyScope) as Primitive;if(seen.has(key))throw new TypeError(`Duplicate iteration key ${String(key)}`);seen.add(key);desired.push({key,item});}
         // Structural setup must not subscribe this list to child props, init
@@ -196,7 +202,7 @@ export function mountComponent(target:Element,model:Model,components:Mount[],sup
             const fragment=document.createDocumentFragment(),start=document.createComment('item'),end=document.createComment('/item');
             const record:Record={start,end,item:signal(entry.item),index:-1,effects:[],cleanups:[]};
             fragment.append(start);record.cleanups.push(()=>{start.remove();end.remove();});
-            const itemScope=Object.create(local) as Scope;itemScope[view.item]=record.item;
+            const itemScope=Object.create(local) as Scope;Object.defineProperty(itemScope,view.item,{value:record.item,enumerable:true,configurable:true});
             try{for(const child of view.children)create(child,fragment,itemScope,'',record.effects,record.cleanups);fragment.append(end);}
             catch(error){try{disposeBag(record.effects,record.cleanups);}catch(cleanup){throw new AggregateError([error,cleanup],'Record preparation and cleanup failed',{cause:error});}throw error;}
             prepared.push(record);planned.push(record);
@@ -207,13 +213,14 @@ export function mountComponent(target:Element,model:Model,components:Mount[],sup
           if(!prepared.length&&!removed.length&&!reordered)return;
           stageStructure(()=>{const cleanupErrors:unknown[]=[];try{let before:Node=anchor;for(let index=planned.length-1;index>=0;index--){const record=planned[index];if(record.index<0)before.parentNode!.insertBefore(record.start.parentNode!,before);else if(stable&&!stable.has(index)&&record.end.nextSibling!==before)move(record,before);before=record.start;record.index=index;}}catch(error){try{disposePrepared();}catch(cleanup){throw new AggregateError([error,cleanup],'Structural commit and staged cleanup failed',{cause:error});}throw error;}records.clear();desired.forEach((entry,index)=>records.set(entry.key,planned[index]));for(const record of removed)try{disposeBag(record.effects,record.cleanups);}catch(error){cleanupErrors.push(error);}return cleanupErrors;},disposePrepared);
         });
-      });effects.push(update);return;
+      },undefined,limits.maxUpdatesPerFlush);effects.push(update);return;
     }
     if(view.component>=0){
       const input=Object.create(null) as Record<string,Primitive>;
       for(const [key,value] of Object.entries(view.attributes))Object.defineProperty(input,key,{enumerable:true,configurable:true,get:()=>evaluate(value,local) as Primitive});
       if(forward)Object.defineProperty(input,'class',{enumerable:true,configurable:true,get:()=>[view.attributes.class?evaluate(view.attributes.class,local):'',forward].filter(Boolean).join(' ')});
-      const dispose=untracked(()=>components[view.component](parent as Element,{mountComponent,mountCounter},input));callbacks.push(dispose);
+      const childRuntime={mountComponent:(childTarget:Element,childModel:Model,childComponents:Mount[],childProps:Record<string,Primitive>={})=>mountComponent(childTarget,childModel,childComponents,childProps,limits,componentDepth+1),mountCounter};
+      const dispose=untracked(()=>components[view.component](parent as Element,childRuntime,input));callbacks.push(dispose);
       // Refresh only the child prop signals; the child and its local state stay
       // mounted. Each child binding independently tracks those signals.
       if(dispose.refresh)track(()=>dispose.refresh!(),effects);return;

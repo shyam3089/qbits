@@ -1,8 +1,8 @@
-# Phase 3A.1 performance and reactivity
+# Phase 3A.2 performance and reactivity
 
-Phase 3A.1 keeps the Phase 2D grammar and public mount API. The security-fix
-revision adds reversible structural preparation and complete runtime numeric checks
-without changing generated application syntax.
+Phase 3A.2 keeps the Phase 2D grammar and existing four-argument mount calls. Optional
+compiler and runtime limit objects add bounded work without changing generated application
+syntax. All Phase 3A.1 rollback, validation, cleanup, and identity guarantees remain.
 
 ## Measured causes and retained optimizations
 
@@ -27,33 +27,28 @@ the distinct-write cases so this decision can be revisited if transaction sizes 
 
 ## Firefox measurements
 
-[Recorded observations](benchmarks/reactivity-2026-10-25-security-fixes.json) were
-captured on 25 October 2026 with Firefox 157.0. The baseline is the pre-fix Phase 3A.1
-runtime saved before implementation; the fixed candidate is the production runtime from
-the same compiler fixtures. Each candidate ran in a separate page with three warmups,
-21 timing samples, 1,000 operations per update sample, and 15 warmed reorder samples.
-Results are machine observations, not universal guarantees.
+[Primary](benchmarks/reactivity-2026-10-25-phase3a2.json) and
+[repeat](benchmarks/reactivity-2026-10-25-phase3a2-repeat.json) observations were captured
+on 25 October 2026 with Firefox 157.0. The baseline is the exact Phase 3A.1 runtime at
+commit `56a202f`; the candidate is the Phase 3A.2 production runtime. Each candidate ran
+in a separate page with identical fixtures, three warmups, 21 timing samples, 1,000
+operations per update sample, and 15 warmed reorder samples.
 
-| Scenario | Pre-fix median | Fixed median | Pre-fix p95 | Fixed p95 |
+| Scenario | 3A.1 medians | 3A.2 medians | 3A.1 p95 | 3A.2 p95 |
 | --- | ---: | ---: | ---: | ---: |
-| 1,000-row lightweight mount | 11 ms | 5 ms | 23 ms | 8 ms |
-| 10,000-row lightweight mount | 49 ms | 43 ms | 126 ms | 58 ms |
-| Isolated row update | 36 us | 15 us | 202 us | 69 us |
-| Computed diamond/two-write chain | 13 us | 19 us | 34 us | 33 us |
-| 1,000-row last-to-first reorder | 1 ms | 1 ms | 1 ms | 1 ms |
-| Nested child-prop update | 12 us | 23 us | 227 us | 64 us |
-| 4 distinct signal writes | 4 us | 4 us | 6 us | 6 us |
-| 16 distinct signal writes | 6 us | 6 us | 6 us | 8 us |
-| 64 distinct signal writes | 18 us | 20 us | 30 us | 26 us |
-| 256 distinct signal writes | 62 us | 70 us | 74 us | 82 us |
-| Heavy 1,000-row mount/dispose cycle | 56 ms | 62 ms | n/a | n/a |
+| 1,000-row lightweight mount | 6 / 6 ms | 4 / 4 ms | 10 / 12 ms | 10 / 6 ms |
+| 10,000-row lightweight mount | 35 / 36 ms | 43 / 36 ms | 93 / 71 ms | 51 / 52 ms |
+| Isolated row update | 22 / 26 us | 22 / 34 us | 79 / 148 us | 118 / 131 us |
+| Computed diamond/two-write chain | 17 / 12 us | 12 / 9 us | 23 / 34 us | 35 / 20 us |
+| Nested child-prop update | 19 / 18 us | 13 / 22 us | 107 / 255 us | 164 / 594 us |
+| Heavy 1,000-row mount/dispose cycle | 59 / 51 ms | 55 / 55 ms | n/a | n/a |
 
-The 10,000-row mount remains well below the 152 ms target and the isolated update
-remains below 40 us. Computed median, nested median, high-cardinality writes, and the
-heavy cycle regressed; these are accepted costs of the added validation and structural
-transaction bookkeeping, while their p95 values stayed similar or improved except for
-256 writes. Keyed reorder creates no elements or text writes and preserves focus, DOM
-identity, and child-local state.
+The earlier 13 to 19 us computed, 12 to 23 us nested-prop, and 56 to 62 ms heavy-cycle
+regressions did not reproduce consistently. Across the paired runs, computed improved,
+nested props crossed in opposite directions, and the heavy cycle stayed within four
+milliseconds. The security-limit overhead is therefore reported as the complete A/B
+delta above: the only repeatable cost is bundle size; timing deltas were smaller than
+run-to-run Firefox variance. No rollback or cleanup path was removed to chase noise.
 
 Firefox did not expose `performance.memory`. After explicit Playwright GC, the WeakRef
 probe observed zero reachable supplied-prop objects and zero reachable rendered nodes
@@ -62,11 +57,10 @@ mount targets were also verified; these observations are not a formal leak proof
 
 ## Bundle and startup tradeoff
 
-The runtime changed from 26,634 to 33,361 bytes raw and from 5,940 to 6,930 bytes gzip.
-The example production JavaScript changed from 20.51 to 22.79 kB minified and from 5.50
-to 6.27 kB gzip. The increase pays for staged structural commits, failure aggregation,
-component disabling after failed recovery, and complete numeric validation. No new
-dependency was added. Removing those paths would violate the documented safety behavior.
+Phase 3A.2 changes the runtime from 33,361 to 35,871 bytes raw and from 6,930 to 7,435
+bytes gzip (+505 bytes). The example production JavaScript is 24.22 kB minified and 6.63
+kB gzip. The increase pays for validated configurable limits, scheduler accounting,
+component-depth propagation, and guarded list operations. No dependency was added.
 
 ## Reproduce
 

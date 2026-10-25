@@ -1,11 +1,13 @@
 import type {ClassDecl,Component,ConditionExpression,Expression,Statement,ViewNode,Span} from './ast.js';
 import {fail} from './diagnostics.js';
+import {resolveCompilerLimits,type CompilerLimits} from './limits.js';
 
 export const elements=new Set(['main','section','div','h1','h2','h3','h4','h5','h6','p','span','label','button','input','ul','ol','li']);
-export interface ValidationOptions {sourceExtension?:string;components?:Map<string,Component>}
+export interface ValidationOptions {sourceExtension?:string;components?:Map<string,Component>;limits?:Partial<CompilerLimits>}
 type Type='string'|'number'|'boolean'|'unknown'|`class:${string}`|`list:${string}`;
 
 export function validate(ast:Component,source:string,filename='<input>',options:ValidationOptions={}):void {
+  const limits=resolveCompilerLimits(options.limits);
   const error=(span:Span,message:string):never=>fail(source,filename,span,message);
   const imported=new Set<string>();
   for(const entry of ast.imports) {
@@ -47,7 +49,7 @@ export function validate(ast:Component,source:string,filename='<input>',options:
   function validateComputed(items:Component['computed'],env:Map<string,Type>):void {
     const pending=new Map(items.map(item=>[item.name.value,item]));const resolving=new Set<string>();
     const names=(expression:Expression,result=new Set<string>()):Set<string>=>{if(expression.kind==='reference')result.add(expression.name);else if(expression.kind==='member')names(expression.object,result);else if(expression.kind==='str'||expression.kind==='len')names(expression.argument,result);else if(expression.kind==='add'){names(expression.left,result);names(expression.right,result);}else if(expression.kind==='construct')expression.arguments.forEach(item=>names(item,result));else if(expression.kind==='list')expression.items.forEach(item=>names(item,result));return result;};
-    const resolve=(name:string):Type=>{const item=pending.get(name);if(!item)return env.get(name)!;if(resolving.has(name))error(item.name.span,`Computed dependency cycle involving ${JSON.stringify(name)}`);resolving.add(name);for(const dependency of names(item.expression))if(pending.has(dependency))resolve(dependency);const result=type(item.expression,env);if(result==='unknown')error(item.expression.span,'Computed type could not be inferred');env.set(name,result);pending.delete(name);resolving.delete(name);return result;};
+    const resolve=(name:string):Type=>{const item=pending.get(name);if(!item)return env.get(name)!;if(resolving.has(name))error(item.name.span,`Computed dependency cycle involving ${JSON.stringify(name)}`);if(resolving.size>=limits.maxNestingDepth)error(item.name.span,`Computed dependency depth exceeds the configured limit of ${limits.maxNestingDepth}`);resolving.add(name);for(const dependency of names(item.expression))if(pending.has(dependency))resolve(dependency);const result=type(item.expression,env);if(result==='unknown')error(item.expression.span,'Computed type could not be inferred');env.set(name,result);pending.delete(name);resolving.delete(name);return result;};
     for(const name of [...pending.keys()])resolve(name);
   }
   for(const declaration of classes.values()){const classEnv=classEnvs.get(declaration.name.value)!;validateComputed(declaration.computed,classEnv);for(const action of declaration.actions)validateStatements(action.statements,classEnv,new Set(declaration.fields.map(field=>field.name.value)),undefined,true);}
