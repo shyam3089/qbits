@@ -265,7 +265,7 @@ export async function retentionProbe(runtimeSource, modules) {
   } finally {urls.forEach(value => URL.revokeObjectURL(value));}
 }
 
-export async function benchmarkSuite(runtimeSource, modules, mountModules, distinctModules={}, {samples=21, operations=1000, reorderSamples=15}={}) {
+export async function benchmarkSuite(runtimeSource, modules, mountModules, distinctModules={}, staticCatalogModules={}, {samples=21, operations=1000, reorderSamples=15}={}) {
   const urls=[];
   const url=source=>{const value=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));urls.push(value);return value;};
   const summary=values=>{const sorted=[...values].sort((a,b)=>a-b);return {median:sorted[Math.floor(sorted.length/2)],p95:sorted[Math.min(sorted.length-1,Math.ceil(sorted.length*.95)-1)],min:sorted[0],max:sorted.at(-1),samples:sorted.length};};
@@ -281,6 +281,14 @@ export async function benchmarkSuite(runtimeSource, modules, mountModules, disti
       for(let index=0;index<3;index++){dispose=module.default(host,runtime);dispose();}
       const values=[];for(let sample=0;sample<samples;sample++){const started=performance.now();dispose=module.default(host,runtime);values.push(performance.now()-started);dispose();}
       mounts[size]=summary(values);
+    }
+    const staticNestedMountMs={};
+    for(const [size,source] of Object.entries(staticCatalogModules)){
+      const childURL=url(source['./ProductTile.qb']);
+      const module=await import(url(source['./Catalog.qb'].replace(JSON.stringify('./ProductTile.qb'),JSON.stringify(childURL))));
+      for(let index=0;index<3;index++){dispose=module.default(host,runtime);dispose();}
+      const values=[];for(let sample=0;sample<samples;sample++){const started=performance.now();dispose=module.default(host,runtime);values.push(performance.now()-started);dispose();}
+      staticNestedMountMs[size]=summary(values);
     }
     dispose=list.default(host,runtime);
     const first=host.querySelector('li'),last=host.querySelector('li:last-child');
@@ -300,6 +308,6 @@ export async function benchmarkSuite(runtimeSource, modules, mountModules, disti
     for(let index=0;index<100;index++)update.click();
     const computedChainUs=timeOperations(()=>update.click());dispose();
     const distinctWritesUs={};for(const [size,source] of Object.entries(distinctModules)){const module=await import(url(source));dispose=module.default(host,runtime);const button=host.querySelector('button');for(let index=0;index<50;index++)button.click();distinctWritesUs[size]=timeOperations(()=>button.click(),500);dispose();}
-    return {mountMs:mounts,isolatedUpdateUs,computedChainUs,reorderMs:summary(reorders),nestedComponentUs,distinctWritesUs};
+    return {mountMs:mounts,staticNestedMountMs,isolatedUpdateUs,computedChainUs,reorderMs:summary(reorders),nestedComponentUs,distinctWritesUs};
   } finally {dispose?.();host.remove();urls.forEach(value=>URL.revokeObjectURL(value));}
 }

@@ -206,6 +206,20 @@ component Mount:
 `).code};
 }
 
+export function staticCatalogFixture(size:number):Record<string,string>{
+  return {
+    './ProductTile.qb':compile(`component ProductTile(label = "", price = 0):
+    section:
+        h2 text=label
+        p text="$" + str(price)
+        button text="Add to cart"`).code,
+    './Catalog.qb':compile(`import ProductTile from "./ProductTile.qb"
+component Catalog:
+    main:
+${Array.from({length:size},(_,index)=>`        ProductTile label="Product ${index}" price=${index+1}`).join('\n')}`).code,
+  };
+}
+
 export function distinctWriteFixture(size: number): string {
   const states=Array.from({length:size},(_,index)=>`    value${index} = 0`).join('\n');
   const writes=Array.from({length:size},(_,index)=>`            value${index} = value${index} + 1`).join('\n');

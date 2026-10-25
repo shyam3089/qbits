@@ -102,8 +102,18 @@ test('generator marks compiler-proven static DOM bindings without emitting execu
   const fixed=compile('component C:\n    p text="Fixed"').code;
   const dynamic=compile('component C:\n    value = "Live"\n    p text=value').code;
   assert.match(fixed,/\\"static\\":1/);
-  assert.doesNotMatch(dynamic,/\\"static\\":/);
+  assert.doesNotMatch(dynamic,/"static":/);
   assert.doesNotMatch(fixed,/innerHTML|eval\(|Function\(/);
+});
+test('generator folds safe constants and removes constant branches without executable source expressions',async()=>{
+  const code=compile('component C:\n    total = 1 + 2\n    enabled = true\n    p text="A" + "B"\n    if false and enabled:\n        span text="dead"\n    else:\n        span text="live"').code;
+  const module=await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+  assert.equal(module.model.states.total.value,3);
+  assert.equal(module.model.roots[0].attributes.text.value,'AB');
+  assert.deepEqual(module.model.roots.map((root:{attributes:{text:{value:string}}})=>root.attributes.text.value),['AB','live']);
+  assert.doesNotMatch(code,/"dead"|innerHTML|eval\(|Function\(/);
+  const overflow=compile('component C:\n    total = 9007199254740991 + 1\n    div').code;
+  assert.match(overflow,/\\"kind\\":\\"add\\"/);
 });
 test('identity is validated and suffix handling is derived', () => {
   assert.equal(isSource('test' + identity.sourceExtension + '?import'), true);

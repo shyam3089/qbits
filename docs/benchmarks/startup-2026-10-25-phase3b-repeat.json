@@ -1,0 +1,50 @@
+{
+  "firefox": "157.0",
+  "protocol": {
+    "runtime": "production generated modules",
+    "fixture": "1000 static product text nodes",
+    "ordering": "paired alternating",
+    "warmups": 3,
+    "samples": 21
+  },
+  "reports": [
+    {
+      "name": "baseline",
+      "generatedBytes": 158276,
+      "generatedGzipBytes": 3368,
+      "compileMs": {
+        "median": 4.67890000000034,
+        "p95": 7.7104999999996835,
+        "min": 3.130300000000261,
+        "max": 8.339800000000196,
+        "samples": 21
+      },
+      "generatedModuleStartupUs": {
+        "median": 3000,
+        "p95": 4000,
+        "min": 1000,
+        "max": 6000,
+        "samples": 21
+      }
+    },
+    {
+      "name": "candidate",
+      "generatedBytes": 158261,
+      "generatedGzipBytes": 3357,
+      "compileMs": {
+        "median": 4.2444000000000415,
+        "p95": 10.350399999999809,
+        "min": 3.3740999999999985,
+        "max": 12.571100000000115,
+        "samples": 21
+      },
+      "generatedModuleStartupUs": {
+        "median": 2000,
+        "p95": 4000,
+        "min": 1000,
+        "max": 5000,
+        "samples": 21
+      }
+    }
+  ]
+}
