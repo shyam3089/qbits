@@ -1,4 +1,38 @@
-# Phase 3A.2 performance and reactivity
+# Phase 3A.3 performance and reactivity
+
+The Phase 3A.3 Firefox A/B record is
+[reactivity-2026-10-25-phase3a3.json](benchmarks/reactivity-2026-10-25-phase3a3.json).
+An independent repeat is
+[reactivity-2026-10-25-phase3a3-repeat.json](benchmarks/reactivity-2026-10-25-phase3a3-repeat.json).
+It uses the unchanged Phase 3A.2 runtime as baseline, identical production modules,
+Firefox 157.0, three warmups, 21 timing samples, 1,000 update operations and 15 reorder
+samples. The checked-in validator record is
+[validator-2026-10-25-phase3a3.json](benchmarks/validator-2026-10-25-phase3a3.json).
+
+Validator duplicate checking now has 4k/8k/16k medians of 1.48/1.59/7.73 ms
+(p95 1.84/3.44/10.75 ms), replacing the confirmed quadratic 164/655/2,477 ms behavior.
+Full parse/validate/generate compilation medians are 25.37/46.62/109.11 ms
+(p95 43.01/61.90/132.07 ms) for the same sources.
+Runtime budget checks add constant-time
+integer accounting at allocation and effect boundaries; rollback and cleanup guarantees
+were not removed for performance.
+
+| Production Firefox scenario | 3A.2 median/p95 | 3A.3 median/p95 |
+| --- | ---: | ---: |
+| 1,000-row mount | 6/9 ms | 4/9 ms |
+| 10,000-row mount | 36/77 ms | 35/49 ms |
+| Isolated reactive update | 18/98 us | 22/82 us |
+| Computed chain | 15/46 us | 11/68 us |
+| Keyed reconciliation | 1/1 ms | 0/1 ms |
+| Nested component prop update | 15/85 us | 15/155 us |
+| 1,000-row mount/dispose cycle | 47/57 ms | 49/57 ms |
+
+The repeat produced 6/12 to 4/7 ms (1k mount), 40/89 to 34/43 ms (10k mount),
+15/98 to 11/78 us (isolated update), 17/74 to 10/27 us (computed), 1/1 to 1/1 ms
+(reconcile), 12/109 to 13/53 us (nested), and 48 to 51 ms cycle medians. The p95
+nested spike in the primary run did not repeat, so it is reported as Firefox variance,
+not optimized by weakening checks. Runtime size changes from 35,871 to 41,064 raw bytes
+and 7,435 to 8,251 gzip bytes (+5,193 raw, +816 gzip). No dependency was added.
 
 Phase 3A.2 keeps the Phase 2D grammar and existing four-argument mount calls. Optional
 compiler and runtime limit objects add bounded work without changing generated application

@@ -1,0 +1,30 @@
+{
+  "protocol": {
+    "warmups": 3,
+    "samples": 11,
+    "scope": "validation-only scaling plus full parse/validate/generate compilation; one class with unique actions"
+  },
+  "results": [
+    {
+      "actions": 4000,
+      "validationMedianMs": 1.4822999999999809,
+      "validationP95Ms": 1.8430999999999926,
+      "compileMedianMs": 25.365200000000073,
+      "compileP95Ms": 43.0145
+    },
+    {
+      "actions": 8000,
+      "validationMedianMs": 1.5892999999999802,
+      "validationP95Ms": 3.4384999999999764,
+      "compileMedianMs": 46.61959999999988,
+      "compileP95Ms": 61.90039999999999
+    },
+    {
+      "actions": 16000,
+      "validationMedianMs": 7.7258999999999105,
+      "validationP95Ms": 10.748700000000099,
+      "compileMedianMs": 109.11410000000024,
+      "compileP95Ms": 132.06950000000006
+    }
+  ]
+}

@@ -1,9 +1,9 @@
 import type { Plugin } from 'vite';
-import { compileFile } from './modules.js';
+import {compileFile,type CompileFileOptions} from './modules.js';
 import { CompileError } from '../language/diagnostics.js';
 import { identity, isSource, metadata } from './config.js';
 import { readFileSync } from 'node:fs';
-export function languagePlugin(): Plugin {
+export function languagePlugin(options:CompileFileOptions={}): Plugin {
   return {name: `${identity.languageId}-compiler`, enforce: 'pre',
     handleHotUpdate(context) {
       if (!isSource(context.file) && !context.file.endsWith('.css')) return;
@@ -16,7 +16,7 @@ export function languagePlugin(): Plugin {
     },
     transform(source, id) {
       if (!isSource(id)) return;
-      try { return {code: metadata() + compileFile(id.split(/[?#]/, 1)[0],source,path=>this.addWatchFile(path)).code, map: null}; }
+      try { return {code: metadata() + compileFile(id.split(/[?#]/, 1)[0],source,path=>this.addWatchFile(path),options).code, map: null}; }
       catch (error) {
         if (!(error instanceof CompileError)) throw error;
         const d = error.diagnostic;

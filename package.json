@@ -34,7 +34,8 @@
     "cli": "node dist/lib/tooling/cli.js",
     "test:docs": "tsx scripts/check-docs.ts",
     "test:external": "tsx scripts/check-external.ts",
-    "bench:reactivity": "tsx scripts/benchmark-reactivity.ts"
+    "bench:reactivity": "tsx scripts/benchmark-reactivity.ts",
+    "bench:validator": "tsx scripts/benchmark-validator.ts"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

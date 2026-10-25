@@ -89,10 +89,11 @@ export async function measure(runtimeSource, modules, {size = 1000, samples = 9,
       const started = performance.now(); dispose = list.default(host, runtime); dispose();
       cycleTimes.push(performance.now() - started);
     }
+    cycleTimes.sort((a,b) => a-b);
     return {size, samples, cycles, mount, batchInitial, batchUpdate, batchValue,
       isolated, propUpdate, childProp, unrelated, move: median(moves), focus, identity, childState,
       noop, append, remove, detached, afterDispose, empty,
-      cycleMedianMs: cycleTimes.sort((a,b) => a-b)[Math.floor(cycles / 2)],
+      cycleMedianMs: cycleTimes[Math.floor(cycles / 2)],cycleP95Ms:cycleTimes[Math.min(cycles-1,Math.ceil(cycles*.95)-1)],
       liveListeners: counts.adds - counts.removes, remainingNodes: host.childNodes.length,
       heapBytes: typeof performance.memory?.usedJSHeapSize === 'number' ? performance.memory.usedJSHeapSize : null};
   } finally {

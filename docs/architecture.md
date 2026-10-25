@@ -56,6 +56,12 @@ identifiers cannot alter a scope prototype. Runtime list size, component depth, 
 scheduler-flush limits propagate through child mounts. Numeric move indexes are validated
 as safe integers before list mutation.
 
+Phase 3A.3 gives every public mount one shared component-tree budget. Component, live
+record, framework DOM-node and reactive-effect reservations happen before allocation;
+detached staged records and initial effects use that same budget. Work accounting spans
+the outer synchronous mount or update. Rollback and disposal release reservations, while
+recovery resets only operation work so cleanup cannot be blocked by the failed operation.
+
 Commit updates ranges and reconciliation maps before disposing removed scopes. Disposal
 is irreversible: a throwing removed-scope cleanup is reported after commit and does not
 roll state back. Transaction guarantees end at the synchronous boundary. Host component
@@ -64,6 +70,10 @@ and can perform side effects outside the runtime journal. See reactivity.md and
 performance.md for detailed behavior and measurements.
 
 `tooling/` owns identity validation, CLI filesystem access, and Vite transformation.
+Component-import discovery, cycle detection, ordering and longest-depth calculation are
+iterative. A real-path map counts shared dependencies once, while cumulative UTF-8 source
+bytes and parsed AST complexity are charged to each distinct module. Bottom-up validation
+preserves existing import semantics without recursive graph traversal.
 The Vite plugin compiles configured suffixes and appends identity metadata; the
 compiler itself knows neither branding nor suffixes. Vite invalidates source modules
 and explicitly triggers full reloads, including after failed transforms. Component

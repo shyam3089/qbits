@@ -16,12 +16,13 @@ dependencies, browser bugs, and asynchronous side effects remain trusted or exte
 | Severity | Finding | Disposition |
 | --- | --- | --- |
 | High | Deep or oversized untrusted source and collections had no explicit work limits, permitting stack or memory exhaustion. | Fixed with configurable source, nesting, expression, collection, component-depth, and scheduler limits plus regression tests. |
-| Medium | A loop variable named `__proto__` used assignment on a derived scope and could replace that scope's prototype. | Fixed by defining an own data property; minimized regression added. |
+| Defense in depth | A loop variable named `__proto__` used assignment on a derived scope. Null-prototype framework scopes prevented the suspected pollution path in focused reproduction. | Own-property definition was retained as hardening and a minimized regression was added; this was not a reproduced exploit. |
 | Low | Runtime `move` truncated/coerced malformed host-model indexes. | Fixed by requiring a safe integer before mutation. |
 | Informational | Getters, proxies, and host mounts can execute arbitrary code and side effects. | Documented trusted boundary; throwing cases verify no framework DOM is left behind. |
 | Informational | Duplicate keyed data can be created while its view is inactive. | Activation fails transactionally and rolls back; documented limitation and stress coverage retained. |
 
-No unresolved known High or Critical finding remains within the reviewed scope. This
-statement is limited to the tests and manual audit above and does not replace independent
+The later Phase 3A release-gate audit found unresolved aggregate compiler-graph and
+component-tree exhaustion paths, so the earlier zero-High statement was inaccurate.
+Phase 3A.3 records their remediation separately and still requires independent human
 review. Searches and generated-code tests found no `eval`, `Function`, `innerHTML`, HTML
 injection, or application-source execution path in compiler/runtime production code.

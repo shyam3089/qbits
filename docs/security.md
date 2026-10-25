@@ -1,33 +1,12 @@
 <!-- Generated for Qubits 0.1.0 by npm run sync. -->
 # Security
 
-Implemented controls: parsing never executes application source; generation serializes
-literals; the runtime uses DOM text nodes, not HTML insertion; no community plugin
-execution or postinstall exists. Compiler-proven static bindings still use text nodes or
-typed DOM properties. All accepted numeric values and arithmetic results are finite safe
-integers. Synchronous transactions validate and prepare structural changes before commit;
-failed preparation leaves committed DOM identities and subscriptions intact. If rollback
-recovery itself fails, the original and recovery errors are reported and participating
-components are disabled instead of continuing with uncertain state.
+Parsing never executes application source, generation serializes literals, and rendering uses DOM element/text/property APIs rather than HTML insertion. Numeric values and arithmetic results are finite safe integers. Synchronous structural transactions prepare before commit; a failed reservation or staged mount preserves committed DOM identity, focus, state and subscriptions. Recovery failure is reported and disables participating components rather than continuing with uncertain state.
 
-A cleanup error after structural commit is reported as a post-commit error; it does not
-roll back committed state. Component mount/cleanup functions, application JavaScript,
-prop getters and proxies, Vite configs, and npm dependencies are trusted host code with
-normal permissions. Transactions are synchronous only and do not span timers, promises,
-network activity, or other asynchronous work. These controls are not a sandbox.
+Compiler module resolution is iterative. Graph-wide defaults are 10,000 distinct modules, import depth 256, 64 MiB cumulative UTF-8 source, and 2,000,000 aggregate AST objects. Shared imports are counted once. Direct compile, compileFile, CLI and Vite use the same limit model; CLI overrides are --max-modules, --max-import-depth, --max-project-bytes and --max-project-complexity. Programmatic callers pass graphLimits. Existing per-file defaults remain 2,097,152 UTF-16 code units, nesting 256, 100,000 expression nodes, expression depth 512 and 100,000 collection items.
 
-Compilation defaults to 2,097,152 UTF-16 code units, 256 nesting levels, 100,000
-expression nodes, 512 recursive expression levels, and 100,000 items in one literal or
-argument list. Callers can lower or raise these positive safe-integer limits through the
-compiler options. The runtime defaults to 100,000 list items, 256 nested components, and
-100,000 effect executions per scheduler flush; optional mount limits propagate to child
-components. Limit failures are explicit and happen before the guarded allocation or
-mutation. These ceilings protect untrusted .qb source, not trusted host JavaScript.
+Each root component tree shares defaults of 100,000 component instances, 250,000 live list records, 500,000 framework-created DOM nodes, 250,000 reactive effects and 1,000,000 units of mount/update work. The existing limits of 100,000 items per collection, component depth 256 and 100,000 effect executions per flush also apply. Detached staged mounts and initial effects are included. Reservations are released on rollback and disposal. All values are configurable positive safe integers through compiler or mount options; raising them transfers exhaustion risk to the host.
 
-init runs only explicitly, rejects symlink instruction files, preserves unmanaged
-instructions and conflicting scripts, and refuses malformed managed markers. The
-scaffolder refuses existing targets and never runs installation. Check skips symlinks,
-hidden directories, node_modules and dist. Review source/config/dependencies, use a
-lockfile, keep development servers local, and require independent review for
-security-sensitive changes. The Phase 3A.2 record prepares that review but does not
-constitute approval. Software is licensed under Apache-2.0; see LICENSE and NOTICE.
+These controls bound framework-accounted synchronous work, not total process memory, browser layout/paint cost, dependency behavior or arbitrary host JavaScript. Component mount/cleanup functions, application code, prop getters/proxies, Vite configuration and npm dependencies are trusted and can execute with normal host permissions or retain resources outside the accounting model. Transactions do not span timers, promises, network activity or other asynchronous side effects. This is defense in depth, not a sandbox or security certification.
+
+Use lockfiles, review source/config/dependencies, keep development servers local, and require an independent human review for security-sensitive changes. Phase 3A.3 is not approved for merge by its implementation record. Software is licensed under Apache-2.0; see LICENSE and NOTICE.
