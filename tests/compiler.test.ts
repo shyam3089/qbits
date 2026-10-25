@@ -102,7 +102,7 @@ test('generator marks compiler-proven static DOM bindings without emitting execu
   const fixed=compile('component C:\n    p text="Fixed"').code;
   const dynamic=compile('component C:\n    value = "Live"\n    p text=value').code;
   assert.match(fixed,/\\"static\\":1/);
-  assert.doesNotMatch(dynamic,/"static":/);
+  assert.doesNotMatch(dynamic,/\\"static\\":/);
   assert.doesNotMatch(fixed,/innerHTML|eval\(|Function\(/);
 });
 test('generator folds safe constants and removes constant branches without executable source expressions',async()=>{
