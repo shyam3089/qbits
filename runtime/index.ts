@@ -17,15 +17,22 @@ type Scope=Record<string,Signal|Instance|(()=>Value)>;
 type ReactiveEffect=(()=>void)&{dependencies:Set<Signal>;disposed:boolean;computed?:Signal};
 type Dispose=(()=>void)&{refresh?:()=>void};
 type Mount=(target:Element,runtime:typeof import('./index.js'),props?:Record<string,Primitive>)=>Dispose;
+type CommitHook=()=>unknown[]|void;
 let activeEffect:ReactiveEffect|undefined;
 let batchDepth=0,flushing=false;
 const pendingComputed=new Set<ReactiveEffect>(),pendingEffects=new Set<ReactiveEffect>();
 let transactionDepth=0;
 const changedSignals:Signal[]=[],previousValues:Value[]=[];
+const commitHooks:CommitHook[]=[],rollbackHooks:(()=>void)[]=[],transactionParticipants:(()=>unknown)[]=[];
 
-function signal<T=Value>(value:T):Signal<T>{return {value,subscribers:new Set()};}
+function assertNumber(value:unknown):void {if(typeof value==='number'&&!Number.isSafeInteger(value))throw new RangeError('State exceeded safe integer range');}
+function signal<T=Value>(value:T):Signal<T>{assertNumber(value);return {value,subscribers:new Set()};}
 function read<T>(source:Signal<T>):T {if(source.dirty)source.derive!();if(activeEffect&&!activeEffect.disposed){source.subscribers.add(activeEffect);activeEffect.dependencies.add(source as Signal);}return source.value;}
-function rememberValue(source:Signal):void {if(!transactionDepth||source.derive||changedSignals.includes(source))return;changedSignals.push(source);previousValues.push(source.value);}
+function rememberValue(source:Signal):void {
+  if(!transactionDepth||source.derive)return;
+  if(changedSignals.includes(source))return;
+  changedSignals.push(source);previousValues.push(source.value);
+}
 function enqueue(effect:ReactiveEffect):void {
   if(effect.disposed)return;
   if(!effect.computed){pendingEffects.add(effect);return;}
@@ -42,7 +49,7 @@ function flush():void {
 }
 function batch<T>(run:()=>T):T {batchDepth++;let complete=false;try{const result=run();complete=true;return result;}finally{batchDepth--;if(complete)flush();}}
 function untracked<T>(run:()=>T):T {const previous=activeEffect;activeEffect=undefined;try{return run();}finally{activeEffect=previous;}}
-function write<T>(source:Signal<T>,value:T):void {if(typeof value==='number'&&!Number.isSafeInteger(value))throw new RangeError('State exceeded safe integer range');if(Object.is(source.value,value))return;rememberValue(source as Signal);source.value=value;for(const subscriber of source.subscribers)enqueue(subscriber);flush();}
+function write<T>(source:Signal<T>,value:T):void {assertNumber(value);if(Object.is(source.value,value))return;rememberValue(source as Signal);source.value=value;for(const subscriber of source.subscribers)enqueue(subscriber);flush();}
 function createEffect(run:()=>void,computed?:Signal):ReactiveEffect {
   const effect=(()=>{if(effect.disposed)return;pendingComputed.delete(effect);pendingEffects.delete(effect);if(computed)computed.dirty=false;for(const source of effect.dependencies)source.subscribers.delete(effect);effect.dependencies.clear();const previous=activeEffect;activeEffect=effect;try{run();}finally{activeEffect=previous;}}) as ReactiveEffect;
   effect.dependencies=new Set();effect.disposed=false;effect.computed=computed;
@@ -52,20 +59,30 @@ function createEffect(run:()=>void,computed?:Signal):ReactiveEffect {
 }
 function stop(effect:ReactiveEffect):void {if(effect.disposed)return;effect.disposed=true;pendingComputed.delete(effect);pendingEffects.delete(effect);for(const source of effect.dependencies)source.subscribers.delete(effect);effect.dependencies.clear();}
 
-function clearTransaction():void {changedSignals.length=previousValues.length=0;}
-function transact<T>(run:()=>T):T {
-  if(transactionDepth)return run();
-  clearTransaction();transactionDepth=1;batchDepth++;let batched=true;
-  try{const result=run();batchDepth--;batched=false;flush();transactionDepth=0;clearTransaction();return result;}
-  catch(error){
-    if(batched)batchDepth--;
-    transactionDepth=0;
-    for(let index=changedSignals.length-1;index>=0;index--)changedSignals[index].value=previousValues[index];
-    pendingComputed.clear();pendingEffects.clear();
-    const recover=[...changedSignals];clearTransaction();
-    batchDepth++;try{for(const source of recover)for(const effect of source.subscribers)enqueue(effect);}finally{batchDepth--;try{flush();}catch{/* Preserve the original transaction failure. */}}
-    throw error;
-  }
+function clearTransaction():void {changedSignals.length=previousValues.length=commitHooks.length=rollbackHooks.length=transactionParticipants.length=0;}
+function participate(disable:()=>unknown):void {if(!transactionParticipants.includes(disable))transactionParticipants.push(disable);}
+function stageStructure(commit:CommitHook,rollback:()=>void):void {if(transactionDepth){commitHooks.push(commit);rollbackHooks.push(rollback);}else{const errors=commit();if(errors?.length)throw new AggregateError(errors,'Structural update committed but cleanup failed');}}
+function disableParticipants(participants:(()=>unknown)[],errors:unknown[]):void {for(const disable of participants)try{const failure=disable();if(failure)errors.push(failure);}catch(error){errors.push(error);}}
+function rollbackTransaction(original:unknown,batched:boolean):never {
+  if(batched)batchDepth--;
+  const sources=[...changedSignals],values=[...previousValues],rollbacks=[...rollbackHooks].reverse(),participants=[...transactionParticipants];
+  transactionDepth=0;pendingComputed.clear();pendingEffects.clear();clearTransaction();
+  for(let index=sources.length-1;index>=0;index--)sources[index].value=values[index];
+  const recoveryErrors:unknown[]=[];
+  for(const rollback of rollbacks)try{rollback();}catch(error){recoveryErrors.push(error);}
+  batchDepth++;try{for(const source of sources)for(const effect of source.subscribers)enqueue(effect);}finally{batchDepth--;try{flush();}catch(error){recoveryErrors.push(error);}}
+  if(recoveryErrors.length){disableParticipants(participants,recoveryErrors);throw new AggregateError([original,...recoveryErrors],'Transaction failed and recovery was incomplete',{cause:original});}
+  throw original;
+}
+function transact<T>(run:()=>T,disable:()=>unknown):T {
+  if(transactionDepth){participate(disable);return run();}
+  clearTransaction();transactionDepth=1;participate(disable);batchDepth++;let batched=true;let result:T;
+  try{result=run();batchDepth--;batched=false;flush();}
+  catch(error){return rollbackTransaction(error,batched);}
+  if(!commitHooks.length){transactionDepth=0;clearTransaction();return result;}
+  const commits=[...commitHooks],participants=[...transactionParticipants];transactionDepth=0;clearTransaction();
+  if(commits.length){const cleanupErrors:unknown[]=[],fatalErrors:unknown[]=[];for(const commit of commits)try{const errors=commit();if(errors?.length)cleanupErrors.push(...errors);}catch(error){fatalErrors.push(error);}if(fatalErrors.length)disableParticipants(participants,fatalErrors);const errors=[...fatalErrors,...cleanupErrors];if(errors.length)throw new AggregateError(errors,fatalErrors.length?'Structural commit failed; affected components were disabled':'Transaction committed but cleanup failed');}
+  return result;
 }
 
 // Indices of the longest ordered group of retained records. Reconciliation only
@@ -88,7 +105,7 @@ export function mountComponent(target:Element,model:Model,components:Mount[],sup
     if(expression.kind==='member'){const owner=evaluate(expression.object,local);if(!owner||typeof owner!=='object'||Array.isArray(owner)||!('__class'in owner))throw new TypeError('Member access requires a class instance');const field=owner.fields[expression.name];if(field)return read(field);const computed=owner.computed[expression.name];if(computed)return evaluate(computed,owner.scope);throw new TypeError(`Unknown member ${expression.name}`);}
     if(expression.kind==='str')return String(evaluate(expression.argument,local));
     if(expression.kind==='len'){const value=evaluate(expression.argument,local);if(!Array.isArray(value))throw new TypeError('len requires a list');return value.length;}
-    if(expression.kind==='add'){const left=evaluate(expression.left,local),right=evaluate(expression.right,local);return typeof left==='number'&&typeof right==='number'?left+right:String(left)+String(right);}
+    if(expression.kind==='add'){const left=evaluate(expression.left,local),right=evaluate(expression.right,local);if(typeof left==='number'&&typeof right==='number'){const result=left+right;assertNumber(result);return result;}return String(left)+String(right);}
     if(expression.kind==='list')return expression.items.map(item=>evaluate(item,local));
     if(expression.kind==='construct')return instantiate(expression.name,expression.arguments.map(item=>evaluate(item,local)));
     throw new TypeError('Unsupported expression');
@@ -126,20 +143,27 @@ export function mountComponent(target:Element,model:Model,components:Mount[],sup
         } else if(owner&&typeof owner==='object'&&'__class'in owner){const body=owner.actions[statement.method];if(!body)throw new TypeError(`Unknown action ${statement.method}`);execute(body,owner.scope);}
         else throw new TypeError('Unsupported call target');
       }
-    }});
+    }},forceDisable);
   }
   function evaluateCondition(expression:ConditionExpr,local:Scope):Primitive {
     if(expression.kind==='literal')return expression.value;if(expression.kind==='reference'||expression.kind==='member')return evaluate(expression as Expr,local) as Primitive;
     if(expression.kind==='not')return !evaluateCondition(expression.argument,local);const left=evaluateCondition(expression.left,local);if(expression.kind==='and')return Boolean(left)&&Boolean(evaluateCondition(expression.right,local));const right=evaluateCondition(expression.right,local);return expression.kind==='equal'?left===right:left!==right;
   }
-  function disposeBag(effects:ReactiveEffect[],callbacks:(()=>void)[]):void {for(const effect of effects)stop(effect);effects.length=0;let failure:unknown;for(const callback of callbacks.reverse())try{untracked(callback);}catch(error){failure??=error;}callbacks.length=0;if(failure)throw failure;}
+  function disposeBag(effects:ReactiveEffect[],callbacks:(()=>void)[]):void {for(const effect of effects)stop(effect);effects.length=0;const failures:unknown[]=[];for(const callback of callbacks.reverse())try{untracked(callback);}catch(error){failures.push(error);}callbacks.length=0;if(failures.length===1)throw failures[0];if(failures.length)throw new AggregateError(failures,'Multiple cleanup operations failed');}
+  function forceDisable():unknown {if(disposed)return;disposed=true;let failure:unknown;try{disposeBag(ownedEffects,cleanups);}catch(error){failure=error;}finally{for(const name of Object.keys(scope))delete scope[name];supplied={};components=[];}return failure;}
   function create(view:View,parent:Element|DocumentFragment,local=scope,forward='',effects=ownedEffects,callbacks=cleanups):void {
     // Dynamic ranges can move out of their staging fragment. Resolve insertion
     // parents from live anchors so nested scopes keep updating in place.
     if(view.kind==='conditional'){
       const anchor=parent.ownerDocument.createComment('if');parent.append(anchor);let selected:boolean|undefined;let branchEffects:ReactiveEffect[]=[];let branchCleanups:(()=>void)[]=[];
       callbacks.push(()=>{try{disposeBag(branchEffects,branchCleanups);}finally{anchor.remove();}});
-      const update=createEffect(()=>{const next=Boolean(evaluateCondition(view.condition,local));if(next===selected)return;untracked(()=>{disposeBag(branchEffects,branchCleanups);selected=next;const fragment=parent.ownerDocument.createDocumentFragment();for(const child of next?view.consequent:view.alternate)create(child,fragment,local,forward,branchEffects,branchCleanups);anchor.parentNode!.insertBefore(fragment,anchor);});});effects.push(update);return;
+      const update=createEffect(()=>{const next=Boolean(evaluateCondition(view.condition,local));if(next===selected)return;untracked(()=>{
+        const nextEffects:ReactiveEffect[]=[],nextCleanups:(()=>void)[]=[],fragment=parent.ownerDocument.createDocumentFragment();
+        try{for(const child of next?view.consequent:view.alternate)create(child,fragment,local,forward,nextEffects,nextCleanups);}
+        catch(error){try{disposeBag(nextEffects,nextCleanups);}catch(cleanup){throw new AggregateError([error,cleanup],'Conditional preparation and cleanup failed',{cause:error});}throw error;}
+        const previousEffects=branchEffects,previousCleanups=branchCleanups;
+        stageStructure(()=>{anchor.parentNode!.insertBefore(fragment,anchor);selected=next;branchEffects=nextEffects;branchCleanups=nextCleanups;try{disposeBag(previousEffects,previousCleanups);}catch(error){return [error];}},()=>disposeBag(nextEffects,nextCleanups));
+      });});effects.push(update);return;
     }
     if(view.kind==='iteration'){
       const document=parent.ownerDocument,anchor=document.createComment('for');parent.append(anchor);
@@ -165,25 +189,23 @@ export function mountComponent(target:Element,model:Model,components:Mount[],sup
         // Structural setup must not subscribe this list to child props, init
         // statements, or static attributes read while constructing records.
         untracked(()=>{
-          for(const [key,record] of records)if(!seen.has(key)){disposeBag(record.effects,record.cleanups);records.delete(key);}
-          for(const entry of desired){
-            const existing=records.get(entry.key);if(existing){write(existing.item,entry.item);continue;}
+          const prepared:Record[]=[],planned:Record[]=[];
+          const disposePrepared=()=>{const failures:unknown[]=[];for(const record of prepared)try{disposeBag(record.effects,record.cleanups);}catch(error){failures.push(error);}if(failures.length)throw new AggregateError(failures,'Prepared record cleanup failed');};
+          try{for(const entry of desired){
+            const existing=records.get(entry.key);if(existing){write(existing.item,entry.item);planned.push(existing);continue;}
             const fragment=document.createDocumentFragment(),start=document.createComment('item'),end=document.createComment('/item');
             const record:Record={start,end,item:signal(entry.item),index:-1,effects:[],cleanups:[]};
             fragment.append(start);record.cleanups.push(()=>{start.remove();end.remove();});
             const itemScope=Object.create(local) as Scope;itemScope[view.item]=record.item;
-            try{for(const child of view.children)create(child,fragment,itemScope,'',record.effects,record.cleanups);fragment.append(end);records.set(entry.key,record);}
-            catch(error){disposeBag(record.effects,record.cleanups);throw error;}
-          }
-          const positions=desired.map(entry=>records.get(entry.key)!.index);
+            try{for(const child of view.children)create(child,fragment,itemScope,'',record.effects,record.cleanups);fragment.append(end);}
+            catch(error){try{disposeBag(record.effects,record.cleanups);}catch(cleanup){throw new AggregateError([error,cleanup],'Record preparation and cleanup failed',{cause:error});}throw error;}
+            prepared.push(record);planned.push(record);
+          }}catch(error){try{disposePrepared();}catch(cleanup){throw new AggregateError([error,cleanup],'List preparation and cleanup failed',{cause:error});}throw error;}
+          const removed=[...records].filter(([key])=>!seen.has(key)).map(([,record])=>record),positions=planned.map(record=>record.index);
           let last=-1,reordered=false;for(const position of positions)if(position>=0){if(position<last)reordered=true;last=position;}
           const stable=reordered?orderedIndices(positions):undefined;
-          let before:Node=anchor;
-          for(let index=desired.length-1;index>=0;index--){const record=records.get(desired[index].key)!;
-            if(record.index<0)before.parentNode!.insertBefore(record.start.parentNode!,before);
-            else if(stable&&!stable.has(index)&&record.end.nextSibling!==before)move(record,before);
-            before=record.start;record.index=index;
-          }
+          if(!prepared.length&&!removed.length&&!reordered)return;
+          stageStructure(()=>{const cleanupErrors:unknown[]=[];try{let before:Node=anchor;for(let index=planned.length-1;index>=0;index--){const record=planned[index];if(record.index<0)before.parentNode!.insertBefore(record.start.parentNode!,before);else if(stable&&!stable.has(index)&&record.end.nextSibling!==before)move(record,before);before=record.start;record.index=index;}}catch(error){try{disposePrepared();}catch(cleanup){throw new AggregateError([error,cleanup],'Structural commit and staged cleanup failed',{cause:error});}throw error;}records.clear();desired.forEach((entry,index)=>records.set(entry.key,planned[index]));for(const record of removed)try{disposeBag(record.effects,record.cleanups);}catch(error){cleanupErrors.push(error);}return cleanupErrors;},disposePrepared);
         });
       });effects.push(update);return;
     }
@@ -203,9 +225,9 @@ export function mountComponent(target:Element,model:Model,components:Mount[],sup
     if(view.handler){const listener=(event:Event)=>execute(view.handler!.statements,local,event);element.addEventListener(view.handler.event,listener);callbacks.push(()=>element.removeEventListener(view.handler!.event,listener));}
     parent.append(element);if(parent===target||parent instanceof DocumentFragment)callbacks.push(()=>element.remove());for(const child of view.children)create(child,element,local,'',effects,callbacks);
   }
-  const refresh=()=>{if(disposed)return;transact(()=>{for(const [name,initial] of Object.entries(model.props)){const value=Object.hasOwn(supplied,name)?supplied[name]:initial;if(typeof value!==typeof initial)throw new TypeError(`Invalid prop ${name}`);write(getSignal(name,scope),value);}});};
-  const dispose:Dispose=()=>{if(disposed)return;disposed=true;try{disposeBag(ownedEffects,cleanups);}finally{try{untracked(()=>execute(model.cleanup));}finally{for(const name of Object.keys(scope))delete scope[name];supplied={};components=[];}}};
-  try{execute(model.init);model.roots.forEach(root=>create(root,target,scope,String(supplied.class??'')));}catch(error){try{dispose();}catch{/* Preserve the original mounting error after attempting all cleanups. */}throw error;}dispose.refresh=refresh;return dispose;
+  const refresh=()=>{if(disposed)return;transact(()=>{for(const [name,initial] of Object.entries(model.props)){const value=Object.hasOwn(supplied,name)?supplied[name]:initial;if(typeof value!==typeof initial)throw new TypeError(`Invalid prop ${name}`);write(getSignal(name,scope),value);}},forceDisable);};
+  const dispose:Dispose=()=>{if(disposed)return;disposed=true;const failures:unknown[]=[];try{disposeBag(ownedEffects,cleanups);}catch(error){failures.push(error);}try{untracked(()=>execute(model.cleanup));}catch(error){failures.push(error);}finally{for(const name of Object.keys(scope))delete scope[name];supplied={};components=[];}if(failures.length===1)throw failures[0];if(failures.length)throw new AggregateError(failures,'Component disposal failed');};
+  try{execute(model.init);model.roots.forEach(root=>create(root,target,scope,String(supplied.class??'')));}catch(error){try{dispose();}catch(cleanup){throw new AggregateError([error,cleanup],'Component mounting and recovery failed',{cause:error});}throw error;}dispose.refresh=refresh;return dispose;
 }
 
-export function mountCounter(target:Element,model:CounterModel):()=>void {let value=model.initial;const button=target.ownerDocument.createElement('button'),text=target.ownerDocument.createTextNode('');button.append(text);const render=()=>{text.data=model.prefix+String(value);};const click=()=>{const next=value+model.step;if(!Number.isSafeInteger(next))throw new RangeError('State exceeded safe integer range');value=next;render();};render();button.addEventListener('click',click);target.append(button);return()=>{button.removeEventListener('click',click);button.remove();};}
+export function mountCounter(target:Element,model:CounterModel):()=>void {assertNumber(model.initial);assertNumber(model.step);let value=model.initial;const button=target.ownerDocument.createElement('button'),text=target.ownerDocument.createTextNode('');button.append(text);const render=()=>{text.data=model.prefix+String(value);};const click=()=>{const next=value+model.step;assertNumber(next);value=next;render();};render();button.addEventListener('click',click);target.append(button);return()=>{button.removeEventListener('click',click);button.remove();};}

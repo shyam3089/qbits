@@ -31,6 +31,36 @@ test('transactions roll back duplicate keys and overflow while preserving subscr
   } finally {await browser.close();}
 });
 
+test('structural preparation failures preserve committed identity and post-commit cleanup stays consistent',async()=>{
+  const [runtime,helper]=await Promise.all([readFile('dist/lib/runtime/index.js','utf8'),readFile('tests/helpers/reactivity-browser.mjs','utf8')]);
+  const browser=await firefox.launch({headless:true});
+  try{const page=await browser.newPage();const pageErrors:string[]=[];page.on('pageerror',error=>pageErrors.push(error.message));
+    const result=await page.evaluate(async({runtime,helper,modules})=>{const url=URL.createObjectURL(new Blob([helper],{type:'text/javascript'}));try{const {verifyTransactionalFailures}=await import(url);return await verifyTransactionalFailures(runtime,modules);}finally{URL.revokeObjectURL(url);}},{runtime,helper,modules:reactiveFixtures(3)});
+    assert.deepEqual(result.transient,{mounts:3,first:{same:true,connected:true,id:'1',state:'1'},retry:{same:false,connected:false,id:'2',state:'0'}});
+    assert.deepEqual(result.persistent,{mounts:3,first:{same:true,connected:true,id:'1',state:'1'},retry:{same:true,connected:true,id:'1',state:'1'}});
+    assert.deepEqual(result.conditional,{mounts:3,first:{same:true,connected:true,label:'Before',state:'1'},retry:{same:false,connected:false,label:'After',state:'0'}});
+    assert.deepEqual(result.cleanup,{removedAfterCommit:true,cleanupCalls:1,restored:true,same:false,id:'1',state:'0'});
+    assert.equal(result.nestedRollback,'0');assert.equal(result.nestedRecovered,'1');
+    assert.deepEqual(result.fatal,{disabled:true,detached:true});
+    assert.equal(result.errors.length,7);assert.match(result.errors[0],/Transient replacement failure/);assert.match(result.errors[1],/Persistent replacement failure/);assert.match(result.errors[2],/Persistent replacement failure/);assert.match(result.errors[3],/Conditional replacement failure/);assert.match(result.errors[4],/committed but cleanup failed/);assert.match(result.errors[5],/Duplicate iteration key/);assert.match(result.errors[6],/recovery was incomplete/);
+    assert.deepEqual(pageErrors,[]);
+  }finally{await browser.close();}
+});
+
+test('all numeric entry paths reject non-finite and unsafe integers before mounting',async()=>{
+  const sources=[
+    `component Initial:\n    value = 9007199254740991 + 1\n    p text=str(value)`,
+    `component Computed:\n    value = 9007199254740991\n    computed next = value + 1\n    p text=str(next)`,
+    `class Item:\n    value = 0\ncomponent Constructor:\n    item = Item(9007199254740991 + 1)\n    p text=str(item.value)`,
+    `class Item:\n    value = 0\n    computed next = value + 1\ncomponent ClassComputed:\n    item = Item(9007199254740991)\n    p text=str(item.next)`,
+    `component HostProp(value = 0):\n    p text=str(value)`,
+  ];
+  const modules=sources.map(source=>compile(source).code),runtime=await readFile('dist/lib/runtime/index.js','utf8'),browser=await firefox.launch({headless:true});
+  try{const page=await browser.newPage();const result=await page.evaluate(async({runtime,modules})=>{const urls=[runtime,...modules].map(source=>URL.createObjectURL(new Blob([source],{type:'text/javascript'})));try{const api=await import(urls[0]),components=[];for(const value of urls.slice(1))components.push(await import(value));const attempts=[()=>components[0].default(document.createElement('main'),api),()=>components[1].default(document.createElement('main'),api),()=>components[2].default(document.createElement('main'),api),()=>components[3].default(document.createElement('main'),api),()=>components[4].default(document.createElement('main'),api,{value:Number.NaN}),()=>components[4].default(document.createElement('main'),api,{value:Number.POSITIVE_INFINITY}),()=>components[4].default(document.createElement('main'),api,{value:9007199254740992}),()=>api.mountCounter(document.createElement('main'),{initial:Number.NaN,prefix:'',step:1}),()=>api.mountCounter(document.createElement('main'),{initial:0,prefix:'',step:Number.POSITIVE_INFINITY})];return attempts.map(run=>{try{run();return null;}catch(error){return {name:error.name,message:error.message};}});}finally{urls.forEach(value=>URL.revokeObjectURL(value));}},{runtime,modules});
+    assert.equal(result.length,9);for(const failure of result)assert.deepEqual(failure,{name:'RangeError',message:'State exceeded safe integer range'});
+  }finally{await browser.close();}
+});
+
 test('all four-row permutations use the minimum number of range moves and retain focused child instances', async () => {
   const permutations = (items: number[]): number[][] => items.length ? items.flatMap((item, index) => permutations(items.filter((_, i) => i !== index)).map(rest => [item, ...rest])) : [[]];
   const source = `import Row from "./Row.qb"

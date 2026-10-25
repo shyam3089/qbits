@@ -179,6 +179,35 @@ export async function verifyEdges(runtimeSource, modules) {
   }
 }
 
+export async function verifyTransactionalFailures(runtimeSource, modules) {
+  const urls=[];const url=source=>{const value=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));urls.push(value);return value;};
+  const host=document.createElement('main');document.body.append(host);const errors=[];
+  const onError=event=>{errors.push(event.message);event.preventDefault();};window.addEventListener('error',onError);
+  const click=text=>[...host.querySelectorAll('button')].find(node=>node.textContent===text).click();
+  try {
+    const runtime=await import(url(runtimeSource)),rowURL=url(modules['./Row.qb']),row=await import(rowURL);
+    const imported=async name=>import(url(modules[name].replaceAll(JSON.stringify('./Row.qb'),JSON.stringify(rowURL))));
+    const list=await imported('./TransactionalList.qb'),conditional=await imported('./TransactionalConditional.qb');
+    const nested=await import(url(modules['./NestedTransaction.qb'])),fatal=await imported('./FatalRecovery.qb');
+    const replacementCase=persistent=>{
+      let mounts=0;const child=(...args)=>{mounts++;if(mounts>1&&(persistent||mounts===2))throw new Error(persistent?'Persistent replacement failure':'Transient replacement failure');return row.default(...args);};
+      const dispose=runtime.mountComponent(host,list.model,[child]),old=host.querySelector('div'),oldButton=old.querySelector('button');oldButton.click();click('Replace');const current=host.querySelector('div'),button=current.querySelector('button');
+      const first={same:current===old&&button===oldButton,connected:old.isConnected,id:current.querySelector('span').textContent,state:button.textContent};click('Replace');const retried=host.querySelector('div'),retryButton=retried.querySelector('button');
+      const result={mounts,first,retry:{same:retried===old&&retryButton===oldButton,connected:old.isConnected,id:retried.querySelector('span').textContent,state:retryButton.textContent}};dispose();return result;
+    };
+    const transient=replacementCase(false),persistent=replacementCase(true);
+    let conditionalMounts=0;const conditionalChild=(...args)=>{if(++conditionalMounts===2)throw new Error('Conditional replacement failure');return row.default(...args);};
+    let dispose=runtime.mountComponent(host,conditional.model,[conditionalChild]);const oldBranch=host.querySelector('div'),oldBranchButton=oldBranch.querySelector('button');oldBranchButton.click();click('Switch');const branch=host.querySelector('div');
+    const conditionalFirst={same:branch===oldBranch&&branch.querySelector('button')===oldBranchButton,connected:oldBranch.isConnected,label:branch.querySelector('span').textContent,state:branch.querySelector('button').textContent};click('Switch');const retriedBranch=host.querySelector('div');const conditionalResult={mounts:conditionalMounts,first:conditionalFirst,retry:{same:retriedBranch===oldBranch,connected:oldBranch.isConnected,label:retriedBranch.querySelector('span').textContent,state:retriedBranch.querySelector('button').textContent}};dispose();
+    let cleanupCalls=0;const cleanupChild=(...args)=>{const childDispose=row.default(...args);return()=>{cleanupCalls++;childDispose();throw new Error('Child cleanup failure');};};
+    dispose=runtime.mountComponent(host,list.model,[cleanupChild]);const removed=host.querySelector('div');removed.querySelector('button').click();click('Remove');const removedAfterCommit=!host.querySelector('div')&&!removed.isConnected;click('Restore');const restored=host.querySelector('div');const cleanupResult={removedAfterCommit,cleanupCalls,restored:Boolean(restored),same:restored===removed,id:restored?.querySelector('span').textContent,state:restored?.querySelector('button').textContent};try{dispose();}catch{}
+    dispose=nested.default(host,runtime);click('Fail');const nestedRollback=host.querySelector('p').textContent;click('Increment');const nestedRecovered=host.querySelector('p').textContent;dispose();
+    const fatalChild=(...args)=>{const childDispose=row.default(...args);return()=>{childDispose();throw new Error('Rollback cleanup failure');};};
+    dispose=runtime.mountComponent(host,fatal.model,[fatalChild]);const fatalButton=host.querySelector('button');fatalButton.click();const fatalResult={disabled:host.childNodes.length===0,detached:!fatalButton.isConnected};try{dispose();}catch{}
+    return {transient,persistent,conditional:conditionalResult,cleanup:cleanupResult,nestedRollback,nestedRecovered,fatal:fatalResult,errors};
+  } finally {window.removeEventListener('error',onError);host.remove();urls.forEach(value=>URL.revokeObjectURL(value));}
+}
+
 export async function verifyReorders(runtimeSource, modules) {
   const urls = [];
   const url = source => {const value = URL.createObjectURL(new Blob([source], {type:'text/javascript'})); urls.push(value); return value;};
@@ -235,7 +264,7 @@ export async function retentionProbe(runtimeSource, modules) {
   } finally {urls.forEach(value => URL.revokeObjectURL(value));}
 }
 
-export async function benchmarkSuite(runtimeSource, modules, mountModules, {samples=21, operations=1000, reorderSamples=15}={}) {
+export async function benchmarkSuite(runtimeSource, modules, mountModules, distinctModules={}, {samples=21, operations=1000, reorderSamples=15}={}) {
   const urls=[];
   const url=source=>{const value=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));urls.push(value);return value;};
   const summary=values=>{const sorted=[...values].sort((a,b)=>a-b);return {median:sorted[Math.floor(sorted.length/2)],p95:sorted[Math.min(sorted.length-1,Math.ceil(sorted.length*.95)-1)],min:sorted[0],max:sorted.at(-1),samples:sorted.length};};
@@ -269,6 +298,7 @@ export async function benchmarkSuite(runtimeSource, modules, mountModules, {samp
     dispose=batch.default(host,runtime);const update=[...host.querySelectorAll('button')].find(node=>node.textContent==='Update');
     for(let index=0;index<100;index++)update.click();
     const computedChainUs=timeOperations(()=>update.click());dispose();
-    return {mountMs:mounts,isolatedUpdateUs,computedChainUs,reorderMs:summary(reorders),nestedComponentUs};
+    const distinctWritesUs={};for(const [size,source] of Object.entries(distinctModules)){const module=await import(url(source));dispose=module.default(host,runtime);const button=host.querySelector('button');for(let index=0;index<50;index++)button.click();distinctWritesUs[size]=timeOperations(()=>button.click(),500);dispose();}
+    return {mountMs:mounts,isolatedUpdateUs,computedChainUs,reorderMs:summary(reorders),nestedComponentUs,distinctWritesUs};
   } finally {dispose?.();host.remove();urls.forEach(value=>URL.revokeObjectURL(value));}
 }

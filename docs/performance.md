@@ -1,76 +1,59 @@
 # Phase 3A.1 performance and reactivity
 
-Phase 3A.1 keeps the Phase 2D grammar and public mount API. It stabilizes the
-fine-grained runtime with synchronous transactions, compiler-marked static bindings,
-and lower-cost ownership cleanup. Compilation still emits serialized data and fixed
-runtime calls; it never executes application source.
+Phase 3A.1 keeps the Phase 2D grammar and public mount API. The security-fix
+revision adds reversible structural preparation and complete runtime numeric checks
+without changing generated application syntax.
 
-## Profiled root causes
+## Measured causes and retained optimizations
 
-The Phase 2D Firefox harness ran its baseline first and its candidate second without
-warmup, so identical runtime bytes measured 141 ms and 65 ms for the same mount. It
-also reported single sub-millisecond updates, which was too coarse for microsecond
-comparisons. The Phase 3A.1 harness warms each candidate and reports repeated medians
-and p95 values.
+Profiling found avoidable literal-binding effects, whole-state transaction snapshots,
+redundant DOM property writes, child remounts, and non-minimal keyed moves. The runtime
+therefore keeps compiler-marked static bindings, first-write transaction journaling,
+computed-before-DOM scheduling, equality checks, child prop refresh, and longest-
+increasing-subsequence keyed movement.
 
-Source and allocation profiling identified three justified production changes:
+The H1 failures came from destroying committed keyed records and conditional branches
+before replacement mounting had succeeded. Replacements now mount into detached
+fragments and register transaction commit/rollback hooks. Successful commits update the
+DOM and reconciliation map before removed scopes are disposed. Cleanup failures after
+commit are reported as post-commit errors; they do not trigger a false rollback.
 
-1. Literal `text`, `value`, and `checked` attributes created effects, dependency sets,
-   and subscription work even though the compiler already proved they were static.
-2. Every descendant element allocated a removal closure although removing an owned
-   subtree root already removes its descendants.
-3. Full state snapshots would make successful transactions scale with component size.
-   Rollback only needs the directly changed writable signals; derived values and DOM
-   can be recovered by invalidating outward from those restored sources.
-
-Keyed reconciliation was already efficient: ordered updates skip the longest-increasing-
-subsequence search, reordered records move once, construction is untracked, and retained
-DOM and child component identity are preserved. No replacement algorithm was justified.
-
-## Runtime behavior
-
-Generated element models now carry an additive numeric bitmask for compiler-proven
-static bindings. New runtimes initialize those DOM values directly and create no effect
-for them. Older runtimes ignore the field, and the new runtime continues to accept models
-without it.
-
-Handlers, nested class actions, lifecycle statements, and prop refreshes share one
-synchronous transaction. A reusable journal records only the first old value of each
-directly changed writable signal. Successful updates allocate no state snapshot and do
-not clone component state. On failure, the runtime restores journaled signals, clears
-uncommitted scheduler work, and invalidates subscribers from the restored sources so
-computed caches, dynamic subscriptions, and DOM return to the last committed state.
-Safe-integer overflow is rejected before mutation.
-
-Bindings still subscribe only to values read during their execution. Computed values
-remain cached and settle before DOM effects. Equality checks suppress redundant writes.
-Keyed lists preserve identity, focus, and selection. Disposal stops effects, removes
-listeners, runs every cleanup, clears retained references, and removes owned subtree
-roots rather than every descendant individually.
+The transaction journal uses reused arrays and records only the first old value of each
+directly written signal. A reusable identity `Set` was evaluated in Firefox against the
+same fixed runtime. At 4/16/64/256 distinct writes, the linear journal medians were
+2/6/14/54 us versus 2/6/18/58 us for the thresholded set variant. The set also added
+565 raw and 102 gzip bytes, so it was not retained. The checked-in benchmark includes
+the distinct-write cases so this decision can be revisited if transaction sizes change.
 
 ## Firefox measurements
 
-[Recorded observations](benchmarks/reactivity-2026-10-24.json) were captured on
-24 October 2026 with Firefox 157.0. Both candidates used the same current compiler-
-generated fixtures in separate Firefox pages. Each candidate received three warmups.
-Mount/update samples contain 21 observations; each update observation averages 1,000
-synchronous operations. Reorder uses 15 warmed samples. Times include DOM event dispatch
-and reactive work. Results are machine observations, not universal guarantees.
+[Recorded observations](benchmarks/reactivity-2026-10-25-security-fixes.json) were
+captured on 25 October 2026 with Firefox 157.0. The baseline is the pre-fix Phase 3A.1
+runtime saved before implementation; the fixed candidate is the production runtime from
+the same compiler fixtures. Each candidate ran in a separate page with three warmups,
+21 timing samples, 1,000 operations per update sample, and 15 warmed reorder samples.
+Results are machine observations, not universal guarantees.
 
-| Scenario | Phase 2D median | Phase 3A.1 median | Phase 2D p95 | Phase 3A.1 p95 |
+| Scenario | Pre-fix median | Fixed median | Pre-fix p95 | Fixed p95 |
 | --- | ---: | ---: | ---: | ---: |
-| 1,000-row lightweight mount | 7 ms | 5 ms | 13 ms | 8 ms |
-| 10,000-row lightweight mount | 47 ms | 33 ms | 104 ms | 46 ms |
-| Isolated row update | 39 us | 17 us | 125 us | 82 us |
-| Computed diamond/two-write chain | 14 us | 10 us | 22 us | 21 us |
-| 1,000-row last-to-first reorder | <1 ms | <1 ms | 2 ms | 1 ms |
-| Nested child-prop update | 39 us | 17 us | 563 us | 283 us |
-| Heavy 1,000-row mount + dispose | 63 ms | 51 ms | n/a | n/a |
+| 1,000-row lightweight mount | 11 ms | 5 ms | 23 ms | 8 ms |
+| 10,000-row lightweight mount | 49 ms | 43 ms | 126 ms | 58 ms |
+| Isolated row update | 36 us | 15 us | 202 us | 69 us |
+| Computed diamond/two-write chain | 13 us | 19 us | 34 us | 33 us |
+| 1,000-row last-to-first reorder | 1 ms | 1 ms | 1 ms | 1 ms |
+| Nested child-prop update | 12 us | 23 us | 227 us | 64 us |
+| 4 distinct signal writes | 4 us | 4 us | 6 us | 6 us |
+| 16 distinct signal writes | 6 us | 6 us | 6 us | 8 us |
+| 64 distinct signal writes | 18 us | 20 us | 30 us | 26 us |
+| 256 distinct signal writes | 62 us | 70 us | 74 us | 82 us |
+| Heavy 1,000-row mount/dispose cycle | 56 ms | 62 ms | n/a | n/a |
 
-The 10,000-row mount target is met with a 33 ms median, below 152 ms. Isolated
-updates are below the 40 us target. The retained-range reorder still inserts/removes
-three boundary nodes, creates no elements, performs no text writes, and preserves focus,
-selection, DOM identity, and child state.
+The 10,000-row mount remains well below the 152 ms target and the isolated update
+remains below 40 us. Computed median, nested median, high-cardinality writes, and the
+heavy cycle regressed; these are accepted costs of the added validation and structural
+transaction bookkeeping, while their p95 values stayed similar or improved except for
+256 writes. Keyed reorder creates no elements or text writes and preserves focus, DOM
+identity, and child-local state.
 
 Firefox did not expose `performance.memory`. After explicit Playwright GC, the WeakRef
 probe observed zero reachable supplied-prop objects and zero reachable rendered nodes
@@ -79,11 +62,11 @@ mount targets were also verified; these observations are not a formal leak proof
 
 ## Bundle and startup tradeoff
 
-The built runtime changed from 24,297 to 26,634 bytes raw and from 5,528 to 5,940
-bytes gzip. The example production JavaScript changed from 19.67 to 20.51 kB minified
-and from 5.23 to 5.50 kB gzip. The increase pays for synchronous rollback and recovery;
-the static-binding bitmask was selected instead of duplicating literal values in the
-model. Removing rollback would save bytes but violate the Phase 3A.1 safety guarantee.
+The runtime changed from 26,634 to 33,361 bytes raw and from 5,940 to 6,930 bytes gzip.
+The example production JavaScript changed from 20.51 to 22.79 kB minified and from 5.50
+to 6.27 kB gzip. The increase pays for staged structural commits, failure aggregation,
+component disabling after failed recovery, and complete numeric validation. No new
+dependency was added. Removing those paths would violate the documented safety behavior.
 
 ## Reproduce
 

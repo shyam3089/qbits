@@ -29,20 +29,29 @@ subscribes to only the signals it reads. Closed handlers batch writes synchronou
 computed values invalidate derived descendants and settle before queued DOM effects.
 Sets deduplicate scheduled effects; equality checks suppress unchanged derived outputs.
 Handlers, lifecycle statements, and prop refreshes are synchronous transactions.
-The runtime reuses a selective journal containing only directly changed writable
-signals. If validation or a reactive effect fails, it restores those values and
-invalidates outward from the restored signals so derived state, subscriptions, and
-DOM return to the last committed state. Successful updates do not clone component state.
+The runtime journals only directly changed writable signals. It uses a compact linear
+journal because isolated comparison found a reusable identity set slower at the measured
+transaction sizes. Numeric values are checked before entering a signal or arithmetic result.
+Conditional branches and new keyed records mount in detached fragments and register
+commit/rollback hooks. A preparation failure disposes only staged scopes, restores
+signals, and reruns affected subscribers, leaving committed DOM and child state intact.
+If that recovery fails, an aggregate error exposes the original and recovery failures
+and participating components are disabled.
 Reads inside actions refresh dirty computed values immediately. Component computed
 values propagate through signals, while class computed members evaluate lazily inside
-their consuming effect, including references to other class computed members. Conditionals use comment anchors and branch-local
-cleanup scopes. Keyed iteration tracks only collection/key reads; record construction
-is untracked. A longest increasing subsequence identifies retained ranges that stay
-in place; only other ranges move. Focus and input selection survive moves. Item
-signals support same-key replacement without recreating child instances. Duplicate
-runtime keys are rejected before structural mutation. Insertion/removal creates or
-disposes only the corresponding scope. Cleanup tracks owned subtree roots rather than
-allocating redundant descendant-removal callbacks. See performance.md for measured results.
+their consuming effect, including references to other class computed members. Conditionals
+use comment anchors and branch-local cleanup scopes. Keyed iteration tracks only
+collection/key reads; record construction is untracked. A longest increasing subsequence
+identifies retained ranges that stay in place; only other ranges move. Focus and input
+selection survive moves. Item signals support same-key replacement without recreating
+child instances. Duplicate keys are rejected during preparation.
+
+Commit updates ranges and reconciliation maps before disposing removed scopes. Disposal
+is irreversible: a throwing removed-scope cleanup is reported after commit and does not
+roll state back. Transaction guarantees end at the synchronous boundary. Host component
+mount/cleanup functions, getters, proxies, and application JavaScript are trusted code
+and can perform side effects outside the runtime journal. See reactivity.md and
+performance.md for detailed behavior and measurements.
 
 `tooling/` owns identity validation, CLI filesystem access, and Vite transformation.
 The Vite plugin compiles configured suffixes and appends identity metadata; the

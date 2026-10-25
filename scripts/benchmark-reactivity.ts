@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import { firefox } from 'playwright';
-import { mountFixture, reactiveFixtures } from '../tests/helpers/reactivity-fixtures.js';
+import { distinctWriteFixture, mountFixture, reactiveFixtures } from '../tests/helpers/reactivity-fixtures.js';
 
 const baselineIndex = process.argv.indexOf('--baseline');
 const outputIndex = process.argv.indexOf('--output');
@@ -10,6 +10,7 @@ const paths = baselineIndex < 0 ? ['dist/lib/runtime/index.js'] : [process.argv[
 const helper = await readFile('tests/helpers/reactivity-browser.mjs', 'utf8');
 const modules = reactiveFixtures();
 const mountModules = Object.fromEntries([1000,10000].map(size=>[size,mountFixture(size)]));
+const distinctModules = Object.fromEntries([4,16,64,256].map(size=>[size,distinctWriteFixture(size)]));
 const browser = await firefox.launch({headless: true});
 const firefoxVersion=browser.version();
 const reports:unknown[]=[];
@@ -19,11 +20,11 @@ try {
     const page = await browser.newPage();
     try {
       const runtime = await readFile(path, 'utf8');
-      const performance = await page.evaluate(async ({helper,runtime,modules,mountModules})=>{
+      const performance = await page.evaluate(async ({helper,runtime,modules,mountModules,distinctModules})=>{
         const url=URL.createObjectURL(new Blob([helper],{type:'text/javascript'}));
-        try{const {benchmarkSuite}=await import(url);return await benchmarkSuite(runtime,modules,mountModules);}
+        try{const {benchmarkSuite}=await import(url);return await benchmarkSuite(runtime,modules,mountModules,distinctModules);}
         finally{URL.revokeObjectURL(url);}
-      },{helper,runtime,modules,mountModules});
+      },{helper,runtime,modules,mountModules,distinctModules});
       const result = await page.evaluate(async ({helper, runtime, modules}) => {
         const url = URL.createObjectURL(new Blob([helper], {type: 'text/javascript'}));
         try {const {measure} = await import(url); return await measure(runtime, modules);}
