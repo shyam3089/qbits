@@ -21,5 +21,16 @@
       "runtimeSha256": "d95abddaeb5a2be98cdcc25a9ac54c0caf02e5ce5d93bd853b04f2c4573017e5",
       "reproducedByTypeScriptTranspileModule": true
     }
-  ]
+  ],
+  "workingTreeSnapshots": {
+    "phase3a": {
+      "description": "Phase 3A working tree captured before Phase 3A.1 edits; runtime matches the Phase 3A published local benchmark hash. No git revision is asserted for uncommitted changes.",
+      "runtime": "tests/benchmarks/phase3a-runtime.js",
+      "runtimeSha256": "00a93fd5d4562ff4f6f5d804bd9edc376d5cc06e378751663eefcd34b8428cd1",
+      "runtimeTypeScriptSha256": "13b1a0dbd012e338cc80ee16e897647939d3b9b7deba20b722ba41263060ca64",
+      "generator": "tests/benchmarks/phase3a-generator.js",
+      "generatorSha256": "d1089a136c5d62594bd0a71d22b6024fc953fa42706b6aa6a33412593ef59a0f",
+      "generatorImportRewrite": "Only ./dependencies.js was rewritten to ../../language/dependencies.js for test-only reuse."
+    }
+  }
 }

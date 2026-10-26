@@ -30,9 +30,11 @@ their existing DOM value only when it differs, preserving focus and caret while 
 Checkbox state is synchronized through the DOM `checked` property.
 Each state or instance field is a small signal. The compiler emits deduplicated dependency paths on bound expressions, and exports
 `analyzeDependencies(ast)` with one-shot initializer edges, computed edges, and
-source-located binding edges. A DOM binding connects these paths in its local scope;
-old models without metadata retain dynamic read tracking. Literal bindings and
-static child props need no subscription effects. Closed handlers batch writes synchronously;
+source-located binding edges. Phase 3A.1 uses metadata to identify static bindings and records actual closed-model
+reads once per effect, avoiding a second expression/dependency walk. Both old and
+new models retain fine-grained tracking; literal bindings and static child props
+need no subscription effects. The compiler omits redundant empty metadata on
+literals, preserving the serialized JSON model boundary. Closed handlers batch writes synchronously;
 computed values invalidate derived descendants and settle before queued DOM effects.
 Sets deduplicate scheduled effects; equality checks suppress unchanged derived outputs.
 Reads inside actions refresh dirty computed values immediately. Component computed
@@ -110,3 +112,36 @@ Use `npm run test:external -- --manager pnpm` to run the same checks with pnpm.
 The harness reports SKIP if its local pnpm CLI is unavailable. Both manager modes
 verify the selected lockfile only, selected command guidance and unchanged locks
 after onboarding. No store configuration or store cleanup is performed by the test.
+
+Phase 3A.1 allocates journal containers on their first actual use. Original dependency
+sets remain immutable undo data; unchanged edges keep their subscriptions instead
+of cloning and reconnecting them. Queue snapshots are captured only when nonempty.
+Empty lifecycle hooks do no work. A child mount validates and initializes props as
+before; its initial propagation effect refreshes props to preserve custom-mount
+behavior, while no-op refreshes allocate no undo containers. Class caches allocate their input
+map on evaluation, rather than allocating an unused empty map first.
+
+Lists separate key lookup from ordered records. A pure reorder reuses the lookup
+map only after all keys and membership are validated. Membership changes allocate
+a new map, while the previous ordered array remains available for rollback. Removed
+scopes still survive until successful commit. The longest increasing subsequence
+and focus restoration are retained. See [stabilization measurements](performance-stabilization.md)
+and the [pending security review checklist](security-review-phase3a1.md).
+
+For expressions containing only root-signal references and approved pure operators,
+`fixedSources` verifies the actual AST and resolves stable signal identities once.
+These effects subscribe after their first evaluation and run without dependency
+collection thereafter. Member paths and conditions retain dynamic read traces;
+unchanged traces allocate no dependency Set. A changed trace is deduplicated and its
+edges compared before replacing subscriptions. Rollback invalidates changed traces,
+and disposal releases them. Pure computed effects ignore self-invalidation while refreshing their own dirty
+inputs, including dynamic member paths; explicit circular-read guards remain active.
+Scheduler removal targets the owning queue and reclassifies work queued during an
+initial scope/prop effect before its structural/propagation flag was installed.
+
+A retained disposer previously kept the caller's mount target through the shared
+parameter environment, even after owned nodes and props were released. The mount
+now clears that reference in a finally block after initial rendering, including
+failure. Updates retain their own live anchors/parents. The public Element-target
+signature is unchanged; the internal nullable reference exists only to release it.
+Firefox retention probes sample targets and class instances as well as props/nodes.

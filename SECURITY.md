@@ -28,3 +28,8 @@ pull_request events, never pull_request_target. Untrusted PR code must not recei
 secrets or privileged runners. Security-sensitive changes require independent
 human review. Policy documents do not enforce hosting permissions. Use the lockfile
 and review dependency updates. Phase 2E hardening is in progress; no public support SLA.
+
+Phase 3A.1 has a [prepared review checklist](docs/security-review-phase3a1.md) covering
+lazy undo data, dependency-set ownership, key-map reuse, rollback and packaging.
+No independent security review is claimed; a separate human review must complete
+before these changes merge.

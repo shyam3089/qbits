@@ -1,3 +1,7 @@
+Phase 3A.1 production-build measurements and allocation profiles are documented in
+[performance stabilization](performance-stabilization.md). The observations below
+remain the original Phase 3A historical report and use a different harness.
+
 # Firefox performance observations
 
 Phase 3A preserves the approved grammar and public mount API. See

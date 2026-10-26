@@ -29,13 +29,14 @@
     "build": "tsc && vite build",
     "test": "tsx --test tests/*.test.ts",
     "test:unit": "tsx --test tests/compiler.test.ts tests/phase2.test.ts tests/phase2d.test.ts tests/tooling.test.ts tests/dependencies.test.ts",
-    "test:browser": "tsx --test tests/browser.test.ts tests/runtime.test.ts tests/phase3.test.ts",
+    "test:browser": "tsx --test tests/browser.test.ts tests/runtime.test.ts tests/phase3.test.ts tests/stabilization.test.ts",
     "test:rename": "tsx scripts/check-rename.ts",
     "cli": "node dist/lib/tooling/cli.js",
     "test:docs": "tsx scripts/check-docs.ts",
     "test:external": "tsx scripts/check-external.ts",
     "bench:reactivity": "tsx scripts/benchmark-reactivity.ts",
-    "bench:phase3": "tsx scripts/benchmark-phase3.ts"
+    "bench:phase3": "tsx scripts/benchmark-phase3.ts",
+    "bench:stabilization": "tsx scripts/benchmark-stabilization.ts"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

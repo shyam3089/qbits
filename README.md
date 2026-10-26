@@ -1,6 +1,6 @@
 # qubits
 A declarative UI language and framework for building reactive web interfaces, designed for simplicity, extensibility, and excellent developer tooling.
-# Qubits UI — Phase 2D
+# Qubits UI — Phase 3A.1
 
 A small UI language compiling to browser JavaScript. Components support nested
 standard elements, numeric/string/boolean local state, read-only typed props with literal defaults,
@@ -86,3 +86,8 @@ subscriptions. The indentation grammar and public mount API are unchanged.
 Run `npm run bench:phase3` after building for Firefox comparisons at 1,000/10,000
 rows. See [reactivity semantics](docs/reactivity.md) and [measurements](docs/performance.md)
 for correctness boundaries, measured costs and remaining optimization work.
+
+Phase 3A.1 reduces empty transactions, redundant expression walks and subscription
+churn while preserving failure recovery. Run `npm run bench:stabilization` for
+repeated Firefox production-build comparisons with nested component and computed
+chain workloads. See [results and measurement limits](docs/performance-stabilization.md).

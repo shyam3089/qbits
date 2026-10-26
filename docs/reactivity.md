@@ -12,7 +12,14 @@ create an ongoing dependency. These APIs operate on ASTs without executing sourc
 Generated models carry dependency paths on bound expression roots. Models produced
 by earlier compilers still work through dynamic read tracking.
 
-At mount, dependency paths connect bindings to the signals in their local scope.
+Phase 3A.1 records actual closed-expression reads in each mounted scope once per
+effect, rather than walking dependency paths and then evaluating the same expression.
+For ASTs limited to root signals and approved pure operators, those signal identities
+are verified once and subscribed after the first evaluation. Member paths and
+conditions keep dynamic read traces; unchanged traces require no dependency Set.
+Changed traces retain immutable undo sets and are cleared on rollback/disposal.
+Metadata still supplies compile-time dependency analysis and static binding hints;
+literals need no redundant empty hint.
 Literal bindings and static child props allocate no subscription effects. Conditions
 retain dynamic short-circuit tracking; iteration tracks the collection and keys in
 its item scope. Compiler paths for these expressions are conservative analysis,
@@ -31,14 +38,17 @@ sequential computed reads inside handlers are not counted as scheduler loops.
 A handler and nested class actions share one synchronous batch:
 
 1. Statements see earlier writes immediately. A computed read refreshes dirty inputs.
-2. The journal records original signal values, dirty flags and subscription sets.
+2. The journal allocates undo containers only when needed and records original
+   signal values, dirty flags and changed dependency sets. Original sets remain
+   immutable undo data; unchanged edges keep their existing subscriptions.
    Class validation, computed derivations and child props settle before DOM work.
 3. Affected structural scopes and bindings prepare render plans. New scopes mount in
    detached fragments; removed scopes remain alive but are excluded from the update.
    Every active list validates all desired primitive keys before structural commit.
 4. Plans commit only after preparation succeeds. Text/properties compare values;
    conditionals replace their owned range. Keyed lists retain records and use the
-   longest increasing subsequence to avoid moving already ordered ranges. Reorders
+   longest increasing subsequence to avoid moving already ordered ranges. Pure
+   reorders retain the validated key map and keep the old order array for rollback. Reorders
    preserve child state, focus and selection.
 5. Successful commits dispose removed scopes. Every owned cleanup is attempted even
    when one cleanup throws. Disposal stops effects, removes queued work/listeners,
@@ -65,3 +75,18 @@ rollback recovery and observed WeakRef retention. See [performance](performance.
 for reproducible comparisons and measured costs. The existing catalog example and
 scaffold already exercise computed fields, keyed lists, actions and typed events;
 their syntax is unchanged.
+
+Phase 3A.1 skips empty lifecycle transactions. Initial prop refreshes remain active,
+including changes made by custom mount callbacks; no-op refreshes allocate no undo
+containers.
+Actual lifecycle statements, prop validation, safe-integer checks, list checks and
+failure recovery remain active. See [performance stabilization](performance-stabilization.md)
+for production-build comparisons and memory-measurement limits.
+
+The completed mount also releases its caller-target parameter reference, which
+otherwise remained reachable through retained disposer handles. Dynamic updates
+continue through their own live anchors/parents, and disposal releases those scopes.
+
+Dirty inputs refreshed during a pure computed evaluation do not requeue that same
+computation. Root and dynamic member chains have evaluation-count regressions;
+actual circular reads still throw before a cached value can be reused.
