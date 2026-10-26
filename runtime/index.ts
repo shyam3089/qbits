@@ -125,7 +125,7 @@ function mountComponentTree(target:Element,model:Model,components:Mount[],suppli
   try{return withWork(budget,()=>mountComponentInternal(target,model,components,supplied,initialState,limits,componentDepth,budget,reservation));}catch(error){releaseComponent(budget,reservation);throw error;}
 }
 
-function mountComponentInternal(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,limits:RuntimeLimits,componentDepth:number,budget:ResourceBudget,componentReservation:Reservation):Dispose {
+function mountComponentInternal(target:Element|undefined,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,limits:RuntimeLimits,componentDepth:number,budget:ResourceBudget,componentReservation:Reservation):Dispose {
   const scope=Object.create(null) as Scope;const ownedEffects:ReactiveEffect[]=[];const cleanups:CleanupBag=[];let disposed=false;
   const track=(run:()=>void,bag=ownedEffects)=>{const effect=createEffect(run,budget,undefined,limits.maxUpdatesPerFlush);bag.push(effect);return effect;};
   for(const key of Object.keys(supplied))if(key!=='class'&&!Object.hasOwn(model.props,key))throw new TypeError(`Unknown prop ${key}`);
@@ -283,7 +283,7 @@ function mountComponentInternal(target:Element,model:Model,components:Mount[],su
   }
   const refresh=()=>{if(disposed)return;transact(()=>{for(const [name,initial] of Object.entries(model.props)){const value=Object.hasOwn(supplied,name)?supplied[name]:initial;if(typeof value!==typeof initial)throw new TypeError(`Invalid prop ${name}`);write(getSignal(name,scope),value);}},forceDisable,budget);};
   const dispose:Dispose=()=>{if(disposed)return;return withWork(budget,()=>{disposed=true;const failures:unknown[]=[];try{disposeBag(ownedEffects,cleanups);}catch(error){failures.push(error);}try{untracked(()=>execute(model.cleanup));}catch(error){failures.push(error);}finally{for(const name of Object.keys(scope))delete scope[name];supplied={};components=[];releaseComponent(budget,componentReservation);}if(failures.length===1)throw failures[0];if(failures.length)throw new AggregateError(failures,'Component disposal failed');});};
-  try{execute(model.init);model.roots.forEach(root=>create(root,target,scope,String(supplied.class??'')));}catch(error){try{dispose();}catch(cleanup){throw new AggregateError([error,cleanup],'Component mounting and recovery failed',{cause:error});}throw error;}dispose.refresh=refresh;return dispose;
+  try{execute(model.init);model.roots.forEach(root=>create(root,target!,scope,String(supplied.class??'')));}catch(error){try{dispose();}catch(cleanup){throw new AggregateError([error,cleanup],'Component mounting and recovery failed',{cause:error});}throw error;}finally{target=undefined;}dispose.refresh=refresh;return dispose;
 }
 
 export function mountCounter(target:Element,model:CounterModel):()=>void {assertNumber(model.initial);assertNumber(model.step);let value=model.initial;const button=target.ownerDocument.createElement('button'),text=target.ownerDocument.createTextNode('');button.append(text);const render=()=>{text.data=model.prefix+String(value);};const click=()=>{const next=value+model.step;assertNumber(next);value=next;render();};render();button.addEventListener('click',click);target.append(button);return()=>{button.removeEventListener('click',click);button.remove();};}
