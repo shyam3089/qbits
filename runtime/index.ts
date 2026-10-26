@@ -22,6 +22,7 @@ interface ResourceBudget {limits:RuntimeLimits;components:number;records:number;
 interface Reservation {released:boolean}
 type ReactiveEffect=(()=>void)&{dependencies:Set<Signal>;disposed:boolean;computed?:Signal;maxUpdates:number;budget:ResourceBudget};
 type Dispose=(()=>void)&{refresh?:()=>void};
+type CleanupBag=(()=>void)[]&{nodes?:number};
 interface RuntimeApi {mountComponent:(target:Element,model:Model,components:Mount[],props?:Record<string,Primitive>)=>Dispose;mountComponentWithState?:(target:Element,model:Model,components:Mount[],props:Record<string,Primitive>,state:InitialState)=>Dispose;mountCounter:(target:Element,model:CounterModel)=>()=>void}
 type Mount=(target:Element,runtime:RuntimeApi,props?:Record<string,Primitive>,state?:InitialState)=>Dispose;
 type CommitHook=()=>unknown[]|void;
@@ -106,7 +107,7 @@ function transact<T>(run:()=>T,disable:()=>unknown,budget:ResourceBudget):T {ret
 // moves records outside this group; new records use the sentinel -1.
 function orderedIndices(positions:number[]):Set<number> {
   const tails:number[]=[],previous=new Array<number>(positions.length).fill(-1);
-  positions.forEach((position,index)=>{if(position<0)return;let low=0,high=tails.length;while(low<high){const middle=(low+high)>>>1;if(positions[tails[middle]]<position)low=middle+1;else high=middle;}if(low)previous[index]=tails[low-1];tails[low]=index;});
+  positions.forEach((position,index)=>{if(position<0)return;const end=tails[tails.length-1];if(positions[end]<position){previous[index]=end;tails.push(index);return;}let low=0,high=tails.length;while(low<high){const middle=(low+high)>>>1;if(positions[tails[middle]]<position)low=middle+1;else high=middle;}if(low)previous[index]=tails[low-1];tails[low]=index;});
   const result=new Set<number>();let index=tails[tails.length-1];while(index!==undefined&&index>=0){result.add(index);index=previous[index];}return result;
 }
 
@@ -125,7 +126,7 @@ function mountComponentTree(target:Element,model:Model,components:Mount[],suppli
 }
 
 function mountComponentInternal(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,limits:RuntimeLimits,componentDepth:number,budget:ResourceBudget,componentReservation:Reservation):Dispose {
-  const scope=Object.create(null) as Scope;const ownedEffects:ReactiveEffect[]=[];const cleanups:(()=>void)[]=[];let disposed=false;
+  const scope=Object.create(null) as Scope;const ownedEffects:ReactiveEffect[]=[];const cleanups:CleanupBag=[];let disposed=false;
   const track=(run:()=>void,bag=ownedEffects)=>{const effect=createEffect(run,budget,undefined,limits.maxUpdatesPerFlush);bag.push(effect);return effect;};
   for(const key of Object.keys(supplied))if(key!=='class'&&!Object.hasOwn(model.props,key))throw new TypeError(`Unknown prop ${key}`);
   for(const [name,initial] of Object.entries(model.props)){consumeWork(budget);const value=Object.hasOwn(supplied,name)?supplied[name]:initial;if(typeof value!==typeof initial)throw new TypeError(`Invalid prop ${name}`);scope[name]=signal(value);}
@@ -197,23 +198,22 @@ function mountComponentInternal(target:Element,model:Model,components:Mount[],su
     if(expression.kind==='literal'){assertNumber(expression.value);return expression.value;}if(expression.kind==='reference'||expression.kind==='member')return evaluate(expression as Expr,local) as Primitive;
     if(expression.kind==='not')return !evaluateCondition(expression.argument,local);const left=evaluateCondition(expression.left,local);if(expression.kind==='and')return Boolean(left)&&Boolean(evaluateCondition(expression.right,local));const right=evaluateCondition(expression.right,local);return expression.kind==='equal'?left===right:left!==right;
   }
-  function disposeBag(effects:ReactiveEffect[],callbacks:(()=>void)[]):void {for(const effect of effects)stop(effect);effects.length=0;const failures:unknown[]=[];for(const callback of callbacks.reverse())try{untracked(callback);}catch(error){failures.push(error);}callbacks.length=0;if(failures.length===1)throw failures[0];if(failures.length)throw new AggregateError(failures,'Multiple cleanup operations failed');}
+  function disposeBag(effects:ReactiveEffect[],callbacks:CleanupBag):void {for(const effect of effects)stop(effect);effects.length=0;const failures:unknown[]=[];for(const callback of callbacks.reverse())try{untracked(callback);}catch(error){failures.push(error);}callbacks.length=0;if(failures.length===1)throw failures[0];if(failures.length)throw new AggregateError(failures,'Multiple cleanup operations failed');}
   function forceDisable():unknown {if(disposed)return;disposed=true;let failure:unknown;try{disposeBag(ownedEffects,cleanups);}catch(error){failure=error;}finally{for(const name of Object.keys(scope))delete scope[name];supplied={};components=[];releaseComponent(budget,componentReservation);}return failure;}
   const childRuntime:RuntimeApi={mountComponent:(childTarget,childModel,childComponents,childProps={})=>mountComponentTree(childTarget,childModel,childComponents,childProps,{},limits,componentDepth+1,budget),mountComponentWithState:(childTarget,childModel,childComponents,childProps,state)=>mountComponentTree(childTarget,childModel,childComponents,childProps,state,limits,componentDepth+1,budget),mountCounter};
   const makeComment=(document:Document,value:string):Comment=>{reserve(budget,'domNodes',1,limits.maxDomNodes,'Framework DOM nodes');try{return document.createComment(value);}catch(error){release(budget,'domNodes');throw error;}};
   const makeElement=(document:Document,tag:string):Element=>{reserve(budget,'domNodes',1,limits.maxDomNodes,'Framework DOM nodes');try{return document.createElement(tag);}catch(error){release(budget,'domNodes');throw error;}};
   const makeText=(document:Document,value:string):Text=>{reserve(budget,'domNodes',1,limits.maxDomNodes,'Framework DOM nodes');try{return document.createTextNode(value);}catch(error){release(budget,'domNodes');throw error;}};
-  const trackedNodes=new WeakMap<(()=>void)[],{count:number}>();
-  const trackNodes=(callbacks:(()=>void)[],count=1)=>{let tracked=trackedNodes.get(callbacks);if(!tracked){tracked={count:0};trackedNodes.set(callbacks,tracked);callbacks.push(()=>{release(budget,'domNodes',tracked!.count);tracked!.count=0;});}tracked.count+=count;};
-  function create(view:View,parent:Element|DocumentFragment,local=scope,forward='',effects=ownedEffects,callbacks=cleanups):void {
+  const trackNodes=(callbacks:CleanupBag,count=1)=>{if(callbacks.nodes===undefined){callbacks.nodes=0;callbacks.push(()=>{release(budget,'domNodes',callbacks.nodes!);callbacks.nodes=0;});}callbacks.nodes+=count;};
+  function create(view:View,parent:Element|DocumentFragment,local=scope,forward='',effects=ownedEffects,callbacks:CleanupBag=cleanups):void {
     consumeWork(budget);
     // Dynamic ranges can move out of their staging fragment. Resolve insertion
     // parents from live anchors so nested scopes keep updating in place.
     if(view.kind==='conditional'){
-      const anchor=makeComment(parent.ownerDocument,'if');let selected:boolean|undefined;let branchEffects:ReactiveEffect[]=[];let branchCleanups:(()=>void)[]=[];
+      const anchor=makeComment(parent.ownerDocument,'if');let selected:boolean|undefined;let branchEffects:ReactiveEffect[]=[];let branchCleanups:CleanupBag=[];
       callbacks.push(()=>{try{disposeBag(branchEffects,branchCleanups);}finally{anchor.remove();release(budget,'domNodes');}});parent.append(anchor);
       const update=createEffect(()=>{const next=Boolean(evaluateCondition(view.condition,local));if(next===selected)return;untracked(()=>{
-        const nextEffects:ReactiveEffect[]=[],nextCleanups:(()=>void)[]=[],fragment=parent.ownerDocument.createDocumentFragment();
+        const nextEffects:ReactiveEffect[]=[],nextCleanups:CleanupBag=[],fragment=parent.ownerDocument.createDocumentFragment();
         try{for(const child of next?view.consequent:view.alternate)create(child,fragment,local,forward,nextEffects,nextCleanups);}
         catch(error){try{disposeBag(nextEffects,nextCleanups);}catch(cleanup){throw new AggregateError([error,cleanup],'Conditional preparation and cleanup failed',{cause:error});}throw error;}
         const previousEffects=branchEffects,previousCleanups=branchCleanups;
@@ -222,7 +222,7 @@ function mountComponentInternal(target:Element,model:Model,components:Mount[],su
     }
     if(view.kind==='iteration'){
       const document=parent.ownerDocument,anchor=makeComment(document,'for');
-      type Record={start:Comment;end:Comment;item:Signal;index:number;effects:ReactiveEffect[];cleanups:(()=>void)[]};
+      type Record={start:Comment;end:Comment;item:Signal;index:number;effects:ReactiveEffect[];cleanups:CleanupBag};
       const records=new Map<Primitive,Record>(),keyScope=Object.create(local) as Scope,keyItem=signal<Value>('');keyScope[view.item]=keyItem;
       let update:ReactiveEffect|undefined;
       callbacks.push(()=>{if(update)stop(update);const failures:unknown[]=[];try{for(const record of records.values())try{disposeBag(record.effects,record.cleanups);}catch(error){failures.push(error);}}finally{records.clear();anchor.remove();release(budget,'domNodes');}if(failures.length===1)throw failures[0];if(failures.length)throw new AggregateError(failures,'Iteration disposal failed');});parent.append(anchor);
@@ -239,29 +239,29 @@ function mountComponentInternal(target:Element,model:Model,components:Mount[],su
       };
       update=createEffect(()=>{
         const collection=evaluate(view.collection,local);if(!Array.isArray(collection))throw new TypeError('Iteration requires a list');if(collection.length>limits.maxCollectionItems)throw new RangeError(`Collection exceeds the configured limit of ${limits.maxCollectionItems} items`);consumeWork(budget,collection.length);
-        const desired:{key:Primitive;item:Value}[]=[],seen=new Set<Primitive>();
-        for(const item of collection){keyItem.value=item;const key=evaluate(view.key,keyScope) as Primitive;if(seen.has(key))throw new TypeError(`Duplicate iteration key ${String(key)}`);seen.add(key);desired.push({key,item});}
+        const keys:Primitive[]=[],items:Value[]=[],seen=new Set<Primitive>();
+        for(const item of collection){items.push(keyItem.value=item);const key=evaluate(view.key,keyScope) as Primitive;if(seen.has(key))throw new TypeError(`Duplicate iteration key ${String(key)}`);seen.add(key);keys.push(key);}
         // Structural setup must not subscribe this list to child props, init
         // statements, or static attributes read while constructing records.
         untracked(()=>{
           const prepared:Record[]=[],planned:Record[]=[];
           const disposePrepared=()=>{const failures:unknown[]=[];for(const record of prepared)try{disposeBag(record.effects,record.cleanups);}catch(error){failures.push(error);}if(failures.length)throw new AggregateError(failures,'Prepared record cleanup failed');};
-          try{for(const entry of desired){
-            const existing=records.get(entry.key);if(existing){write(existing.item,entry.item);planned.push(existing);continue;}
+          try{for(let index=0;index<items.length;index++){const key=keys[index],item=items[index];
+            const existing=records.get(key);if(existing){write(existing.item,item);planned.push(existing);continue;}
             reserve(budget,'records',1,limits.maxListRecords,'List records');let start:Comment|undefined,end:Comment|undefined;
             try{start=makeComment(document,'item');end=makeComment(document,'/item');}catch(error){if(start)release(budget,'domNodes');release(budget,'records');throw error;}
-            const fragment=document.createDocumentFragment(),record:Record={start:start!,end:end!,item:signal(entry.item),index:-1,effects:[],cleanups:[]};
+            const fragment=document.createDocumentFragment(),record:Record={start:start!,end:end!,item:signal(item),index:-1,effects:[],cleanups:[]};
             fragment.append(start);record.cleanups.push(()=>{try{start!.remove();end!.remove();}finally{release(budget,'domNodes',2);release(budget,'records');}});
             const itemScope=Object.create(local) as Scope;Object.defineProperty(itemScope,view.item,{value:record.item,enumerable:true,configurable:true});
             try{for(const child of view.children)create(child,fragment,itemScope,'',record.effects,record.cleanups);fragment.append(end);}
             catch(error){try{disposeBag(record.effects,record.cleanups);}catch(cleanup){throw new AggregateError([error,cleanup],'Record preparation and cleanup failed',{cause:error});}throw error;}
             prepared.push(record);planned.push(record);
           }}catch(error){try{disposePrepared();}catch(cleanup){throw new AggregateError([error,cleanup],'List preparation and cleanup failed',{cause:error});}throw error;}
-          const removed=[...records].filter(([key])=>!seen.has(key)).map(([,record])=>record),positions=planned.map(record=>record.index);
-          let last=-1,reordered=false;for(const position of positions)if(position>=0){if(position<last)reordered=true;last=position;}
-          const stable=reordered?orderedIndices(positions):undefined;
+          const removed:Record[]=[];for(const [key,record] of records)if(!seen.has(key))removed.push(record);
+          let last=-1,reordered=false;for(const record of planned)if(record.index>=0){if(record.index<last)reordered=true;last=record.index;}
+          const stable=reordered?orderedIndices(planned.map(record=>record.index)):undefined;
           if(!prepared.length&&!removed.length&&!reordered)return;
-          stageStructure(()=>{const cleanupErrors:unknown[]=[];try{let before:Node=anchor;for(let index=planned.length-1;index>=0;index--){const record=planned[index];if(record.index<0)before.parentNode!.insertBefore(record.start.parentNode!,before);else if(stable&&!stable.has(index)&&record.end.nextSibling!==before)move(record,before);before=record.start;record.index=index;}}catch(error){try{disposePrepared();}catch(cleanup){throw new AggregateError([error,cleanup],'Structural commit and staged cleanup failed',{cause:error});}throw error;}records.clear();desired.forEach((entry,index)=>records.set(entry.key,planned[index]));for(const record of removed)try{disposeBag(record.effects,record.cleanups);}catch(error){cleanupErrors.push(error);}return cleanupErrors;},disposePrepared);
+          stageStructure(()=>{const cleanupErrors:unknown[]=[];try{let before:Node=anchor;for(let index=planned.length-1;index>=0;index--){const record=planned[index];if(record.index<0)before.parentNode!.insertBefore(record.start.parentNode!,before);else if(stable&&!stable.has(index)&&record.end.nextSibling!==before)move(record,before);before=record.start;record.index=index;}}catch(error){try{disposePrepared();}catch(cleanup){throw new AggregateError([error,cleanup],'Structural commit and staged cleanup failed',{cause:error});}throw error;}records.clear();keys.forEach((key,index)=>records.set(key,planned[index]));for(const record of removed)try{disposeBag(record.effects,record.cleanups);}catch(error){cleanupErrors.push(error);}return cleanupErrors;},disposePrepared);
         });
       },budget,undefined,limits.maxUpdatesPerFlush);effects.push(update);return;
     }

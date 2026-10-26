@@ -139,8 +139,9 @@ test('1000 keyed rows isolate updates, retain child state and focus, and release
     assert.equal(result.childProp, 'Changed'); assert.equal(result.unrelated, 'Row 01');
     assert.equal(result.childState, '1'); assert.equal(result.identity, true); assert.equal(result.focus, true);
     assert.equal(result.move.fragments, 1); assert.equal(result.move.inserted, 3); assert.equal(result.move.removed, 3);
-    assert.equal(result.move.elements, 0); assert.equal(result.move.textWrites, 0);
-    assert.equal(result.noop.fragments, 0); assert.equal(result.noop.textWrites, 0);
+    assert.equal(result.move.elements, 0); assert.equal(result.move.texts, 0); assert.equal(result.move.comments, 0);
+    assert.equal(result.move.adds, 0); assert.equal(result.move.removes, 0); assert.equal(result.move.textWrites, 0);
+    assert.equal(result.noop.fragments, 0); assert.equal(result.noop.elements, 0); assert.equal(result.noop.comments, 0); assert.equal(result.noop.textWrites, 0);
     assert.equal(result.append.elements, 10); assert.equal(result.remove.elements, 0);
     assert.equal(result.remove.removes, 6);
     assert.equal(result.detached.textWrites, 0); assert.equal(result.afterDispose.textWrites, 0);

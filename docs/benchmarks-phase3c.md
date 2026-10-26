@@ -71,6 +71,37 @@ Isolated updates remained 0.2/0.4 ms. Keyed reorder median regressed 2.3 ms and 
 faster than React and Vue but slower than Angular in this run. Nested 1k was 65/100 ms startup,
 78/108 ms mount and 0.05/0.15 ms update; rows 1k was 63/86, 51/68, 0.1/0.15 and 2.1/3.9.
 
+## Phase 3C.2 mount and reorder results
+
+Phase 3C.2 keeps runtime validation and the minimum-move keyed algorithm, but removes the
+temporary `{key,item}` object for every collection entry, stores DOM-node release counts directly
+on each cleanup bag, avoids intermediate removal arrays, and fast-paths an already growing LIS
+tail. The final Firefox-only run used the same pinned builds, three warmups and 15 paired samples.
+Raw samples and verification hashes are in
+[`frameworks-2026-10-26-phase3c2.json`](benchmarks/frameworks-2026-10-26-phase3c2.json).
+
+| Workload | Cold start | Mount | Isolated update | Keyed reorder | JS gzip |
+|---|---:|---:|---:|---:|---:|
+| Rows 1k | 34/54 | 29/37 | 0.050/0.100 | 1.300/1.900 | 7,747 B |
+| Rows 10k | 42/65 | 204/219 | 0.200/0.200 | 10.333/11.333 | 7,747 B |
+| Nested 1k | 42/76 | 48/108 | 0.050/0.100 | — | 7,747 B |
+| API catalog 1k | 40/56 | 40/71 | 0.050/0.050 | — | 7,747 B |
+
+Against the pinned Phase 3C.1 measurements, 10k mount changed from 323/401 to 204/219 ms,
+keyed reorder from 15/23.667 to 10.333/11.333 ms, and startup from 64/94 to 42/65 ms. Gzip
+changed from 7,749 to 7,747 bytes and the isolated update did not regress. A separate preliminary
+seven-sample local before/after check measured 232/243 versus 197/217 ms mount and 12/13 versus
+10.333/14.667 ms reorder; the final 15-sample run above is the release-gate result.
+
+An instrumented Firefox production mount quantified the 10k row path as 40,003 signals, 10,000
+class instances, 20,002 effects, 20,001 comment anchors, 50,003 elements, 40,001 text nodes,
+10,000 fragments and 20,000 listeners. Instrumentation raised wall time to 337 ms: typed-state
+hydration took 26 ms, including 18 ms in class construction (about 8 ms for record validation and
+hydration outside construction); effect setup took 14 ms; anchor creation took 18 ms; and list
+reconciliation took 309 ms inclusive of hydration-independent DOM and reactive setup. A keyed
+reorder spent 9 of 12 instrumented milliseconds in reconciliation. These overlapping timings are
+diagnostic attribution, not additive benchmark results; Firefox did not expose allocation bytes.
+
 ## Tradeoffs and bottlenecks
 
 Qubits performs targeted subscribed-text updates and keyed DOM moves, explaining its low update
