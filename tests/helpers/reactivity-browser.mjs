@@ -283,6 +283,8 @@ export async function staticValidationProbe(runtimeSource) {
     attempt(empty(),{},new Proxy({},{ownKeys(){throw new Error('state proxy blocked');}}));
     const getter={kind:'literal'};Object.defineProperty(getter,'value',{get(){throw new Error('literal getter blocked');}});
     attempt({...empty(),roots:[{kind:'element',tag:'p',component:-1,static:1,attributes:{text:getter},children:[]}]});
+    for(const value of invalid)attempt({...empty(),roots:[{kind:'element',tag:'p',component:-1,static:value,attributes:{text:{kind:'literal',value:'safe'}},children:[]}]});
+    attempt({...empty(),roots:[{kind:'element',tag:'p',component:-1,static:1,attributes:{text:{kind:'literal',value:'prepared'}},children:[]},{kind:'element',tag:'p',component:-1,static:Number.NaN,attributes:{text:{kind:'literal',value:'invalid'}},children:[]}]});
     const valid={...empty(),roots:[{kind:'element',tag:'input',component:-1,static:2,attributes:{value:{kind:'literal',value:'safe'}},children:[]}]},host=document.createElement('main'),dispose=api.mountComponent(host,valid,[],{}, {maxDomNodes:1});
     const exact={value:host.firstChild.value,nodes:host.childNodes.length};dispose();dispose();dispose.refresh();
     return {failures,exact,empty:host.childNodes.length===0};

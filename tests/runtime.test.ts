@@ -273,21 +273,23 @@ test('unchanged text values produce no character data mutations', async () => {
 });
 
 test('disposed handles release mount hosts while preserving nested ownership and idempotent disposal', async () => {
-  const code=compile(`component Retained(label = "Owned"):
+  const child=compile(`component Child(label = "Owned"):
     count = 0
+    button text=label + str(count):
+        on click:
+            count = count + 1
+`).code,parent=compile(`import Child from "./Child.qb"
+component Retained(label = "Owned"):
     section:
-        div:
-            button text=label + str(count):
-                on click:
-                    count = count + 1
+        Child label=label
 `).code;
   const runtime=await readFile('dist/lib/runtime/index.js','utf8'),browser=await firefox.launch({headless:true});
   try{
     const page=await browser.newPage();
-    const behavior=await page.evaluate(async({runtime,code})=>{
-      const urls=[runtime,code].map(source=>URL.createObjectURL(new Blob([source],{type:'text/javascript'})));
+    const behavior=await page.evaluate(async({runtime,child,parent})=>{
+      const urls=[runtime,child].map(source=>URL.createObjectURL(new Blob([source],{type:'text/javascript'}))),parentURL=URL.createObjectURL(new Blob([parent.replace(JSON.stringify('./Child.qb'),JSON.stringify(urls[1]))],{type:'text/javascript'}));urls.push(parentURL);
       try{
-        const api=await import(urls[0]),component=await import(urls[1]),handles=[],hosts=[],nodes=[],props=[];
+        const api=await import(urls[0]),component=await import(urls[2]),handles=[],hosts=[],nodes=[],props=[];
         for(let cycle=0;cycle<30;cycle++){
           const host=document.createElement('main'),sibling=document.createElement('aside'),supplied={label:'Owned'};host.append(sibling);document.body.append(host);
           const dispose=component.default(host,api,supplied),root=host.querySelector('section'),button=host.querySelector('button');button.click();
@@ -298,18 +300,18 @@ test('disposed handles release mount hosts while preserving nested ownership and
         }
         (globalThis as any).__disposedHostProbe={handles,hosts,nodes,props};return {handles:handles.length};
       }finally{urls.forEach(url=>URL.revokeObjectURL(url));}
-    },{runtime,code});
+    },{runtime,child,parent});
     assert.equal(behavior.handles,30);await page.requestGC();
     const retained=await page.evaluate(()=>{const probe=(globalThis as any).__disposedHostProbe;return {handles:probe.handles.length,hosts:probe.hosts.filter((ref:WeakRef<object>)=>ref.deref()).length,nodes:probe.nodes.filter((ref:WeakRef<object>)=>ref.deref()).length,props:probe.props.filter((ref:WeakRef<object>)=>ref.deref()).length};});
     assert.deepEqual(retained,{handles:30,hosts:0,nodes:0,props:0});
   }finally{await browser.close();}
 });
 
-test('static bindings validate numbers and hostile host values before commit',async()=>{
+test('static bindings validate numbers and hostile host values with mount rollback',async()=>{
   const [runtime,helper]=await Promise.all([readFile('dist/lib/runtime/index.js','utf8'),readFile('tests/helpers/reactivity-browser.mjs','utf8')]),browser=await firefox.launch({headless:true});
   try{
     const page=await browser.newPage(),result=await page.evaluate(async({runtime,helper})=>{const url=URL.createObjectURL(new Blob([helper],{type:'text/javascript'}));try{return await (await import(url)).staticValidationProbe(runtime);}finally{URL.revokeObjectURL(url);}},{runtime,helper});
-    assert.equal(result.failures.length,35);assert.equal(result.failures.filter(value=>value==='accepted').length,0);
+    assert.equal(result.failures.length,39);assert.equal(result.failures.filter(value=>value==='accepted').length,0);
     assert.ok(result.failures.slice(0,24).every(value=>/^RangeError:State exceeded safe integer range:1:true$/.test(value)),JSON.stringify(result.failures));
     assert.ok(result.failures.slice(24,26).every(value=>/^TypeError:checked requires boolean:1:true$/.test(value)));
     assert.match(result.failures[26],/^TypeError:Invalid prop class:1:true$/);
@@ -321,6 +323,7 @@ test('static bindings validate numbers and hostile host values before commit',as
     assert.match(result.failures[32],/^Error:getter blocked:1:true$/);
     assert.match(result.failures[33],/^Error:state proxy blocked:1:true$/);
     assert.match(result.failures[34],/^Error:literal getter blocked:1:true$/);
+    assert.ok(result.failures.slice(35).every(value=>/^RangeError:State exceeded safe integer range:1:true$/.test(value)),JSON.stringify(result.failures));
     assert.deepEqual(result.exact,{value:'safe',nodes:1});assert.equal(result.empty,true);
   }finally{await browser.close();}
 });
