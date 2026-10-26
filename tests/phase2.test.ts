@@ -18,6 +18,20 @@ test('nested elements, typed defaults, imports and class spans',()=>{
   assert.doesNotMatch(code,/innerHTML|eval\(/);
 });
 
+test('one default slot accepts typed parent content without adding expression syntax',()=>{
+  const layoutModule=compile('component Layout(title = ""):\n    section:\n        h2 text=title\n        slot'),layout=layoutModule.ast;
+  const source='import Layout from "./Layout.qb"\ncomponent App:\n    count = 0\n    Layout title="Count " + str(count):\n        button text=str(count):\n            on click:\n                count = count + 1';
+  const {ast,code}=compile(source,'App.qb',{components:new Map([['Layout',layout]])});
+  assert.equal(layout.roots[0].kind,'element');
+  assert.equal(layout.roots[0].kind==='element'&&layout.roots[0].children[1].kind,'slot');
+  assert.equal(ast.roots[0].kind==='element'&&ast.roots[0].children.length,1);
+  assert.match(layoutModule.code,/"kind":"slot"/);assert.match(code,/mountComponentWithContent/);
+  const plain=compile('component Plain:\n    div').ast;
+  assert.throws(()=>compile('import Plain from "./Plain.qb"\ncomponent App:\n    Plain:\n        p text="content"','App.qb',{components:new Map([['Plain',plain]])}),/does not accept content/);
+  assert.throws(()=>compile('component Bad:\n    div:\n        slot\n        slot'),/one default slot/);
+  assert.throws(()=>compile('component Bad:\n    visible = true\n    if visible:\n        slot'),/cannot be inside if or for/);
+});
+
 test('props are read-only and expressions and class attributes are checked',()=>{
   const invalid:[string,RegExp][]=[
     ['component C(label = "a"):\n    button text=label:\n        on click:\n            label = label + 1',/read-only/],
@@ -142,6 +156,9 @@ test('module graph validates props, missing files, suffixes, cycles and transiti
   try {
     await writeFile(join(temp,'Counter.css'),counterCSS);await writeFile(counter,counterSource());await writeFile(join(temp,'Greeting'+ext),greetingSource());await writeFile(join(temp,'NotificationSetting'+ext),notificationSettingSource());await writeFile(join(temp,'Catalog'+ext),catalogSource());await writeFile(app,appSource(identity));
     assert.ok(compileFile(app).code);
+    const layout=join(temp,'Layout'+ext);await writeFile(layout,'component Layout(title = ""):\n    section:\n        h2 text=title\n        slot');
+    assert.ok(check(`import Layout from "./Layout${ext}"\ncomponent App:\n    Layout title="Reusable":\n        p text="Parent content"`).code);
+    expect(`import Counter from "./Counter${ext}"\ncomponent App:\n    Counter:\n        p text="Not accepted"`,/does not accept content/);
     expect(instance('unknown="bad"'),/Unknown prop/);
     expect(instance('label=2'),/requires string/);
     expect(instance('label=false'),/requires string/);

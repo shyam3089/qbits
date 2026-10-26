@@ -1,0 +1,4 @@
+component Card(title = ""):
+    section class="card":
+        h2 text=title
+        slot

@@ -234,6 +234,74 @@ component Nested:
   } finally { await browser.close(); }
 });
 
+test('slotted parent content stays reactive and preserves keyed identity, rollback, focus and disposal',async()=>{
+  const panel=compile(`component Panel(title = ""):
+    section class="panel":
+        h2 text=title
+        slot
+`).code,row=compile(`component Row(label = ""):
+    count = 0
+    li class="row":
+        input:
+            value=label
+        button class="local" text=str(count):
+            on click:
+                count = count + 1
+`).code,wrapper=compile(`import Panel from "./Panel.qb"
+component Wrapper(title = ""):
+    Panel title=title:
+        slot
+`).code,app=compile(`import Wrapper from "./Wrapper.qb"
+import Row from "./Row.qb"
+class Item:
+    id = 0
+    label = ""
+component App:
+    first = Item(1, "One")
+    second = Item(2, "Two")
+    items = [first, second]
+    count = 0
+    visible = true
+    button class="increment" text="Increment":
+        on click:
+            count = count + 1
+    button class="duplicate" text="Duplicate":
+        on click:
+            items.append(Item(1, "Duplicate"))
+    button class="move" text="Move":
+        on click:
+            items.move(second, 0)
+    button class="hide" text="Hide":
+        on click:
+            visible = false
+    button class="show" text="Show":
+        on click:
+            visible = true
+    Wrapper title="Items " + str(count):
+        p class="projected" text="Parent " + str(count)
+        if visible:
+            ul:
+                for item in items key=item.id:
+                    Row label=item.label
+`).code;
+  const runtime=await readFile('dist/lib/runtime/index.js','utf8'),browser=await firefox.launch({headless:true});
+  try{
+    const page=await browser.newPage(),failure=page.waitForEvent('pageerror'),result=await page.evaluate(async({runtime,panel,row,wrapper,app})=>{
+      const urls=[runtime,panel,row].map(source=>URL.createObjectURL(new Blob([source],{type:'text/javascript'}))),wrapperURL=URL.createObjectURL(new Blob([wrapper.replace(JSON.stringify('./Panel.qb'),JSON.stringify(urls[1]))],{type:'text/javascript'})),appSource=app.replace(JSON.stringify('./Wrapper.qb'),JSON.stringify(wrapperURL)).replace(JSON.stringify('./Row.qb'),JSON.stringify(urls[2])),appURL=URL.createObjectURL(new Blob([appSource],{type:'text/javascript'}));urls.push(wrapperURL,appURL);
+      try{
+        const api=await import(urls[0]),wrapperModule=await import(wrapperURL),rowModule=await import(urls[2]),component=await import(appURL),host=document.createElement('main'),sibling=document.createElement('aside');host.append(sibling);document.body.append(host);const dispose=component.default(host,api),panelNode=host.querySelector('.panel'),rows=[...host.querySelectorAll('.row')],second=rows[1],input=second.querySelector('input'),local=second.querySelector('.local');
+        local.click();input.focus();input.setSelectionRange(1,2);host.querySelector('.increment').click();const reactive={samePanel:host.querySelector('.panel')===panelNode,title:host.querySelector('h2').textContent,projected:host.querySelector('.projected').textContent};
+        host.querySelector('.duplicate').click();const afterRollback=[...host.querySelectorAll('.row')];
+        host.querySelector('.move').click();const moved=[...host.querySelectorAll('.row')],identity={rollback:afterRollback[1]===second,moved:moved[0]===second,local:second.querySelector('.local').textContent,focused:document.activeElement===input,selection:[input.selectionStart,input.selectionEnd]};
+        host.querySelector('.hide').click();const hidden=host.querySelectorAll('.row').length;host.querySelector('.show').click();const shown=[...host.querySelectorAll('.row')].map(node=>node.querySelector('input').value);dispose();dispose();const remaining=host.childNodes.length,owned=host.firstChild===sibling;host.remove();
+        const limitHost=document.createElement('main'),limitSibling=document.createElement('aside');limitHost.append(limitSibling);let depthFailure='';try{api.mountComponent(limitHost,component.model,[wrapperModule.default,rowModule.default],{}, {maxComponentDepth:3});}catch(error){depthFailure=error.message;}const depthRollback=limitHost.childNodes.length===1&&limitHost.firstChild===limitSibling;
+        const plainHost=document.createElement('main'),plainSibling=document.createElement('aside'),plainModel={props:{},classes:{},states:{},computed:{},init:[],cleanup:[],roots:[{kind:'element',tag:'p',component:-1,static:1,attributes:{text:{kind:'literal',value:'plain'}},children:[]}]};plainHost.append(plainSibling);let plainFailure='';try{api.mountComponentWithContent(plainHost,plainModel,[],{}, {},()=>()=>{});}catch(error){plainFailure=error.message;}const plainRollback=plainHost.childNodes.length===1&&plainHost.firstChild===plainSibling;return{reactive,identity,hidden,shown,remaining,owned,depthFailure,depthRollback,plainFailure,plainRollback};
+      }finally{urls.forEach(url=>URL.revokeObjectURL(url));}
+    },{runtime,panel,row,wrapper,app});
+    assert.equal((await failure).message,'Duplicate iteration key 1');assert.deepEqual(result,{reactive:{samePanel:true,title:'Items 1',projected:'Parent 1'},identity:{rollback:true,moved:true,local:'1',focused:true,selection:[1,2]},hidden:0,shown:['Two','One'],remaining:1,owned:true,depthFailure:'Component nesting exceeds the configured limit of 3',depthRollback:true,plainFailure:'Component does not accept content',plainRollback:true});
+  }finally{await browser.close();}
+});
+
 test('unchanged text values produce no character data mutations', async () => {
   const code = compile(`component Text:
     items = [1, 1]

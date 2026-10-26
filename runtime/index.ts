@@ -11,7 +11,8 @@ interface Handler {kind?:string;event:'click'|'input'|'change';statements:Statem
 interface ElementView {kind:'element';tag:string;component:number;attributes:Record<string,Expr>;static?:number;children:View[];handler?:Handler}
 interface ConditionalView {kind:'conditional';condition:ConditionExpr;consequent:View[];alternate:View[]}
 interface IterationView {kind:'iteration';item:string;collection:Expr;key:Expr;children:View[]}
-type View=ElementView|ConditionalView|IterationView;
+interface SlotView {kind:'slot'}
+type View=ElementView|ConditionalView|IterationView|SlotView;
 interface ClassModel {fields:{name:string;initial:Expr}[];computed:Record<string,Expr>;actions:Record<string,Statement[]>}
 interface Model {props:Record<string,Primitive>;classes:Record<string,ClassModel>;states:Record<string,Expr>;computed:Record<string,Expr>;init:Statement[];cleanup:Statement[];roots:View[]}
 interface Signal<T=Value>{value:T;subscribers:Set<ReactiveEffect>;derive?:ReactiveEffect;dirty?:boolean}
@@ -22,9 +23,10 @@ interface ResourceBudget {limits:RuntimeLimits;components:number;records:number;
 interface Reservation {released:boolean}
 type ReactiveEffect=(()=>void)&{dependencies:Set<Signal>;disposed:boolean;computed?:Signal;maxUpdates:number;budget:ResourceBudget};
 type Dispose=(()=>void)&{refresh?:()=>void};
+type ContentMount=(target:Element|DocumentFragment,runtime:RuntimeApi)=>Dispose;
 type CleanupBag=(()=>void)[]&{nodes?:number};
-interface RuntimeApi {mountComponent:(target:Element,model:Model,components:Mount[],props?:Record<string,Primitive>)=>Dispose;mountComponentWithState?:(target:Element,model:Model,components:Mount[],props:Record<string,Primitive>,state:InitialState)=>Dispose;mountCounter:(target:Element,model:CounterModel)=>()=>void}
-type Mount=(target:Element,runtime:RuntimeApi,props?:Record<string,Primitive>,state?:InitialState)=>Dispose;
+interface RuntimeApi {mountComponent:(target:Element,model:Model,components:Mount[],props?:Record<string,Primitive>)=>Dispose;mountComponentWithState?:(target:Element,model:Model,components:Mount[],props:Record<string,Primitive>,state:InitialState)=>Dispose;mountComponentWithContent?:(target:Element,model:Model,components:Mount[],props:Record<string,Primitive>,state:InitialState,content:ContentMount)=>Dispose;mountCounter:(target:Element,model:CounterModel)=>()=>void}
+type Mount=(target:Element,runtime:RuntimeApi,props?:Record<string,Primitive>,state?:InitialState,content?:ContentMount)=>Dispose;
 type CommitHook=()=>unknown[]|void;
 let activeEffect:ReactiveEffect|undefined;
 let batchDepth=0,flushing=false;
@@ -119,13 +121,17 @@ export function mountComponentWithState(target:Element,model:Model,components:Mo
   const limits=resolveRuntimeLimits(limitOverrides),budget:ResourceBudget={limits,components:0,records:0,domNodes:0,effects:0,work:0,workDepth:0};return mountComponentTree(target,model,components,supplied,initialState,limits,componentDepth,budget);
 }
 
-function mountComponentTree(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,limits:RuntimeLimits,componentDepth:number,budget:ResourceBudget):Dispose {
-  if(componentDepth>=limits.maxComponentDepth)throw new RangeError(`Component nesting exceeds the configured limit of ${limits.maxComponentDepth}`);
-  reserve(budget,'components',1,limits.maxComponentInstances,'Component instances');const reservation:Reservation={released:false};
-  try{return withWork(budget,()=>mountComponentInternal(target,model,components,supplied,initialState,limits,componentDepth,budget,reservation));}catch(error){releaseComponent(budget,reservation);throw error;}
+export function mountComponentWithContent(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,content:ContentMount,limitOverrides:Partial<RuntimeLimits>={},componentDepth=0):Dispose {
+  const limits=resolveRuntimeLimits(limitOverrides),budget:ResourceBudget={limits,components:0,records:0,domNodes:0,effects:0,work:0,workDepth:0};return mountComponentTree(target,model,components,supplied,initialState,limits,componentDepth,budget,content);
 }
 
-function mountComponentInternal(target:Element|undefined,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,limits:RuntimeLimits,componentDepth:number,budget:ResourceBudget,componentReservation:Reservation):Dispose {
+function mountComponentTree(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,limits:RuntimeLimits,componentDepth:number,budget:ResourceBudget,content?:ContentMount):Dispose {
+  if(componentDepth>=limits.maxComponentDepth)throw new RangeError(`Component nesting exceeds the configured limit of ${limits.maxComponentDepth}`);
+  reserve(budget,'components',1,limits.maxComponentInstances,'Component instances');const reservation:Reservation={released:false};
+  try{return withWork(budget,()=>mountComponentInternal(target,model,components,supplied,initialState,limits,componentDepth,budget,reservation,content));}catch(error){releaseComponent(budget,reservation);throw error;}
+}
+
+function mountComponentInternal(target:Element|undefined,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,limits:RuntimeLimits,componentDepth:number,budget:ResourceBudget,componentReservation:Reservation,content?:ContentMount):Dispose {
   const scope=Object.create(null) as Scope,classDefaults=new Map<string,Primitive[]>(),ownedEffects:ReactiveEffect[]=[];const cleanups:CleanupBag=[];let disposed=false;
   const track=(run:()=>void,bag=ownedEffects)=>{const effect=createEffect(run,budget,undefined,limits.maxUpdatesPerFlush);bag.push(effect);return effect;};
   for(const key of Object.keys(supplied))if(key!=='class'&&!Object.hasOwn(model.props,key))throw new TypeError(`Unknown prop ${key}`);
@@ -202,14 +208,17 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
     if(expression.kind==='not')return !evaluateCondition(expression.argument,local);const left=evaluateCondition(expression.left,local);if(expression.kind==='and')return Boolean(left)&&Boolean(evaluateCondition(expression.right,local));const right=evaluateCondition(expression.right,local);return expression.kind==='equal'?left===right:left!==right;
   }
   function disposeBag(effects:ReactiveEffect[],callbacks:CleanupBag):void {for(const effect of effects)stop(effect);effects.length=0;const failures:unknown[]=[];for(const callback of callbacks.reverse())try{untracked(callback);}catch(error){failures.push(error);}callbacks.length=0;if(failures.length===1)throw failures[0];if(failures.length)throw new AggregateError(failures,'Multiple cleanup operations failed');}
-  function forceDisable():unknown {if(disposed)return;disposed=true;let failure:unknown;try{disposeBag(ownedEffects,cleanups);}catch(error){failure=error;}finally{for(const name of Object.keys(scope))delete scope[name];supplied={};components=[];releaseComponent(budget,componentReservation);}return failure;}
-  const childRuntime:RuntimeApi={mountComponent:(childTarget,childModel,childComponents,childProps={})=>mountComponentTree(childTarget,childModel,childComponents,childProps,{},limits,componentDepth+1,budget),mountComponentWithState:(childTarget,childModel,childComponents,childProps,state)=>mountComponentTree(childTarget,childModel,childComponents,childProps,state,limits,componentDepth+1,budget),mountCounter};
+  function forceDisable():unknown {if(disposed)return;disposed=true;let failure:unknown;try{disposeBag(ownedEffects,cleanups);}catch(error){failure=error;}finally{for(const name of Object.keys(scope))delete scope[name];supplied={};components=[];content=undefined;releaseComponent(budget,componentReservation);}return failure;}
+  const childRuntime:RuntimeApi={mountComponent:(childTarget,childModel,childComponents,childProps={})=>mountComponentTree(childTarget,childModel,childComponents,childProps,{},limits,componentDepth+1,budget),mountComponentWithState:(childTarget,childModel,childComponents,childProps,state)=>mountComponentTree(childTarget,childModel,childComponents,childProps,state,limits,componentDepth+1,budget),mountComponentWithContent:(childTarget,childModel,childComponents,childProps,state,childContent)=>mountComponentTree(childTarget,childModel,childComponents,childProps,state,limits,componentDepth+1,budget,childContent),mountCounter};
   const makeComment=(document:Document,value:string):Comment=>{reserve(budget,'domNodes',1,limits.maxDomNodes,'Framework DOM nodes');try{return document.createComment(value);}catch(error){release(budget,'domNodes');throw error;}};
   const makeElement=(document:Document,tag:string):Element=>{reserve(budget,'domNodes',1,limits.maxDomNodes,'Framework DOM nodes');try{return document.createElement(tag);}catch(error){release(budget,'domNodes');throw error;}};
   const makeText=(document:Document,value:string):Text=>{reserve(budget,'domNodes',1,limits.maxDomNodes,'Framework DOM nodes');try{return document.createTextNode(value);}catch(error){release(budget,'domNodes');throw error;}};
   const trackNodes=(callbacks:CleanupBag,count=1)=>{if(callbacks.nodes===undefined){callbacks.nodes=0;callbacks.push(()=>{release(budget,'domNodes',callbacks.nodes!);callbacks.nodes=0;});}callbacks.nodes+=count;};
-  function create(view:View,parent:Element|DocumentFragment,local=scope,forward='',effects=ownedEffects,callbacks:CleanupBag=cleanups,rootOwned=false):void {
+  function create(view:View,parent:Element|DocumentFragment,local=scope,forward='',effects=ownedEffects,callbacks:CleanupBag=cleanups,rootOwned=false,componentRuntime=childRuntime):void {
     consumeWork(budget);
+    if(view.kind==='slot'){
+      if(contentMounted)throw new TypeError('Component model contains multiple slots');contentMounted=true;if(!content)return;const project=content,dispose=untracked(()=>project(parent,componentRuntime));content=undefined;callbacks.push(dispose);return;
+    }
     // Dynamic ranges can move out of their staging fragment. Resolve insertion
     // parents from live anchors so nested scopes keep updating in place.
     if(view.kind==='conditional'){
@@ -217,7 +226,7 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
       callbacks.push(()=>{try{disposeBag(branchEffects,branchCleanups);}finally{anchor.remove();release(budget,'domNodes');}});parent.append(anchor);
       const update=createEffect(()=>{const next=Boolean(evaluateCondition(view.condition,local));if(next===selected)return;untracked(()=>{
         const nextEffects:ReactiveEffect[]=[],nextCleanups:CleanupBag=[],fragment=parent.ownerDocument.createDocumentFragment();
-        try{for(const child of next?view.consequent:view.alternate)create(child,fragment,local,forward,nextEffects,nextCleanups);}
+        try{for(const child of next?view.consequent:view.alternate)create(child,fragment,local,forward,nextEffects,nextCleanups,false,componentRuntime);}
         catch(error){try{disposeBag(nextEffects,nextCleanups);}catch(cleanup){throw new AggregateError([error,cleanup],'Conditional preparation and cleanup failed',{cause:error});}throw error;}
         const previousEffects=branchEffects,previousCleanups=branchCleanups;
         stageStructure(()=>{anchor.parentNode!.insertBefore(fragment,anchor);selected=next;branchEffects=nextEffects;branchCleanups=nextCleanups;try{disposeBag(previousEffects,previousCleanups);}catch(error){return [error];}},()=>disposeBag(nextEffects,nextCleanups));
@@ -256,7 +265,7 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
             const fragment=document.createDocumentFragment(),record:Record={start:start!,end:end!,item:signal(item),index:-1,effects:[],cleanups:[]};
             fragment.append(start);record.cleanups.push(()=>{try{start!.remove();end!.remove();}finally{release(budget,'domNodes',2);release(budget,'records');}});
             const itemScope=Object.create(local) as Scope;Object.defineProperty(itemScope,view.item,{value:record.item,enumerable:true,configurable:true});
-            try{for(const child of view.children)create(child,fragment,itemScope,'',record.effects,record.cleanups);fragment.append(end);}
+            try{for(const child of view.children)create(child,fragment,itemScope,'',record.effects,record.cleanups,false,componentRuntime);fragment.append(end);}
             catch(error){try{disposeBag(record.effects,record.cleanups);}catch(cleanup){throw new AggregateError([error,cleanup],'Record preparation and cleanup failed',{cause:error});}throw error;}
             prepared.push(record);planned.push(record);
           }}catch(error){try{disposePrepared();}catch(cleanup){throw new AggregateError([error,cleanup],'List preparation and cleanup failed',{cause:error});}throw error;}
@@ -272,7 +281,8 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
       const input=Object.create(null) as Record<string,Primitive>;
       for(const [key,value] of Object.entries(view.attributes))Object.defineProperty(input,key,{enumerable:true,configurable:true,get:()=>evaluate(value,local) as Primitive});
       if(forward)Object.defineProperty(input,'class',{enumerable:true,configurable:true,get:()=>[view.attributes.class?evaluate(view.attributes.class,local):'',forward].filter(Boolean).join(' ')});
-      const dispose=untracked(()=>components[view.component](parent as Element,childRuntime,input));callbacks.push(dispose);
+      const project:ContentMount|undefined=view.children.length?(contentTarget,contentRuntime)=>{const contentEffects:ReactiveEffect[]=[],contentCleanups:CleanupBag=[];let contentDisposed=false;const dispose:Dispose=()=>{if(contentDisposed)return;contentDisposed=true;disposeBag(contentEffects,contentCleanups);};try{for(const child of view.children)create(child,contentTarget,local,'',contentEffects,contentCleanups,true,contentRuntime);}catch(error){try{dispose();}catch(cleanup){throw new AggregateError([error,cleanup],'Component content mounting and recovery failed',{cause:error});}throw error;}return dispose;}:undefined;
+      const dispose=untracked(()=>components[view.component](parent as Element,componentRuntime,input,{},project));callbacks.push(dispose);
       // Refresh only the child prop signals; the child and its local state stay
       // mounted. Each child binding independently tracks those signals.
       if(dispose.refresh)track(()=>dispose.refresh!(),effects);return;
@@ -282,11 +292,11 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
     if(view.attributes.value){const input=element as HTMLInputElement,fixed=Boolean(staticBindings&2);if(fixed)input.value=String(evaluate(view.attributes.value,local));else effects.push(createEffect(()=>{const value=String(evaluate(view.attributes.value,local));if(input.value!==value)input.value=value;},budget));}
     if(view.attributes.checked){const input=element as HTMLInputElement,fixed=Boolean(staticBindings&4);if(fixed){const value=evaluate(view.attributes.checked,local);if(typeof value!=='boolean')throw new TypeError('checked requires boolean');input.checked=value;}else effects.push(createEffect(()=>{const value=evaluate(view.attributes.checked,local);if(typeof value!=='boolean')throw new TypeError('checked requires boolean');if(input.checked!==value)input.checked=value;},budget));}
     if(view.handler){const listener=(event:Event)=>execute(view.handler!.statements,local,event);element.addEventListener(view.handler.event,listener);callbacks.push(()=>element.removeEventListener(view.handler!.event,listener));}
-    parent.append(element);for(const child of view.children)create(child,element,local,'',effects,callbacks);
+    parent.append(element);for(const child of view.children)create(child,element,local,'',effects,callbacks,false,componentRuntime);
   }
   const refresh=()=>{if(disposed)return;transact(()=>{for(const [name,initial] of Object.entries(model.props)){const value=Object.hasOwn(supplied,name)?supplied[name]:initial;if(typeof value!==typeof initial)throw new TypeError(`Invalid prop ${name}`);write(getSignal(name,scope),value);}},forceDisable,budget);};
-  const dispose:Dispose=()=>{if(disposed)return;return withWork(budget,()=>{disposed=true;const failures:unknown[]=[];try{disposeBag(ownedEffects,cleanups);}catch(error){failures.push(error);}try{untracked(()=>execute(model.cleanup));}catch(error){failures.push(error);}finally{for(const name of Object.keys(scope))delete scope[name];classDefaults.clear();supplied={};components=[];releaseComponent(budget,componentReservation);}if(failures.length===1)throw failures[0];if(failures.length)throw new AggregateError(failures,'Component disposal failed');});};
-  try{execute(model.init);for(const root of model.roots)create(root,target!,scope,forwardClass,ownedEffects,cleanups,true);}catch(error){try{dispose();}catch(cleanup){throw new AggregateError([error,cleanup],'Component mounting and recovery failed',{cause:error});}throw error;}finally{target=undefined;}dispose.refresh=refresh;return dispose;
+  const dispose:Dispose=()=>{if(disposed)return;return withWork(budget,()=>{disposed=true;const failures:unknown[]=[];try{disposeBag(ownedEffects,cleanups);}catch(error){failures.push(error);}try{untracked(()=>execute(model.cleanup));}catch(error){failures.push(error);}finally{for(const name of Object.keys(scope))delete scope[name];classDefaults.clear();supplied={};components=[];content=undefined;releaseComponent(budget,componentReservation);}if(failures.length===1)throw failures[0];if(failures.length)throw new AggregateError(failures,'Component disposal failed');});};
+  let contentMounted=false;try{execute(model.init);for(const root of model.roots)create(root,target!,scope,forwardClass,ownedEffects,cleanups,true);if(content&&!contentMounted)throw new TypeError('Component does not accept content');}catch(error){try{dispose();}catch(cleanup){throw new AggregateError([error,cleanup],'Component mounting and recovery failed',{cause:error});}throw error;}finally{target=undefined;}dispose.refresh=refresh;return dispose;
 }
 
 export function mountCounter(target:Element,model:CounterModel):()=>void {assertNumber(model.initial);assertNumber(model.step);let value=model.initial;const button=target.ownerDocument.createElement('button'),text=target.ownerDocument.createTextNode('');button.append(text);const render=()=>{text.data=model.prefix+String(value);};const click=()=>{const next=value+model.step;assertNumber(next);value=next;render();};render();button.addEventListener('click',click);target.append(button);return()=>{button.removeEventListener('click',click);button.remove();};}

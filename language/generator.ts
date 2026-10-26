@@ -50,6 +50,7 @@ export function generate(ast:Component):string {
     return result;
   }
   function node(value:Exclude<ViewNode,{kind:'conditional'}>):unknown {
+    if(value.kind==='slot')return {kind:value.kind};
     if(value.kind==='iteration')return {kind:value.kind,item:value.item.value,collection:expression(value.collection),key:expression(value.key),children:nodes(value.children)};
     const attributes:Record<string,unknown>={};
     const flags:Record<string,number>={text:1,value:2,checked:4,class:8,type:16};
@@ -61,5 +62,5 @@ export function generate(ast:Component):string {
   const imports=ast.imports.map(item=>item.name?`import c${componentImports.indexOf(item)} from ${JSON.stringify(item.path.value)};`:`import ${JSON.stringify(item.path.value)};`).join('\n');
   const model={props:Object.fromEntries(ast.props.map(prop=>[prop.name.value,prop.initial.value])),classes,states:Object.fromEntries(ast.states.map(state=>[state.name.value,expression(state.initial)])),computed:Object.fromEntries(ast.computed.map(item=>[item.name.value,expression(item.expression)])),init:ast.init.map(statement),cleanup:ast.cleanup.map(statement),roots:nodes(ast.roots)};
   const serialized=JSON.stringify(model).replaceAll('"__proto__":','["__proto__"]:');
-  return `${imports}\nexport const componentName=${JSON.stringify(ast.name.value)};\nexport const model=${serialized};\nexport default function mount(target,runtime,props={},state={}){const components=[${componentImports.map((_,index)=>`c${index}`).join(',')}];return Object.keys(state).length?runtime.mountComponentWithState(target,model,components,props,state):runtime.mountComponent(target,model,components,props)}\n`;
+  return `${imports}\nexport const componentName=${JSON.stringify(ast.name.value)};\nexport const model=${serialized};\nexport default function mount(target,runtime,props={},state={},content){const components=[${componentImports.map((_,index)=>`c${index}`).join(',')}];if(content){if(!runtime.mountComponentWithContent)throw new TypeError('Runtime does not support component content');return runtime.mountComponentWithContent(target,model,components,props,state,content)}return Object.keys(state).length?runtime.mountComponentWithState(target,model,components,props,state):runtime.mountComponent(target,model,components,props)}\n`;
 }

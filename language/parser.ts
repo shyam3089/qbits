@@ -1,4 +1,4 @@
-import type {Action,ClassDecl,Component,Computed,ConditionExpression,ElementNode,Expression,Handler,Import,IterationNode,Literal,Node,Prop,State,Statement,ViewNode} from './ast.js';
+import type {Action,ClassDecl,Component,Computed,ConditionExpression,ElementNode,Expression,Handler,Import,IterationNode,Literal,Node,Prop,SlotNode,State,Statement,ViewNode} from './ast.js';
 import {tokenize,type Token} from './tokenizer.js';
 import {fail} from './diagnostics.js';
 import {resolveCompilerLimits,type CompilerLimits} from './limits.js';
@@ -120,10 +120,11 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     if(!children.length)fail(source,filename,item.span,'Iteration requires a view block');
     return {kind:'iteration',item,collection,key,children,span:{start,end:children.at(-1)!.span.end}};
   }
+  function slot():SlotNode {const token=word('slot');take('NEWLINE');return {kind:'slot',span:token.span};}
   function view():ViewNode {
     if(++viewDepth>limits.maxNestingDepth)fail(source,filename,peek().span,`View nesting exceeds the configured limit of ${limits.maxNestingDepth} levels`);
     try{if(at('else'))fail(source,filename,peek().span,'else must immediately follow an if block at the same indentation');
-    if(at('if'))return conditional();if(at('for'))return iteration();return element();}finally{viewDepth--;}
+    if(at('if'))return conditional();if(at('for'))return iteration();if(at('slot'))return slot();return element();}finally{viewDepth--;}
   }
   function computed():Computed {const start=word('computed').span.start;const name=id();symbol('=');const value=expression();take('NEWLINE');return {name,expression:value,span:{start,end:value.span.end}};}
   function action():Action {const start=word('action').span.start;const name=id();block();const body=statements();take('DEDENT');if(!body.length)fail(source,filename,name.span,'Action requires at least one statement');return {name,statements:body,span:{start,end:body.at(-1)!.span.end}};}

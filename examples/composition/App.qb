@@ -1,0 +1,10 @@
+import Card from "./Card.qb"
+
+component App:
+    count = 0
+    main:
+        Card title="Reusable counter":
+            p text="Parent count: " + str(count)
+            button text="Increment":
+                on click:
+                    count = count + 1

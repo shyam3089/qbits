@@ -29,7 +29,8 @@ export interface Handler {event:Node<'click'|'input'|'change'>;kind?:'click'|'cl
 export interface ElementNode {kind:'element';tag:Node<string>;attributes:Record<string,Expression>;indentedAttributes:string[];children:ViewNode[];handler?:Handler;span:Span}
 export interface ConditionalNode {kind:'conditional';condition:ConditionExpression;consequent:ViewNode[];alternate:ViewNode[];span:Span}
 export interface IterationNode {kind:'iteration';item:Node<string>;collection:Expression;key:Expression;children:ViewNode[];span:Span}
-export type ViewNode = ElementNode | ConditionalNode | IterationNode;
+export interface SlotNode {kind:'slot';span:Span}
+export type ViewNode = ElementNode | ConditionalNode | IterationNode | SlotNode;
 export interface Component {
   kind:'Component';name:Node<string>;span:Span;imports:Import[];classes:ClassDecl[];props:Prop[];states:State[];computed:Computed[];init:Statement[];cleanup:Statement[];roots:ViewNode[];
 }

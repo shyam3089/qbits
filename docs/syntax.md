@@ -1,4 +1,4 @@
-# Phase 2D syntax
+# Qubits syntax through Phase 3D.1
 
 One default component is declared per file. Imports precede the component.
 The Phase 1 counter remains valid:
@@ -31,7 +31,41 @@ Relative default imports use the configured source extension; see the generated
 [example](examples.md) for the current identity. An imported component is instantiated
 by its local import name. Named attributes supply props. Omitted props retain defaults.
 Unknown props, incompatible value types, and assignments to props are errors.
-Component instances cannot accept children, slots, or event handlers in this phase.
+Component instances do not accept event handlers directly.
+
+## Component composition
+
+A reusable layout may declare one default `slot`. Indented views supplied to an
+instance are rendered at that marker and keep the parent's scope:
+
+```text
+component Panel(title = ""):
+    section class="panel":
+        h2 text=title
+        slot
+```
+
+The parent imports that layout in a separate file:
+
+```text
+import Panel from "./Panel.qb"
+
+component App:
+    count = 0
+    Panel title="Counter":
+        p text="Count: " + str(count)
+        button text="Increment":
+            on click:
+                count = count + 1
+```
+
+Slotted content may contain elements, components, conditions, and keyed lists.
+Parent updates remain reactive, while nested component state and keyed identity are
+preserved normally. The layout owns the insertion point; disposing it also disposes
+the projected content. A component without `slot` rejects supplied content. One
+unnamed slot is supported per component, and its marker must be in the static layout,
+not inside `if` or `for`. Named slots, fallback slot content, and component-level
+event handlers are not supported.
 
 Phase 2B adds the approved text-input form:
 

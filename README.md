@@ -1,6 +1,6 @@
 # qubits
 A declarative UI language and framework for building reactive web interfaces, designed for simplicity, extensibility, and excellent developer tooling.
-# Qubits UI — Phase 3A.3
+# Qubits UI — Phase 3D.1
 
 A small UI language compiling to browser JavaScript. Components support nested
 standard elements, numeric/string/boolean local state, read-only typed props with literal defaults,
@@ -11,6 +11,9 @@ event actions, and component initialization/cleanup. Use `text=expression` and
 Phase 3A.3 preserves that syntax while adding iterative module-graph limits, shared
 runtime resource budgets, transactional rollback, compiler-marked static bindings,
 and repeatable Firefox performance measurements.
+Phase 3D.1 adds one default `slot` for reusable parent-child layouts. Slotted content
+retains its parent's reactive scope, keyed identity, rollback behavior, and cleanup.
+See the [composition example](examples/composition/App.qb).
 The example mounts two independent counters. Instance classes merge into a single
 root element's defaults; ambiguous forwarding is an error.
 See the [grammar](docs/syntax.md) and [identity reference](docs/identity.md).
@@ -82,7 +85,7 @@ constructors, access modifiers, static members, action parameters, and unrestric
 methods. Lists require a non-empty homogeneous literal for type inference. `or`,
 ordering comparisons, filtering/sorting/index expressions, additional controls,
 routing, SSR, plugins, LSP/editor extensions, native targets, and a registry are
-deferred. Component children/slots and state-preserving HMR are also deferred.
+deferred. Named/fallback slots and state-preserving HMR are also deferred.
 No performance claim is made without a benchmark.
 
 Phase 2E adds synchronous reactive batching, computed dependency ordering, tracked

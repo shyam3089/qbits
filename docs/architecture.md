@@ -81,7 +81,7 @@ The Vite plugin compiles configured suffixes and appends identity metadata; the
 compiler itself knows neither branding nor suffixes. Vite invalidates source modules
 and explicitly triggers full reloads, including after failed transforms. Component
 HMR/state preservation is unsupported; component state resets on reload. Source maps are deferred, while
-compile diagnostics retain original locations. `examples/` contains only the demo.
+compile diagnostics retain original locations. `examples/` contains focused demos.
 
 `tooling/modules.ts` validates the relative component graph without executing it:
 missing imports, configured extensions, cycles, prop types and transitive single-root
@@ -93,6 +93,10 @@ independent state, safe text nodes, child mounts and teardown callbacks per inst
 Conditions are compiled to a typed data tree and interpreted by the runtime; source
 text is never evaluated as JavaScript. Branch content uses text nodes, not HTML insertion.
 Props are read-only inputs; parent state changes notify child bindings without remounting.
+Default-slot content is compiled as parent-owned views and mounted through the child
+layout's insertion point. It therefore reads the parent scope while using the rendered
+child depth for shared limits; child disposal owns the projected effects, listeners,
+components and DOM ranges.
 Component disposal stops effects, removes listeners, DOM nodes, child instances and
 conditional/list scopes, then runs its closed cleanup statements once and releases
 state and supplied-prop references. Cleanup failures do not skip other owned resources.
