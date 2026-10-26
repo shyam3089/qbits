@@ -145,3 +145,30 @@ now clears that reference in a finally block after initial rendering, including
 failure. Updates retain their own live anchors/parents. The public Element-target
 signature is unchanged; the internal nullable reference exists only to release it.
 Firefox retention probes sample targets and class instances as well as props/nodes.
+
+## Resource controls and merged history
+
+The tokenizer rejects oversized source and excessive indentation before constructing a
+full token/AST graph. The parser tracks view depth, recursive expression depth, total
+expression nodes, and literal/argument collection sizes. Defaults are exported and each
+compile call may supply narrower or wider positive safe-integer limits. These checks are
+compiler policy only; identity and configured suffixes remain tooling concerns.
+
+Phase 3A.3 gives every public mount one shared component-tree budget. Component, live
+record, framework DOM-node and reactive-effect reservations happen before allocation;
+detached staged records and initial effects use that same budget. Work accounting spans
+the outer synchronous mount or update. Rollback and disposal release reservations, while
+recovery resets only operation work so cleanup cannot be blocked by the failed operation.
+
+Component-import discovery, cycle detection, ordering and longest-depth calculation are
+iterative. A real-path map counts shared dependencies once, while cumulative UTF-8 source
+bytes and parsed AST complexity are charged to each distinct module. Bottom-up validation
+preserves existing import semantics without recursive graph traversal.
+
+The reconciled engine retains lazy Map journals and immutable dependency undo sets,
+not the incoming branch's separate linear journal. Recovery restores those sets
+directly; cleanup failures are aggregated and unrecoverable participants disabled.
+Loop bindings use own data properties, including names such as `__proto__`.
+The generator retains incoming literal-binding bitmasks alongside dependency metadata;
+the runtime proves constant expressions directly so older models remain compatible.
+Historical performance reports measure their named versions, not this combination.

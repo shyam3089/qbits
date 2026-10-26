@@ -5,13 +5,17 @@ import { fileURLToPath } from 'node:url';
 import { CompileError, type Diagnostic } from '../language/index.js';
 import { identity, isSource, metadata } from './config.js';
 import { initialize } from './onboarding.js';
-import { compileFile } from './modules.js';
+import {compileFile,type CompileFileOptions} from './modules.js';
 const args = process.argv.slice(2);
 const docsRoot = new URL('../../../docs/', import.meta.url);
-const usage = `Usage: ${identity.cliName} compile <input${identity.sourceExtension}> <output.js> | check [path ...] [--json] | init | docs [--agent|topic]`;
+const usage = `Usage: ${identity.cliName} compile <input${identity.sourceExtension}> <output.js> [graph limits] | check [path ...] [--json] [graph limits] | init | docs [--agent|topic]`;
+const graphFlags={
+  '--max-modules':'maxModules','--max-import-depth':'maxImportDepth','--max-project-bytes':'maxTotalSourceBytes','--max-project-complexity':'maxAggregateComplexity'
+} as const;
+function graphOptions(values:string[]):{values:string[];options:CompileFileOptions}{const rest:string[]=[],graphLimits:NonNullable<CompileFileOptions['graphLimits']>={};for(const value of values){const [flag,raw]=value.split('=',2),name=graphFlags[flag as keyof typeof graphFlags];if(!name){rest.push(value);continue;}const parsed=Number(raw);if(raw===undefined||!Number.isSafeInteger(parsed)||parsed<1)throw new Error(`${flag} requires a positive safe integer using ${flag}=value`);graphLimits[name]=parsed;}return{values:rest,options:{graphLimits}};}
 type CheckDiagnostic = Diagnostic & {kind: 'syntax' | 'io'};
 async function check(paths: string[]): Promise<void> {
-  const json = paths.includes('--json'); const files: string[] = []; const diagnostics: CheckDiagnostic[] = [];
+  const parsed=graphOptions(paths),json=parsed.values.includes('--json'),files:string[] = [],diagnostics: CheckDiagnostic[] = [];
   const io = (filename: string, message: string) => diagnostics.push({kind:'io',filename,line:1,column:1,span:{start:0,end:0},message});
   async function visit(path: string, explicit = false): Promise<void> {
     try {
@@ -23,12 +27,12 @@ async function check(paths: string[]): Promise<void> {
       else if (explicit) io(path,`Expected a ${identity.sourceExtension} source file or directory`);
     } catch (error) { io(path,error instanceof Error ? error.message : String(error)); }
   }
-  const inputs = paths.filter(p => p !== '--json');
+  const inputs = parsed.values.filter(p => p !== '--json');
   for (const input of inputs.length ? inputs : ['src']) {
     if (input.startsWith('-')) io(input,'Unknown check option'); else await visit(resolve(input),true);
   }
   for (const file of [...new Set(files)]) {
-    try { compileFile(file); }
+    try { compileFile(file,undefined,undefined,parsed.options); }
     catch (error) { if (error instanceof CompileError) diagnostics.push({...error.diagnostic,kind:'syntax'}); else io(file,error instanceof Error ? error.message : String(error)); }
   }
   if (!files.length && !diagnostics.length) io(resolve(inputs[0] ?? 'src'),`No ${identity.sourceExtension} source files found`);
@@ -43,14 +47,14 @@ try {
   else if (command === 'init') { if (rest.length) throw new Error(usage); await initialize(); }
   else if (command === 'docs') {
     const topic = rest[0] === '--agent' ? 'agent' : rest[0] ?? 'agent';
-    if (rest.length > 1 || !['agent','syntax','examples','security','commands','limitations','package-managers','reactivity'].includes(topic)) throw new Error(usage);
+    if (rest.length > 1 || !['agent','syntax','examples','security','reactivity','performance','commands','limitations','package-managers'].includes(topic)) throw new Error(usage);
     const manifest = JSON.parse(await readFile(new URL('manifest.json',docsRoot),'utf8'));
     console.log(`${identity.displayName} ${manifest.version} — installed docs: ${fileURLToPath(docsRoot)}\n` + await readFile(new URL(`${topic}.md`,docsRoot),'utf8'));
   } else {
     // Retain the earlier local two-argument compile invocation for compatibility.
-    const [input,output,...extra] = command === 'compile' ? rest : args;
+    const parsed=graphOptions(command === 'compile' ? rest : args),[input,output,...extra]=parsed.values;
     if (!input || !output || extra.length || !isSource(input)) throw new Error(usage);
-    const result = compileFile(input);
+    const result = compileFile(input,undefined,undefined,parsed.options);
     await writeFile(output,metadata() + result.code);
     console.log(`${identity.displayName}: compiled ${input} -> ${output}`);
   }

@@ -91,3 +91,7 @@ Phase 3A.1 reduces empty transactions, redundant expression walks and subscripti
 churn while preserving failure recovery. Run `npm run bench:stabilization` for
 repeated Firefox production-build comparisons with nested component and computed
 chain workloads. See [results and measurement limits](docs/performance-stabilization.md).
+
+The incoming Phase 3A.2/3A.3 compiler-graph and shared runtime budgets are preserved.
+See [release notes](RELEASE_NOTES.md), [limits](docs/limitations.md), and
+[merged-history caveats](docs/performance.md#divergent-phase-3a1-history).

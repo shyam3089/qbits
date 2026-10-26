@@ -1,3 +1,4 @@
+<!-- Generated for Qubits 0.1.0 by npm run sync. -->
 # Phase 3A reactivity
 
 Phase 3A preserves the Phase 2D grammar, closed expressions, safe-integer checks,
@@ -66,7 +67,7 @@ An input event's external DOM edits, caller-owned objects, custom mount callback
 and other host JavaScript side effects cannot generally be undone. If host DOM
 operations repeatedly fail and restoration is impossible, the affected owner is
 disposed to stop subscriptions and listeners. A hostile DOM override can also prevent
-physical removal; no sandbox or general resource-limit guarantee is provided.
+physical removal; no sandbox or general process-resource guarantee is provided.
 Security-sensitive changes require independent human review before merging.
 
 Use `npm run test:browser` for Firefox identity, computed chains, batching, forms,
@@ -90,3 +91,17 @@ continue through their own live anchors/parents, and disposal releases those sco
 Dirty inputs refreshed during a pure computed evaluation do not requeue that same
 computation. Root and dynamic member chains have evaluation-count regressions;
 actual circular reads still throw before a cached value can be reused.
+
+## Shared resource budgets
+
+Transactions end before trusted host cleanup code runs and never cross an asynchronous
+boundary. JavaScript getters, proxies and component mount/cleanup functions can execute
+arbitrary host code and must be reviewed by the application. See security.md and
+limitations.md for the trust and resource boundaries.
+
+
+Compiler graph limits and runtime tree budgets are described in security.md and
+limitations.md. Reservations include staged DOM/effects/records/components and are
+released on rollback/disposal. Framework work and scheduled effect executions are
+bounded; trusted host callbacks are not sandboxed. The merged engine restores
+recorded dependency sets directly rather than re-running effects to recover.

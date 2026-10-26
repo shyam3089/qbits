@@ -1,7 +1,11 @@
 import type { Span } from './ast.js';
 import { fail } from './diagnostics.js';
+import {resolveCompilerLimits,type CompilerLimits} from './limits.js';
 export interface Token { kind: 'identifier' | 'number' | 'string' | 'symbol' | 'NEWLINE' | 'INDENT' | 'DEDENT' | 'eof'; value: string; span: Span }
-export function tokenize(source: string, filename = '<input>'): Token[] {
+export function tokenize(source: string, filename = '<input>', limitOverrides:Partial<CompilerLimits>={}): Token[] {
+  if(typeof source!=='string')throw new TypeError('Tokenizer source must be a string');
+  const limits=resolveCompilerLimits(limitOverrides);
+  if(source.length>limits.maxSourceLength)fail(source,filename,{start:0,end:0},`Source exceeds the configured limit of ${limits.maxSourceLength} UTF-16 code units`);
   const tokens: Token[] = []; const levels = [0]; let width: number | undefined;
   let followsHeader = false;
   const emit = (kind: Token['kind'], start: number, end: number, value = '') => tokens.push({kind, value, span: {start, end}});
@@ -24,6 +28,7 @@ export function tokenize(source: string, filename = '<input>'): Token[] {
       width ??= indent;
       if (indent - current !== width) fail(source, filename, {start, end: i}, `Inconsistent indentation: each block must add ${width} spaces`);
       levels.push(indent); emit('INDENT', start, i);
+      if(levels.length-1>limits.maxNestingDepth)fail(source,filename,{start,end:i},`Nesting exceeds the configured limit of ${limits.maxNestingDepth} levels`);
     } else if (indent < current) {
       if (!levels.includes(indent)) fail(source, filename, {start, end: i}, `Inconsistent dedent: expected an existing indentation level (${levels.join(', ')} spaces)`);
       while (levels.at(-1)! > indent) { levels.pop(); emit('DEDENT', i, i); }

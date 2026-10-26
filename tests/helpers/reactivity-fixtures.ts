@@ -58,6 +58,87 @@ component List:
             count = count + 1
     p text=str(total)
 `).code,
+    './Overflow.qb': compile(`component Overflow:
+    count = 9007199254740991
+    button text=str(count):
+        on click:
+            count = count + 1
+`).code,
+    './TransactionalList.qb': compile(`import Row from "./Row.qb"
+class Item:
+    id = 0
+component TransactionalList:
+    original = Item(1)
+    replacement = Item(2)
+    items = [original]
+    button text="Replace":
+        on click:
+            items.remove(original)
+            items.append(replacement)
+    button text="Remove":
+        on click:
+            items.remove(original)
+    button text="Restore":
+        on click:
+            items.append(original)
+    for item in items key=item.id:
+        div:
+            span text=str(item.id)
+            Row
+`).code,
+    './TransactionalConditional.qb': compile(`import Row from "./Row.qb"
+component TransactionalConditional:
+    visible = true
+    button text="Switch":
+        on click:
+            visible = false
+    if visible:
+        div:
+            span text="Before"
+            Row
+    else:
+        div:
+            span text="After"
+            Row
+`).code,
+    './NestedTransaction.qb': compile(`class Counter:
+    value = 0
+    action increment:
+        value = value + 1
+class Item:
+    id = 0
+component NestedTransaction:
+    counter = Counter(0)
+    original = Item(1)
+    items = [original]
+    button text="Fail":
+        on click:
+            counter.increment()
+            items.append(original)
+    button text="Increment":
+        on click:
+            counter.increment()
+    p text=str(counter.value)
+    for item in items key=item.id:
+        span text=str(item.id)
+`).code,
+    './FatalRecovery.qb': compile(`import Row from "./Row.qb"
+class Item:
+    id = 0
+component FatalRecovery:
+    original = Item(1)
+    added = Item(2)
+    items = [original]
+    duplicates = [original]
+    button text="Fail":
+        on click:
+            items.append(added)
+            duplicates.append(original)
+    for item in items key=item.id:
+        Row
+    for item in duplicates key=item.id:
+        span text=str(item.id)
+`).code,
     './Edges.qb': compile(`import Row from "./Row.qb"
 class Item:
     id = 0
@@ -95,6 +176,7 @@ component Edges:
             replacement.name = "Renamed"
     button text="Duplicate":
         on click:
+            count = count + 1
             items.append(replacement)
     button text="Recover":
         on click:
@@ -112,4 +194,26 @@ component Edges:
                 Row label=item.name
 `).code,
   };
+}
+
+export function mountFixture(size: number): Record<string, string> {
+  return {'./Mount.qb': compile(`class Item:
+    id = 0
+component Mount:
+    items = [${Array.from({length:size},(_,index)=>`Item(${index})`).join(', ')}]
+    ul:
+        for item in items key=item.id:
+            li text="Row"
+`).code};
+}
+
+export function distinctWriteFixture(size: number): string {
+  const states=Array.from({length:size},(_,index)=>`    value${index} = 0`).join('\n');
+  const writes=Array.from({length:size},(_,index)=>`            value${index} = value${index} + 1`).join('\n');
+  return compile(`component DistinctWrites:
+${states}
+    button text="Update":
+        on click:
+${writes}
+`).code;
 }

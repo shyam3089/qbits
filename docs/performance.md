@@ -1,98 +1,141 @@
-Phase 3A.1 production-build measurements and allocation profiles are documented in
-[performance stabilization](performance-stabilization.md). The observations below
-remain the original Phase 3A historical report and use a different harness.
+# Phase 3A.3 performance and reactivity
 
-# Firefox performance observations
+## Release-gate hardening comparison
 
-Phase 3A preserves the approved grammar and public mount API. See
-[reactivity](reactivity.md) for dependency metadata, caching, transactional rendering
-and failure semantics. This report compares measured Qubits implementations only.
-No React, Angular or Vue numbers are inferred.
+The final security fixes were measured against the exact pre-fix Phase 3A.3 runtime
+(`0d651649d567…`) in two paired Firefox 157.0 runs. The candidate runtime is
+`e9b641f99daf…`; size changed from 41,064/8,251 to 41,292/8,273 raw/gzip bytes
+(+228 raw, +22 gzip).
 
-## Method
+| Scenario | Baseline run 1 / candidate | Baseline run 2 / candidate |
+| --- | ---: | ---: |
+| 1,000-row mount, ms | 7/12 → 6/16 | 8/17 → 7/11 |
+| 10,000-row mount, ms | 45/88 → 47/100 | 53/89 → 47/66 |
+| Isolated update, us | 15/51 → 14/63 | 22/60 → 15/45 |
+| Computed chain, us | 15/31 → 18/38 | 12/39 → 19/66 |
+| Keyed reconciliation, ms | 1/1 → 1/3 | 1/6 → 1/2 |
+| Nested prop update, us | 15/54 → 19/79 | 19/63 → 21/88 |
+| Mount/dispose cycle, ms | 82/163 → 68/135 | 68/105 → 68/169 |
 
-[Raw observations](benchmarks/phase3a-2026-10-24.json) were captured on 24 October
-2026 local time (23 October UTC): Windows 10.0.26200, Intel Core i3-1115G4,
-Node 22.16.0, Firefox 157.0. Runtime/fixture hashes, individual samples and baseline
-provenance are in the report. Historical runtime snapshots are confined to
-`tests/benchmarks`; their original revisions and TypeScript settings are recorded
-in `tests/benchmarks/provenance.json`. Both snapshots reproduce from those revisions.
+Mount/startup and disposal showed no repeatable median regression. Computed-chain
+medians increased by 3 and 7 us because derived numeric expressions now validate their
+literals; this is the expected constant-time security cost. Nested-update medians differed
+by 2–4 us while tails varied widely, with unchanged DOM work. The remaining differences
+are treated as Firefox/JIT microbenchmark variance. No protection was removed.
 
-Each runtime receives the same current compiler-generated fixture. It contains
-1,000 or 10,000 keyed `li` row elements, class-computed text, a stateful child and
-controls. Actual element counts are 1,010/10,010; including text/comments there are
-4,019/40,019 DOM nodes. This is a row-update workload, not a complete commerce app.
+The Phase 3A.3 Firefox A/B record is
+[reactivity-2026-10-25-phase3a3.json](benchmarks/reactivity-2026-10-25-phase3a3.json).
+An independent repeat is
+[reactivity-2026-10-25-phase3a3-repeat.json](benchmarks/reactivity-2026-10-25-phase3a3-repeat.json).
+It uses the unchanged Phase 3A.2 runtime as baseline, identical production modules,
+Firefox 157.0, three warmups, 21 timing samples, 1,000 update operations and 15 reorder
+samples. The checked-in validator record is
+[validator-2026-10-25-phase3a3.json](benchmarks/validator-2026-10-25-phase3a3.json).
 
-Three trials alternate runtime order, using fresh Firefox pages. Each trial warms
-up 30 updates, then records seven batches of 1,000 synchronous events and seven
-last-to-first moves (reset moves excluded). Update/reorder columns use medians of
-all 21 samples; mount uses three single observations. Timing includes event
-execution, safety checks, synchronous reconciliation and MutationObserver recording,
-not subsequent paint/layout. Firefox's coarse timer resolution limits small-operation
-precision. There are no timing thresholds in correctness tests.
+Validator duplicate checking now has 4k/8k/16k medians of 1.48/1.59/7.73 ms
+(p95 1.84/3.44/10.75 ms), replacing the confirmed quadratic 164/655/2,477 ms behavior.
+Full parse/validate/generate compilation medians are 25.37/46.62/109.11 ms
+(p95 43.01/61.90/132.07 ms) for the same sources.
+Runtime budget checks add constant-time
+integer accounting at allocation and effect boundaries; rollback and cleanup guarantees
+were not removed for performance.
 
-## Before and after
+| Production Firefox scenario | 3A.2 median/p95 | 3A.3 median/p95 |
+| --- | ---: | ---: |
+| 1,000-row mount | 6/9 ms | 4/9 ms |
+| 10,000-row mount | 36/77 ms | 35/49 ms |
+| Isolated reactive update | 18/98 us | 22/82 us |
+| Computed chain | 15/46 us | 11/68 us |
+| Keyed reconciliation | 1/1 ms | 0/1 ms |
+| Nested component prop update | 15/85 us | 15/155 us |
+| 1,000-row mount/dispose cycle | 47/57 ms | 49/57 ms |
 
-| Rows | Implementation | Mount, ms | Isolated update, microseconds/event | Events/second | Reorder, ms |
-| ---: | --- | ---: | ---: | ---: | ---: |
-| 1,000 | Before Phase 2D guards (`d845f2d`) | 25 | 44 | 22,727 | 1 |
-| 1,000 | Phase 2D baseline (`ab4d8b7`) | 28 | 26 | 38,462 | 1 |
-| 1,000 | Phase 3A | 36 | 34 | 29,412 | 1 |
-| 10,000 | Before Phase 2D guards (`d845f2d`) | 146 | 61 | 16,393 | 7 |
-| 10,000 | Phase 2D baseline (`ab4d8b7`) | 152 | 40 | 25,000 | 8 |
-| 10,000 | Phase 3A | 188 | 40 | 25,000 | 9 |
+The repeat produced 6/12 to 4/7 ms (1k mount), 40/89 to 34/43 ms (10k mount),
+15/98 to 11/78 us (isolated update), 17/74 to 10/27 us (computed), 1/1 to 1/1 ms
+(reconcile), 12/109 to 13/53 us (nested), and 48 to 51 ms cycle medians. The p95
+nested spike in the primary run did not repeat, so it is reported as Firefox variance,
+not optimized by weakening checks. Runtime size changes from 35,871 to 41,064 raw bytes
+and 7,435 to 8,251 gzip bytes (+5,193 raw, +816 gzip). No dependency was added.
 
-The historical safety comparison records mount increases of 3/6 ms and an emitted
-runtime increase from 24,297 to 31,518 bytes (gzip 5,528 to 6,892). Measured update
-times decreased in that comparison. It compares complete historical implementations,
-not an isolated guard-only ablation: JIT behavior, allocation and noise also affect
-these numbers. It does not establish that safety checks are free or improve speed.
-No safety checks were disabled in the delivered runtime for benchmarking.
+Phase 3A.2 keeps the Phase 2D grammar and existing four-argument mount calls. Optional
+compiler and runtime limit objects add bounded work without changing generated application
+syntax. All Phase 3A.1 rollback, validation, cleanup, and identity guarantees remain.
 
-Phase 3A introduces transactional preparation/rollback, caches and dependency
-connectors. Compared with Phase 2D, the 1,000-row update measurement is slower;
-10,000-row throughput is unchanged at this resolution. Mount and larger reorders
-are slower. Median mount/dispose cycle observations are 15/150 ms for 1,000/10,000
-rows, versus 15/99 ms in Phase 2D. Correctness takes priority; no overall speedup
-is claimed. Emitted runtime size is 42,106 bytes, gzip 8,836, versus Phase 2D's
-31,518/6,892. These are standalone emitted-module sizes, not minified app bundle
-sizes. The current example's Vite JS build is about 27.70 kB (gzip 7.79 kB).
+## Measured causes and retained optimizations
 
-All three runtimes produced two isolated text writes (row and child label), zero
-structural writes for that update, and one moved three-node range per reorder
-(three removals/insertions, zero text writes). All retained row and child identities.
-Phase 3A regression tests separately prove one class-computed evaluation across
-validation and multiple consumers, one committed render per binding per batch,
-key/DOM failure rollback, and no recreation of unrelated nodes or instances.
+Profiling found avoidable literal-binding effects, whole-state transaction snapshots,
+redundant DOM property writes, child remounts, and non-minimal keyed moves. The runtime
+therefore keeps compiler-marked static bindings, first-write transaction journaling,
+computed-before-DOM scheduling, equality checks, child prop refresh, and longest-
+increasing-subsequence keyed movement.
 
-The retention probe keeps five disposed handles alive after repeated mounts and
-uses WeakRefs plus Playwright `requestGC`. Every run observed zero reachable sampled
-props/nodes, zero attached owned nodes and balanced listeners. This is evidence for
-these workloads, not heap-byte measurement or proof that every leak is impossible.
-Firefox does not expose a portable heap-byte reading here. Failed-transaction
-retention has a separate Firefox regression test.
+The H1 failures came from destroying committed keyed records and conditional branches
+before replacement mounting had succeeded. Replacements now mount into detached
+fragments and register transaction commit/rollback hooks. Successful commits update the
+DOM and reconciliation map before removed scopes are disposed. Cleanup failures after
+commit are reported as post-commit errors; they do not trigger a false rollback.
+
+The transaction journal uses reused arrays and records only the first old value of each
+directly written signal. A reusable identity `Set` was evaluated in Firefox against the
+same fixed runtime. At 4/16/64/256 distinct writes, the linear journal medians were
+2/6/14/54 us versus 2/6/18/58 us for the thresholded set variant. The set also added
+565 raw and 102 gzip bytes, so it was not retained. The checked-in benchmark includes
+the distinct-write cases so this decision can be revisited if transaction sizes change.
+
+## Firefox measurements
+
+[Primary](benchmarks/reactivity-2026-10-25-phase3a2.json) and
+[repeat](benchmarks/reactivity-2026-10-25-phase3a2-repeat.json) observations were captured
+on 25 October 2026 with Firefox 157.0. The baseline is the exact Phase 3A.1 runtime at
+commit `56a202f`; the candidate is the Phase 3A.2 production runtime. Each candidate ran
+in a separate page with identical fixtures, three warmups, 21 timing samples, 1,000
+operations per update sample, and 15 warmed reorder samples.
+
+| Scenario | 3A.1 medians | 3A.2 medians | 3A.1 p95 | 3A.2 p95 |
+| --- | ---: | ---: | ---: | ---: |
+| 1,000-row lightweight mount | 6 / 6 ms | 4 / 4 ms | 10 / 12 ms | 10 / 6 ms |
+| 10,000-row lightweight mount | 35 / 36 ms | 43 / 36 ms | 93 / 71 ms | 51 / 52 ms |
+| Isolated row update | 22 / 26 us | 22 / 34 us | 79 / 148 us | 118 / 131 us |
+| Computed diamond/two-write chain | 17 / 12 us | 12 / 9 us | 23 / 34 us | 35 / 20 us |
+| Nested child-prop update | 19 / 18 us | 13 / 22 us | 107 / 255 us | 164 / 594 us |
+| Heavy 1,000-row mount/dispose cycle | 59 / 51 ms | 55 / 55 ms | n/a | n/a |
+
+The earlier 13 to 19 us computed, 12 to 23 us nested-prop, and 56 to 62 ms heavy-cycle
+regressions did not reproduce consistently. Across the paired runs, computed improved,
+nested props crossed in opposite directions, and the heavy cycle stayed within four
+milliseconds. The security-limit overhead is therefore reported as the complete A/B
+delta above: the only repeatable cost is bundle size; timing deltas were smaller than
+run-to-run Firefox variance. No rollback or cleanup path was removed to chase noise.
+
+Firefox did not expose `performance.memory`. After explicit Playwright GC, the WeakRef
+probe observed zero reachable supplied-prop objects and zero reachable rendered nodes
+for both candidates while retaining 30 disposed handles. Listener balance and empty
+mount targets were also verified; these observations are not a formal leak proof.
+
+## Bundle and startup tradeoff
+
+Phase 3A.2 changes the runtime from 33,361 to 35,871 bytes raw and from 6,930 to 7,435
+bytes gzip (+505 bytes). The example production JavaScript is 24.22 kB minified and 6.63
+kB gzip. The increase pays for validated configurable limits, scheduler accounting,
+component-depth propagation, and guarded list operations. No dependency was added.
 
 ## Reproduce
 
+Run `npm run build`, then `npm run bench:reactivity`. For a same-process comparison,
+save a built baseline runtime and run:
+
 ```sh
-npm ci
-npm run build
-npm run bench:phase3
-npm run bench:phase3 -- --sizes 1000,10000 --trials 3 --samples 7 --events 1000 --output phase3-results.json
-npm run test:browser
+npm run bench:reactivity -- --baseline /path/to/runtime.js --output docs/benchmarks/result.json
 ```
 
-Default output is `.tools/phase3a/latest.json`. Use `--runtimes` with comma-separated
-runtime paths for other saved comparisons. Baseline snapshots are test-only framework
-runtimes, not production inputs; builds never decode or execute them. Tests, scripts
-and snapshots are excluded from production modules and packed packages. Only Firefox
-is launched. The older `npm run bench:reactivity` and its
-[historical report](benchmarks/reactivity-2026-10-23.json) remain available for the
-richer 1,000-row form/component workload; those earlier numbers predate safety guards.
+The benchmark uses Firefox only. Fixtures and instrumentation remain under `tests/`
+and `scripts/` and are excluded from production modules. Timing is not a CI threshold;
+correctness tests assert DOM operations, rollback, cleanup, and identity separately.
 
-Next priorities are profiling transactional journal/plan allocations, list map/range
-snapshots and startup closures; specializing generated static/binding code; and
-repeating measurements on more machines and browser versions. Key validation remains
-linear in list length, as does general keyed reconciliation. No virtualization,
-async scheduler, external batching API, state-preserving HMR or resource sandbox is
-introduced. Keep rollback, typed validation and subscription integrity when optimizing.
+## Divergent Phase 3A.1 history
+
+The other machine independently developed a different Phase 3A/3A.1 runtime. Its
+[Phase 3A results](performance-phase3a-local.md) and [stabilization results](performance-stabilization.md)
+remain historical evidence. The reconciled runtime combines its dependency/rollback
+engine with the incoming resource limits. No historical table measures this merge.
+Rebenchmark the merged implementation before making new performance claims.

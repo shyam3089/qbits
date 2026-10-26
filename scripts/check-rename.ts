@@ -18,7 +18,7 @@ try {
   run(['scripts/sync.mjs']); run(['scripts/sync.mjs','--check']);
   run(['node_modules/tsx/dist/cli.mjs','scripts/check-docs.ts']);
   run(['node_modules/typescript/bin/tsc']); run(['node_modules/vite/bin/vite.js','build']);
-  run(['node_modules/tsx/dist/cli.mjs','--test','tests/compiler.test.ts','tests/phase2.test.ts','tests/phase2d.test.ts','tests/browser.test.ts','tests/runtime.test.ts','tests/phase3.test.ts','tests/dependencies.test.ts','tests/stabilization.test.ts']);
+  run(['node_modules/tsx/dist/cli.mjs','--test','tests/compiler.test.ts','tests/phase2.test.ts','tests/phase2d.test.ts','tests/browser.test.ts','tests/runtime.test.ts','tests/phase3.test.ts','tests/dependencies.test.ts','tests/stabilization.test.ts','tests/security.test.ts','tests/merge.test.ts']);
   run(['node_modules/tsx/dist/cli.mjs','--test','tests/tooling.test.ts']);
   run(['node_modules/tsx/dist/cli.mjs','tooling/cli.ts','examples/counter/Counter.orb','dist/counter.js']);
   const output = await readFile(join(temp,'dist/counter.js'),'utf8');

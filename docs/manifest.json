@@ -15,8 +15,9 @@
     "examples",
     "commands",
     "security",
+    "reactivity",
+    "performance",
     "limitations",
-    "package-managers",
-    "reactivity"
+    "package-managers"
   ]
 }
