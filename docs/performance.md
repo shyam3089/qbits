@@ -1,5 +1,9 @@
 # Phase 3A.3 performance and reactivity
 
+The cross-framework Phase 3C methodology, raw Firefox results, limitations and bottleneck notes
+are documented in [Phase 3C framework benchmarks](benchmarks-phase3c.md). The measurements do
+not establish a universal framework ranking.
+
 ## Release-gate hardening comparison
 
 The final security fixes were measured against the exact pre-fix Phase 3A.3 runtime

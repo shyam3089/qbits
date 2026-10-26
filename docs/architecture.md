@@ -54,7 +54,10 @@ child instances. Duplicate keys are rejected during preparation. Loop variables 
 installed as own data properties, including names such as `__proto__`, so source
 identifiers cannot alter a scope prototype. Runtime list size, component depth, and
 scheduler-flush limits propagate through child mounts. Numeric move indexes are validated
-as safe integers before list mutation.
+as safe integers before list mutation. Generated mounts also accept typed API records as
+fourth-argument initial state. Only declared non-empty list states can be seeded; plain
+records are checked against class fields, primitive types, safe-number rules and collection
+limits before the first DOM node is committed.
 
 Phase 3A.3 gives every public mount one shared component-tree budget. Component, live
 record, framework DOM-node and reactive-effect reservations happen before allocation;

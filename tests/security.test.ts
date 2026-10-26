@@ -73,7 +73,7 @@ test('compiler limits reject excessive work with explicit diagnostics',()=>{
 test('Unicode text is inert while confusable identifiers remain rejected',()=>{
   const source='component C:\n    p text="🙂 café é <script>alert(1)</script>"';
   const output=compile(source).code;
-  assert.match(output,/JSON\.parse/);assert.doesNotMatch(output,/innerHTML|eval\(|new Function/);
+  assert.match(output,/export const model=\{/);assert.doesNotMatch(output,/JSON\.parse|innerHTML|eval\(|new Function/);
   assert.throws(()=>compile('component Café:\n    p text="x"'),/Unexpected character/);
   assert.throws(()=>compile('component С:\n    p text="x"'),/Unexpected character/);
 });

@@ -40,7 +40,7 @@ test('text input binds string state through the approved event.value form',()=>{
   assert.equal(ast.states[0].initial.value,'');
   assert.deepEqual(ast.roots[0].indentedAttributes,['value']);
   assert.equal(ast.roots[0].handler?.kind,'input');
-  assert.match(code,/\\"kind\\":\\"input\\"/);
+  assert.match(code,/"kind":"input"/);
   assert.doesNotMatch(code,/innerHTML|eval\(/);
   const invalid:[string,RegExp][]=[
     ['component C:\n    name = ""\n    input value=name',/indented input property/],
@@ -60,8 +60,8 @@ test('checkbox input binds boolean state through the approved event.checked form
   assert.equal(ast.roots[0].handler?.kind,'clickBoolean');
   assert.deepEqual(ast.roots[1].indentedAttributes,['type','checked']);
   assert.equal(ast.roots[1].handler?.kind,'change');
-  assert.match(code,/\\"kind\\":\\"clickBoolean\\"/);
-  assert.match(code,/\\"kind\\":\\"change\\"/);
+  assert.match(code,/"kind":"clickBoolean"/);
+  assert.match(code,/"kind":"change"/);
   assert.doesNotMatch(code,/innerHTML|eval\(/);
   const invalid:[string,RegExp][]=[
     ['component C:\n    input type="checkbox"',/indented input property/],
@@ -85,12 +85,12 @@ test('conditionals support typed equality, and, not, and an optional else branch
   assert.equal(conditional.kind,'conditional');
   if(conditional.kind!=='conditional') assert.fail('Expected conditional root');
   assert.equal(conditional.condition.kind,'reference');if(conditional.condition.kind==='reference')assert.equal(conditional.condition.name,'enabled');assert.equal(conditional.consequent.length,1);assert.equal(conditional.alternate.length,1);
-  assert.match(code,/\\"kind\\":\\"conditional\\"/);assert.doesNotMatch(code,/innerHTML|eval\(/);
+  assert.match(code,/"kind":"conditional"/);assert.doesNotMatch(code,/innerHTML|eval\(/);
   const greeting=compile(greetingSource());const [empty,available,unavailable]=greeting.ast.roots.slice(1,4);
   assert.equal(empty.kind,'conditional');if(empty.kind==='conditional')assert.equal(empty.condition.kind,'equal');
   assert.equal(available.kind,'conditional');if(available.kind==='conditional'){assert.equal(available.condition.kind,'and');if(available.condition.kind==='and')assert.equal(available.condition.right.kind,'notEqual');}
   assert.equal(unavailable.kind,'conditional');if(unavailable.kind==='conditional')assert.equal(unavailable.condition.kind,'not');
-  assert.match(greeting.code,/\\"kind\\":\\"notEqual\\"/);assert.doesNotMatch(greeting.code,/innerHTML|eval\(/);
+  assert.match(greeting.code,/"kind":"notEqual"/);assert.doesNotMatch(greeting.code,/innerHTML|eval\(/);
   const precedence=compile('component C:\n    enabled = true\n    if not enabled == false and enabled:\n        p text="yes"').ast.roots[0];
   assert.equal(precedence.kind,'conditional');if(precedence.kind==='conditional'){
     assert.equal(precedence.condition.kind,'and');

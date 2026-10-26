@@ -1,0 +1,12 @@
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.4 system-ui, sans-serif; color: #20242c; background: #fff; }
+button { font: inherit; }
+.benchmark { padding: 12px; }
+.benchmark h1 { margin: 0 0 10px; font-size: 20px; }
+.rows, .cards, .catalog { display: grid; gap: 2px; }
+.row, .card, .product { display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 3px 6px; border: 1px solid #d9dde5; }
+.name { min-width: 110px; }
+.value { min-width: 28px; font-variant-numeric: tabular-nums; }
+.details { display: flex; align-items: center; gap: 8px; }
+.product h2, .product p { margin: 0; font-size: 14px; font-weight: 400; }
+

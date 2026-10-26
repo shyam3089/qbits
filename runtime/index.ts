@@ -3,6 +3,7 @@ export interface RuntimeLimits {maxCollectionItems:number;maxComponentDepth:numb
 export const defaultRuntimeLimits:Readonly<RuntimeLimits>=Object.freeze({maxCollectionItems:100_000,maxComponentDepth:256,maxUpdatesPerFlush:100_000,maxComponentInstances:100_000,maxListRecords:250_000,maxDomNodes:500_000,maxReactiveEffects:250_000,maxWorkPerOperation:1_000_000});
 type Primitive=string|number|boolean;
 type Value=Primitive|Instance|Value[];
+type InitialState=Readonly<Record<string,readonly unknown[]>>;
 type Expr={kind:'literal';value:Primitive}|{kind:'reference';name:string}|{kind:'member';object:Expr;name:string}|{kind:'str'|'len';argument:Expr}|{kind:'add';left:Expr;right:Expr}|{kind:'construct';name:string;arguments:Expr[]}|{kind:'list';items:Expr[]};
 type ConditionExpr={kind:'literal';value:Primitive}|{kind:'reference';name:string}|{kind:'member';object:Expr;name:string}|{kind:'not';argument:ConditionExpr}|{kind:'equal'|'notEqual'|'and';left:ConditionExpr;right:ConditionExpr};
 type Statement={kind:'assign';target:Expr;value:Expr}|{kind:'eventAssign';target:Expr;member:'value'|'checked'}|{kind:'call';target:Expr;method:string;arguments:Expr[]};
@@ -21,8 +22,8 @@ interface ResourceBudget {limits:RuntimeLimits;components:number;records:number;
 interface Reservation {released:boolean}
 type ReactiveEffect=(()=>void)&{dependencies:Set<Signal>;disposed:boolean;computed?:Signal;maxUpdates:number;budget:ResourceBudget};
 type Dispose=(()=>void)&{refresh?:()=>void};
-interface RuntimeApi {mountComponent:(target:Element,model:Model,components:Mount[],props?:Record<string,Primitive>)=>Dispose;mountCounter:(target:Element,model:CounterModel)=>()=>void}
-type Mount=(target:Element,runtime:RuntimeApi,props?:Record<string,Primitive>)=>Dispose;
+interface RuntimeApi {mountComponent:(target:Element,model:Model,components:Mount[],props?:Record<string,Primitive>)=>Dispose;mountComponentWithState?:(target:Element,model:Model,components:Mount[],props:Record<string,Primitive>,state:InitialState)=>Dispose;mountCounter:(target:Element,model:CounterModel)=>()=>void}
+type Mount=(target:Element,runtime:RuntimeApi,props?:Record<string,Primitive>,state?:InitialState)=>Dispose;
 type CommitHook=()=>unknown[]|void;
 let activeEffect:ReactiveEffect|undefined;
 let batchDepth=0,flushing=false;
@@ -110,16 +111,20 @@ function orderedIndices(positions:number[]):Set<number> {
 }
 
 export function mountComponent(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>={},limitOverrides:Partial<RuntimeLimits>={},componentDepth=0):Dispose {
-  const limits=resolveRuntimeLimits(limitOverrides),budget:ResourceBudget={limits,components:0,records:0,domNodes:0,effects:0,work:0,workDepth:0};return mountComponentTree(target,model,components,supplied,limits,componentDepth,budget);
+  return mountComponentWithState(target,model,components,supplied,{},limitOverrides,componentDepth);
 }
 
-function mountComponentTree(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>,limits:RuntimeLimits,componentDepth:number,budget:ResourceBudget):Dispose {
+export function mountComponentWithState(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,limitOverrides:Partial<RuntimeLimits>={},componentDepth=0):Dispose {
+  const limits=resolveRuntimeLimits(limitOverrides),budget:ResourceBudget={limits,components:0,records:0,domNodes:0,effects:0,work:0,workDepth:0};return mountComponentTree(target,model,components,supplied,initialState,limits,componentDepth,budget);
+}
+
+function mountComponentTree(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,limits:RuntimeLimits,componentDepth:number,budget:ResourceBudget):Dispose {
   if(componentDepth>=limits.maxComponentDepth)throw new RangeError(`Component nesting exceeds the configured limit of ${limits.maxComponentDepth}`);
   reserve(budget,'components',1,limits.maxComponentInstances,'Component instances');const reservation:Reservation={released:false};
-  try{return withWork(budget,()=>mountComponentInternal(target,model,components,supplied,limits,componentDepth,budget,reservation));}catch(error){releaseComponent(budget,reservation);throw error;}
+  try{return withWork(budget,()=>mountComponentInternal(target,model,components,supplied,initialState,limits,componentDepth,budget,reservation));}catch(error){releaseComponent(budget,reservation);throw error;}
 }
 
-function mountComponentInternal(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>,limits:RuntimeLimits,componentDepth:number,budget:ResourceBudget,componentReservation:Reservation):Dispose {
+function mountComponentInternal(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,limits:RuntimeLimits,componentDepth:number,budget:ResourceBudget,componentReservation:Reservation):Dispose {
   const scope=Object.create(null) as Scope;const ownedEffects:ReactiveEffect[]=[];const cleanups:(()=>void)[]=[];let disposed=false;
   const track=(run:()=>void,bag=ownedEffects)=>{const effect=createEffect(run,budget,undefined,limits.maxUpdatesPerFlush);bag.push(effect);return effect;};
   for(const key of Object.keys(supplied))if(key!=='class'&&!Object.hasOwn(model.props,key))throw new TypeError(`Unknown prop ${key}`);
@@ -145,7 +150,24 @@ function mountComponentInternal(target:Element,model:Model,components:Mount[],su
     for(const [member,expression] of Object.entries(declaration.computed))instanceScope[member]=()=>evaluate(expression,instanceScope);
     return instance;
   }
-  for(const [name,initial] of Object.entries(model.states)){consumeWork(budget);scope[name]=signal(evaluate(initial));}
+  function hydrateInitialList(expression:Expr,input:readonly unknown[],name:string):Value[] {
+    if(expression.kind!=='list'||!expression.items.length)throw new TypeError(`Initial state ${name} is not a typed non-empty list`);
+    if(input.length>limits.maxCollectionItems)throw new RangeError(`Collection exceeds the configured limit of ${limits.maxCollectionItems} items`);consumeWork(budget,input.length);
+    const schema=expression.items[0];
+    const primitive=(value:unknown,expected:Primitive,label:string):Primitive=>{if(typeof value!==typeof expected)throw new TypeError(`${label} requires ${typeof expected}`);if(typeof value==='number')assertNumber(value);return value as Primitive;};
+    if(schema.kind==='literal')return input.map((value,index)=>primitive(value,schema.value,`Initial state ${name}[${index}]`));
+    if(schema.kind!=='construct')throw new TypeError(`Initial state ${name} requires primitive or class records`);
+    const declaration=model.classes[schema.name];if(!declaration)throw new TypeError(`Unknown class ${schema.name}`);const fields=new Set(declaration.fields.map(field=>field.name)),defaults=declaration.fields.map(field=>evaluate(field.initial) as Primitive);
+    return input.map((value,index)=>{
+      if(!value||typeof value!=='object'||Array.isArray(value))throw new TypeError(`Initial state ${name}[${index}] requires an object record`);
+      const prototype=Object.getPrototypeOf(value);if(prototype!==Object.prototype&&prototype!==null)throw new TypeError(`Initial state ${name}[${index}] requires a plain object record`);
+      for(const key of Object.keys(value))if(!fields.has(key))throw new TypeError(`Unknown field ${key} in initial state ${name}[${index}]`);
+      const args=declaration.fields.map((field,fieldIndex)=>{const descriptor=Object.getOwnPropertyDescriptor(value,field.name);if(!descriptor)return defaults[fieldIndex];if(!('value'in descriptor))throw new TypeError(`Initial state field ${field.name} must be data`);return primitive(descriptor.value,defaults[fieldIndex],`Initial state field ${field.name}`);});
+      return instantiate(schema.name,args);
+    });
+  }
+  for(const name of Object.keys(initialState))if(!Object.hasOwn(model.states,name))throw new TypeError(`Unknown initial state ${name}`);
+  for(const [name,initial] of Object.entries(model.states)){consumeWork(budget);scope[name]=signal(Object.hasOwn(initialState,name)?hydrateInitialList(initial,initialState[name],name):evaluate(initial));}
   for(const name of Object.keys(model.computed))scope[name]=signal('');
   try{for(const [name,expression] of Object.entries(model.computed)){const source=getSignal(name,scope);ownedEffects.push(createEffect(()=>write(source,evaluate(expression)),budget,source,limits.maxUpdatesPerFlush));}}catch(error){disposeBag(ownedEffects,cleanups);throw error;}
   function resolveTarget(target:Expr,local:Scope):Signal {
@@ -177,10 +199,12 @@ function mountComponentInternal(target:Element,model:Model,components:Mount[],su
   }
   function disposeBag(effects:ReactiveEffect[],callbacks:(()=>void)[]):void {for(const effect of effects)stop(effect);effects.length=0;const failures:unknown[]=[];for(const callback of callbacks.reverse())try{untracked(callback);}catch(error){failures.push(error);}callbacks.length=0;if(failures.length===1)throw failures[0];if(failures.length)throw new AggregateError(failures,'Multiple cleanup operations failed');}
   function forceDisable():unknown {if(disposed)return;disposed=true;let failure:unknown;try{disposeBag(ownedEffects,cleanups);}catch(error){failure=error;}finally{for(const name of Object.keys(scope))delete scope[name];supplied={};components=[];releaseComponent(budget,componentReservation);}return failure;}
-  const childRuntime:RuntimeApi={mountComponent:(childTarget,childModel,childComponents,childProps={})=>mountComponentTree(childTarget,childModel,childComponents,childProps,limits,componentDepth+1,budget),mountCounter};
+  const childRuntime:RuntimeApi={mountComponent:(childTarget,childModel,childComponents,childProps={})=>mountComponentTree(childTarget,childModel,childComponents,childProps,{},limits,componentDepth+1,budget),mountComponentWithState:(childTarget,childModel,childComponents,childProps,state)=>mountComponentTree(childTarget,childModel,childComponents,childProps,state,limits,componentDepth+1,budget),mountCounter};
   const makeComment=(document:Document,value:string):Comment=>{reserve(budget,'domNodes',1,limits.maxDomNodes,'Framework DOM nodes');try{return document.createComment(value);}catch(error){release(budget,'domNodes');throw error;}};
   const makeElement=(document:Document,tag:string):Element=>{reserve(budget,'domNodes',1,limits.maxDomNodes,'Framework DOM nodes');try{return document.createElement(tag);}catch(error){release(budget,'domNodes');throw error;}};
   const makeText=(document:Document,value:string):Text=>{reserve(budget,'domNodes',1,limits.maxDomNodes,'Framework DOM nodes');try{return document.createTextNode(value);}catch(error){release(budget,'domNodes');throw error;}};
+  const trackedNodes=new WeakMap<(()=>void)[],{count:number}>();
+  const trackNodes=(callbacks:(()=>void)[],count=1)=>{let tracked=trackedNodes.get(callbacks);if(!tracked){tracked={count:0};trackedNodes.set(callbacks,tracked);callbacks.push(()=>{release(budget,'domNodes',tracked!.count);tracked!.count=0;});}tracked.count+=count;};
   function create(view:View,parent:Element|DocumentFragment,local=scope,forward='',effects=ownedEffects,callbacks=cleanups):void {
     consumeWork(budget);
     // Dynamic ranges can move out of their staging fragment. Resolve insertion
@@ -250,10 +274,10 @@ function mountComponentInternal(target:Element,model:Model,components:Mount[],su
       // mounted. Each child binding independently tracks those signals.
       if(dispose.refresh)track(()=>dispose.refresh!(),effects);return;
     }
-    const element=makeElement(parent.ownerDocument,view.tag),removeOwned=parent===target||parent instanceof DocumentFragment,staticBindings=view.static??0;callbacks.push(()=>{try{if(removeOwned)element.remove();}finally{release(budget,'domNodes');}});const classValue=view.attributes.class?evaluate(view.attributes.class,local):'';const classes=[String(classValue),forward].join(' ').split(/\s+/).filter(Boolean);if(classes.length)element.classList.add(...new Set(classes));if(view.attributes.type)(element as HTMLInputElement).type=String(evaluate(view.attributes.type,local));
-    if(view.attributes.text){const fixed=Boolean(staticBindings&1),initial=fixed?String(evaluate(view.attributes.text,local)):'';const text=makeText(parent.ownerDocument,initial);callbacks.push(()=>release(budget,'domNodes'));element.append(text);if(!fixed)effects.push(createEffect(()=>{const value=String(evaluate(view.attributes.text,local));if(text.data!==value)text.data=value;},budget));}
-    if(view.attributes.value){const input=element as HTMLInputElement,fixed=Boolean(staticBindings&2);if(fixed)input.value=String(evaluate(view.attributes.value,local));else effects.push(createEffect(()=>{const value=String(evaluate(view.attributes.value,local));if(input.value!==value)input.value=value;},budget));}
-    if(view.attributes.checked){const input=element as HTMLInputElement,fixed=Boolean(staticBindings&4);if(fixed)input.checked=Boolean(evaluate(view.attributes.checked,local));else effects.push(createEffect(()=>{const value=evaluate(view.attributes.checked,local);if(typeof value!=='boolean')throw new TypeError('checked requires boolean');if(input.checked!==value)input.checked=value;},budget));}
+    const element=makeElement(parent.ownerDocument,view.tag),removeOwned=parent===target||parent instanceof DocumentFragment,staticBindings=view.static??0;trackNodes(callbacks);if(removeOwned)callbacks.push(()=>element.remove());if(view.attributes.class){const classValue=staticBindings&8?(view.attributes.class as {kind:'literal';value:Primitive}).value:evaluate(view.attributes.class,local);const combined=forward?[...new Set(`${String(classValue)} ${forward}`.split(/\s+/).filter(Boolean))].join(' '):String(classValue);if(combined)element.setAttribute('class',combined);}else if(forward)element.setAttribute('class',forward);if(view.attributes.type)(element as HTMLInputElement).type=String(staticBindings&16?(view.attributes.type as {kind:'literal';value:Primitive}).value:evaluate(view.attributes.type,local));
+    if(view.attributes.text){const fixed=Boolean(staticBindings&1),initial=fixed?String((view.attributes.text as {kind:'literal';value:Primitive}).value):'';const text=makeText(parent.ownerDocument,initial);trackNodes(callbacks);element.append(text);if(!fixed)effects.push(createEffect(()=>{const value=String(evaluate(view.attributes.text,local));if(text.data!==value)text.data=value;},budget));}
+    if(view.attributes.value){const input=element as HTMLInputElement,fixed=Boolean(staticBindings&2);if(fixed)input.value=String((view.attributes.value as {kind:'literal';value:Primitive}).value);else effects.push(createEffect(()=>{const value=String(evaluate(view.attributes.value,local));if(input.value!==value)input.value=value;},budget));}
+    if(view.attributes.checked){const input=element as HTMLInputElement,fixed=Boolean(staticBindings&4);if(fixed)input.checked=Boolean((view.attributes.checked as {kind:'literal';value:Primitive}).value);else effects.push(createEffect(()=>{const value=evaluate(view.attributes.checked,local);if(typeof value!=='boolean')throw new TypeError('checked requires boolean');if(input.checked!==value)input.checked=value;},budget));}
     if(view.handler){const listener=(event:Event)=>execute(view.handler!.statements,local,event);element.addEventListener(view.handler.event,listener);callbacks.push(()=>element.removeEventListener(view.handler!.event,listener));}
     parent.append(element);for(const child of view.children)create(child,element,local,'',effects,callbacks);
   }

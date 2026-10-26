@@ -1,0 +1,754 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-25T18:10:13.137Z",
+  "baselineCommit": "67bf3ff9837adfafad956bfb84fe4a60dfcc1dbf",
+  "environment": {
+    "node": "v22.22.2",
+    "firefox": "157.0",
+    "platform": "win32 x64",
+    "warmups": 3,
+    "samples": 15,
+    "paired": true,
+    "cache": "fresh Firefox context and no-store responses per observation"
+  },
+  "versions": {
+    "qubits": "workspace-0.1.0",
+    "react": "19.3.1",
+    "angular": "21.2.25",
+    "vue": "3.5.44"
+  },
+  "methodology": {
+    "productionBuilds": true,
+    "workloads": [
+      "rows-1k",
+      "rows-10k",
+      "nested",
+      "catalog"
+    ],
+    "repetitions": {
+      "rows-1k": {
+        "update": 20,
+        "reorder": 10
+      },
+      "rows-10k": {
+        "update": 5,
+        "reorder": 3
+      },
+      "nested": {
+        "update": 20,
+        "reorder": 0
+      },
+      "catalog": {
+        "update": 20,
+        "reorder": 0
+      }
+    },
+    "operationTiming": "performance.now around fixed click batches through framework settlement, divided to per-operation milliseconds",
+    "coldStartup": "navigation start to benchmark API installation; fresh context, warm OS filesystem cache",
+    "domVerification": "SHA-256 of exact descendant tag, attributes, and non-whitespace text tree plus interaction assertions"
+  },
+  "memory": {
+    "performanceMemory": false,
+    "userAgentSpecificMemory": false,
+    "measured": false,
+    "reason": "Firefox exposes neither performance.memory nor measureUserAgentSpecificMemory in this environment"
+  },
+  "gzipJsBytes": {
+    "qubits": {
+      "rawBytes": 1930434,
+      "gzipBytes": 82912,
+      "files": 1
+    },
+    "react": {
+      "rawBytes": 224672,
+      "gzipBytes": 69996,
+      "files": 1
+    },
+    "angular": {
+      "rawBytes": 112491,
+      "gzipBytes": 37247,
+      "files": 1
+    },
+    "vue": {
+      "rawBytes": 67854,
+      "gzipBytes": 26614,
+      "files": 1
+    }
+  },
+  "verification": {
+    "rows-1k": {
+      "qubits": {
+        "dom": {
+          "hash": "0c618f6f25ccf636ef032614a2db4f04797ff1884c2bb30c64c8c7c4eb69834c",
+          "elements": 5003
+        },
+        "update": {
+          "before": "0",
+          "after": "20",
+          "count": 1000
+        },
+        "reorder": {
+          "expected": "Row 990",
+          "actual": "Row 990",
+          "preserved": true
+        }
+      },
+      "react": {
+        "dom": {
+          "hash": "0c618f6f25ccf636ef032614a2db4f04797ff1884c2bb30c64c8c7c4eb69834c",
+          "elements": 5003
+        },
+        "update": {
+          "before": "0",
+          "after": "20",
+          "count": 1000
+        },
+        "reorder": {
+          "expected": "Row 990",
+          "actual": "Row 990",
+          "preserved": true
+        }
+      },
+      "angular": {
+        "dom": {
+          "hash": "0c618f6f25ccf636ef032614a2db4f04797ff1884c2bb30c64c8c7c4eb69834c",
+          "elements": 5003
+        },
+        "update": {
+          "before": "0",
+          "after": "20",
+          "count": 1000
+        },
+        "reorder": {
+          "expected": "Row 990",
+          "actual": "Row 990",
+          "preserved": true
+        }
+      },
+      "vue": {
+        "dom": {
+          "hash": "0c618f6f25ccf636ef032614a2db4f04797ff1884c2bb30c64c8c7c4eb69834c",
+          "elements": 5003
+        },
+        "update": {
+          "before": "0",
+          "after": "20",
+          "count": 1000
+        },
+        "reorder": {
+          "expected": "Row 990",
+          "actual": "Row 990",
+          "preserved": true
+        }
+      }
+    },
+    "rows-10k": {
+      "qubits": {
+        "dom": {
+          "hash": "c406bec7e217d8ed3f43f648cfea8660c06645efccf5b6470b3eed22de1c9913",
+          "elements": 50003
+        },
+        "update": {
+          "before": "0",
+          "after": "5",
+          "count": 10000
+        },
+        "reorder": {
+          "expected": "Row 9997",
+          "actual": "Row 9997",
+          "preserved": true
+        }
+      },
+      "react": {
+        "dom": {
+          "hash": "c406bec7e217d8ed3f43f648cfea8660c06645efccf5b6470b3eed22de1c9913",
+          "elements": 50003
+        },
+        "update": {
+          "before": "0",
+          "after": "5",
+          "count": 10000
+        },
+        "reorder": {
+          "expected": "Row 9997",
+          "actual": "Row 9997",
+          "preserved": true
+        }
+      },
+      "angular": {
+        "dom": {
+          "hash": "c406bec7e217d8ed3f43f648cfea8660c06645efccf5b6470b3eed22de1c9913",
+          "elements": 50003
+        },
+        "update": {
+          "before": "0",
+          "after": "5",
+          "count": 10000
+        },
+        "reorder": {
+          "expected": "Row 9997",
+          "actual": "Row 9997",
+          "preserved": true
+        }
+      },
+      "vue": {
+        "dom": {
+          "hash": "c406bec7e217d8ed3f43f648cfea8660c06645efccf5b6470b3eed22de1c9913",
+          "elements": 50003
+        },
+        "update": {
+          "before": "0",
+          "after": "5",
+          "count": 10000
+        },
+        "reorder": {
+          "expected": "Row 9997",
+          "actual": "Row 9997",
+          "preserved": true
+        }
+      }
+    },
+    "nested": {
+      "qubits": {
+        "dom": {
+          "hash": "acfc0d72186e9bb4b75aa8573a2a21aea1eced5a36cd5f26a0d6db6000b0a3a6",
+          "elements": 5003
+        },
+        "update": {
+          "before": "0",
+          "after": "20",
+          "count": 1000
+        },
+        "reorder": null
+      },
+      "react": {
+        "dom": {
+          "hash": "acfc0d72186e9bb4b75aa8573a2a21aea1eced5a36cd5f26a0d6db6000b0a3a6",
+          "elements": 5003
+        },
+        "update": {
+          "before": "0",
+          "after": "20",
+          "count": 1000
+        },
+        "reorder": null
+      },
+      "angular": {
+        "dom": {
+          "hash": "acfc0d72186e9bb4b75aa8573a2a21aea1eced5a36cd5f26a0d6db6000b0a3a6",
+          "elements": 5003
+        },
+        "update": {
+          "before": "0",
+          "after": "20",
+          "count": 1000
+        },
+        "reorder": null
+      },
+      "vue": {
+        "dom": {
+          "hash": "acfc0d72186e9bb4b75aa8573a2a21aea1eced5a36cd5f26a0d6db6000b0a3a6",
+          "elements": 5003
+        },
+        "update": {
+          "before": "0",
+          "after": "20",
+          "count": 1000
+        },
+        "reorder": null
+      }
+    },
+    "catalog": {
+      "qubits": {
+        "dom": {
+          "hash": "c9610d9ab95edc2c9d8a28ccdcf19d2750f2ca5da2242fd882a54b92d7fe21eb",
+          "elements": 5003
+        },
+        "update": {
+          "before": "0",
+          "after": "20",
+          "count": 1000
+        },
+        "reorder": null
+      },
+      "react": {
+        "dom": {
+          "hash": "c9610d9ab95edc2c9d8a28ccdcf19d2750f2ca5da2242fd882a54b92d7fe21eb",
+          "elements": 5003
+        },
+        "update": {
+          "before": "0",
+          "after": "20",
+          "count": 1000
+        },
+        "reorder": null
+      },
+      "angular": {
+        "dom": {
+          "hash": "c9610d9ab95edc2c9d8a28ccdcf19d2750f2ca5da2242fd882a54b92d7fe21eb",
+          "elements": 5003
+        },
+        "update": {
+          "before": "0",
+          "after": "20",
+          "count": 1000
+        },
+        "reorder": null
+      },
+      "vue": {
+        "dom": {
+          "hash": "c9610d9ab95edc2c9d8a28ccdcf19d2750f2ca5da2242fd882a54b92d7fe21eb",
+          "elements": 5003
+        },
+        "update": {
+          "before": "0",
+          "after": "20",
+          "count": 1000
+        },
+        "reorder": null
+      }
+    }
+  },
+  "results": {
+    "qubits": {
+      "rows-1k": {
+        "coldStartupMs": {
+          "median": 74,
+          "p95": 128,
+          "min": 59,
+          "max": 128,
+          "samples": 15
+        },
+        "mountMs": {
+          "median": 41,
+          "p95": 53,
+          "min": 32,
+          "max": 53,
+          "samples": 15
+        },
+        "updateMs": {
+          "median": 0.05,
+          "p95": 0.1,
+          "min": 0,
+          "max": 0.1,
+          "samples": 15
+        },
+        "reorderMs": {
+          "median": 2.1,
+          "p95": 3,
+          "min": 1.2,
+          "max": 3,
+          "samples": 15
+        }
+      },
+      "rows-10k": {
+        "coldStartupMs": {
+          "median": 85,
+          "p95": 254,
+          "min": 73,
+          "max": 254,
+          "samples": 15
+        },
+        "mountMs": {
+          "median": 300,
+          "p95": 498,
+          "min": 262,
+          "max": 498,
+          "samples": 15
+        },
+        "updateMs": {
+          "median": 0.2,
+          "p95": 0.4,
+          "min": 0,
+          "max": 0.4,
+          "samples": 15
+        },
+        "reorderMs": {
+          "median": 12.666666666666666,
+          "p95": 18,
+          "min": 12,
+          "max": 18,
+          "samples": 15
+        }
+      },
+      "nested": {
+        "coldStartupMs": {
+          "median": 71,
+          "p95": 224,
+          "min": 57,
+          "max": 224,
+          "samples": 15
+        },
+        "mountMs": {
+          "median": 50,
+          "p95": 183,
+          "min": 41,
+          "max": 183,
+          "samples": 15
+        },
+        "updateMs": {
+          "median": 0.05,
+          "p95": 0.15,
+          "min": 0,
+          "max": 0.15,
+          "samples": 15
+        },
+        "reorderMs": null
+      },
+      "catalog": {
+        "coldStartupMs": {
+          "median": 84,
+          "p95": 180,
+          "min": 59,
+          "max": 180,
+          "samples": 15
+        },
+        "mountMs": {
+          "median": 50,
+          "p95": 120,
+          "min": 37,
+          "max": 120,
+          "samples": 15
+        },
+        "updateMs": {
+          "median": 0.05,
+          "p95": 0.15,
+          "min": 0,
+          "max": 0.15,
+          "samples": 15
+        },
+        "reorderMs": null
+      }
+    },
+    "react": {
+      "rows-1k": {
+        "coldStartupMs": {
+          "median": 73,
+          "p95": 101,
+          "min": 50,
+          "max": 101,
+          "samples": 15
+        },
+        "mountMs": {
+          "median": 27,
+          "p95": 49,
+          "min": 22,
+          "max": 49,
+          "samples": 15
+        },
+        "updateMs": {
+          "median": 7.3,
+          "p95": 11.5,
+          "min": 6.7,
+          "max": 11.5,
+          "samples": 15
+        },
+        "reorderMs": {
+          "median": 12.2,
+          "p95": 14.5,
+          "min": 11.5,
+          "max": 14.5,
+          "samples": 15
+        }
+      },
+      "rows-10k": {
+        "coldStartupMs": {
+          "median": 72,
+          "p95": 92,
+          "min": 52,
+          "max": 92,
+          "samples": 15
+        },
+        "mountMs": {
+          "median": 207,
+          "p95": 263,
+          "min": 188,
+          "max": 263,
+          "samples": 15
+        },
+        "updateMs": {
+          "median": 76.8,
+          "p95": 119.2,
+          "min": 69.4,
+          "max": 119.2,
+          "samples": 15
+        },
+        "reorderMs": {
+          "median": 441.3333333333333,
+          "p95": 636.6666666666666,
+          "min": 384.6666666666667,
+          "max": 636.6666666666666,
+          "samples": 15
+        }
+      },
+      "nested": {
+        "coldStartupMs": {
+          "median": 65,
+          "p95": 124,
+          "min": 46,
+          "max": 124,
+          "samples": 15
+        },
+        "mountMs": {
+          "median": 27,
+          "p95": 101,
+          "min": 24,
+          "max": 101,
+          "samples": 15
+        },
+        "updateMs": {
+          "median": 0.55,
+          "p95": 3.35,
+          "min": 0.4,
+          "max": 3.35,
+          "samples": 15
+        },
+        "reorderMs": null
+      },
+      "catalog": {
+        "coldStartupMs": {
+          "median": 64,
+          "p95": 126,
+          "min": 55,
+          "max": 126,
+          "samples": 15
+        },
+        "mountMs": {
+          "median": 26,
+          "p95": 71,
+          "min": 21,
+          "max": 71,
+          "samples": 15
+        },
+        "updateMs": {
+          "median": 0.55,
+          "p95": 1.15,
+          "min": 0.4,
+          "max": 1.15,
+          "samples": 15
+        },
+        "reorderMs": null
+      }
+    },
+    "angular": {
+      "rows-1k": {
+        "coldStartupMs": {
+          "median": 55,
+          "p95": 123,
+          "min": 46,
+          "max": 123,
+          "samples": 15
+        },
+        "mountMs": {
+          "median": 34,
+          "p95": 44,
+          "min": 27,
+          "max": 44,
+          "samples": 15
+        },
+        "updateMs": {
+          "median": 0.55,
+          "p95": 1.2,
+          "min": 0.4,
+          "max": 1.2,
+          "samples": 15
+        },
+        "reorderMs": {
+          "median": 0.8,
+          "p95": 2.8,
+          "min": 0.7,
+          "max": 2.8,
+          "samples": 15
+        }
+      },
+      "rows-10k": {
+        "coldStartupMs": {
+          "median": 66,
+          "p95": 109,
+          "min": 46,
+          "max": 109,
+          "samples": 15
+        },
+        "mountMs": {
+          "median": 223,
+          "p95": 247,
+          "min": 189,
+          "max": 247,
+          "samples": 15
+        },
+        "updateMs": {
+          "median": 3.6,
+          "p95": 20.6,
+          "min": 3,
+          "max": 20.6,
+          "samples": 15
+        },
+        "reorderMs": {
+          "median": 6.666666666666667,
+          "p95": 21.666666666666668,
+          "min": 5.666666666666667,
+          "max": 21.666666666666668,
+          "samples": 15
+        }
+      },
+      "nested": {
+        "coldStartupMs": {
+          "median": 70,
+          "p95": 262,
+          "min": 46,
+          "max": 262,
+          "samples": 15
+        },
+        "mountMs": {
+          "median": 48,
+          "p95": 298,
+          "min": 43,
+          "max": 298,
+          "samples": 15
+        },
+        "updateMs": {
+          "median": 0.5,
+          "p95": 1.85,
+          "min": 0.4,
+          "max": 1.85,
+          "samples": 15
+        },
+        "reorderMs": null
+      },
+      "catalog": {
+        "coldStartupMs": {
+          "median": 57,
+          "p95": 120,
+          "min": 43,
+          "max": 120,
+          "samples": 15
+        },
+        "mountMs": {
+          "median": 56,
+          "p95": 178,
+          "min": 38,
+          "max": 178,
+          "samples": 15
+        },
+        "updateMs": {
+          "median": 0.6,
+          "p95": 1.9,
+          "min": 0.45,
+          "max": 1.9,
+          "samples": 15
+        },
+        "reorderMs": null
+      }
+    },
+    "vue": {
+      "rows-1k": {
+        "coldStartupMs": {
+          "median": 49,
+          "p95": 93,
+          "min": 35,
+          "max": 93,
+          "samples": 15
+        },
+        "mountMs": {
+          "median": 29,
+          "p95": 78,
+          "min": 25,
+          "max": 78,
+          "samples": 15
+        },
+        "updateMs": {
+          "median": 3.35,
+          "p95": 4.7,
+          "min": 3,
+          "max": 4.7,
+          "samples": 15
+        },
+        "reorderMs": {
+          "median": 5.9,
+          "p95": 8.3,
+          "min": 4.8,
+          "max": 8.3,
+          "samples": 15
+        }
+      },
+      "rows-10k": {
+        "coldStartupMs": {
+          "median": 55,
+          "p95": 118,
+          "min": 37,
+          "max": 118,
+          "samples": 15
+        },
+        "mountMs": {
+          "median": 201,
+          "p95": 531,
+          "min": 177,
+          "max": 531,
+          "samples": 15
+        },
+        "updateMs": {
+          "median": 33,
+          "p95": 111.6,
+          "min": 28.8,
+          "max": 111.6,
+          "samples": 15
+        },
+        "reorderMs": {
+          "median": 56.666666666666664,
+          "p95": 147,
+          "min": 50,
+          "max": 147,
+          "samples": 15
+        }
+      },
+      "nested": {
+        "coldStartupMs": {
+          "median": 52,
+          "p95": 142,
+          "min": 38,
+          "max": 142,
+          "samples": 15
+        },
+        "mountMs": {
+          "median": 57,
+          "p95": 213,
+          "min": 43,
+          "max": 213,
+          "samples": 15
+        },
+        "updateMs": {
+          "median": 0.15,
+          "p95": 0.45,
+          "min": 0.1,
+          "max": 0.45,
+          "samples": 15
+        },
+        "reorderMs": null
+      },
+      "catalog": {
+        "coldStartupMs": {
+          "median": 46,
+          "p95": 59,
+          "min": 33,
+          "max": 59,
+          "samples": 15
+        },
+        "mountMs": {
+          "median": 45,
+          "p95": 59,
+          "min": 33,
+          "max": 59,
+          "samples": 15
+        },
+        "updateMs": {
+          "median": 0.1,
+          "p95": 0.25,
+          "min": 0.05,
+          "max": 0.25,
+          "samples": 15
+        },
+        "reorderMs": null
+      }
+    }
+  }
+}

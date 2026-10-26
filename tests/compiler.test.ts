@@ -101,8 +101,8 @@ test('untrusted text remains literal and generated output mounts via explicit ru
 test('generator marks compiler-proven static DOM bindings without emitting executable code',()=>{
   const fixed=compile('component C:\n    p text="Fixed"').code;
   const dynamic=compile('component C:\n    value = "Live"\n    p text=value').code;
-  assert.match(fixed,/\\"static\\":1/);
-  assert.doesNotMatch(dynamic,/\\"static\\":/);
+  assert.match(fixed,/"static":1/);
+  assert.doesNotMatch(dynamic,/"static":/);
   assert.doesNotMatch(fixed,/innerHTML|eval\(|Function\(/);
 });
 test('generator folds safe constants and removes constant branches without executable source expressions',async()=>{
@@ -113,7 +113,17 @@ test('generator folds safe constants and removes constant branches without execu
   assert.deepEqual(module.model.roots.map((root:{attributes:{text:{value:string}}})=>root.attributes.text.value),['AB','live']);
   assert.doesNotMatch(code,/"dead"|innerHTML|eval\(|Function\(/);
   const overflow=compile('component C:\n    total = 9007199254740991 + 1\n    div').code;
-  assert.match(overflow,/\\"kind\\":\\"add\\"/);
+  assert.match(overflow,/"kind":"add"/);
+});
+test('generator emits one directly tree-shakeable model literal without startup JSON parsing',()=>{
+  const code=compile('component C:\n    items = [1, 2, 3]\n    p text="Fixed"').code;
+  assert.match(code,/export const model=\{/);
+  assert.doesNotMatch(code,/JSON\.parse|\\\\"kind\\\\"/);
+});
+test('direct model literals retain __proto__ declarations as own data',async()=>{
+  const {code}=compile('component C(__proto__ = "safe"):\n    p text=__proto__');
+  const module=await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+  assert.equal(Object.hasOwn(module.model.props,'__proto__'),true);assert.equal(module.model.props.__proto__,'safe');
 });
 test('identity is validated and suffix handling is derived', () => {
   assert.equal(isSource('test' + identity.sourceExtension + '?import'), true);

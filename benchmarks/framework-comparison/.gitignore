@@ -1,0 +1,7 @@
+node_modules/
+.angular/
+dist/
+src/qubits/generated/
+results/
+package-lock.angular22-stale.json
+

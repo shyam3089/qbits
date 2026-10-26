@@ -38,7 +38,10 @@
     "test:external": "tsx scripts/check-external.ts",
     "bench:reactivity": "tsx scripts/benchmark-reactivity.ts",
     "bench:startup": "tsx scripts/benchmark-startup.ts",
-    "bench:validator": "tsx scripts/benchmark-validator.ts"
+    "bench:validator": "tsx scripts/benchmark-validator.ts",
+    "bench:frameworks:build": "npm --prefix benchmarks/framework-comparison run build",
+    "bench:frameworks:verify": "npm --prefix benchmarks/framework-comparison run verify",
+    "bench:frameworks": "npm --prefix benchmarks/framework-comparison run bench"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

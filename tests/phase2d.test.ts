@@ -13,7 +13,7 @@ test('classes provide typed fields, computed values, and closed actions',()=>{
   assert.deepEqual(ast.classes[0].fields.map(field=>field.name.value),['id','name','quantity']);
   assert.equal(ast.classes[0].computed[0].name.value,'label');assert.equal(ast.classes[0].actions[0].name.value,'increment');
   assert.deepEqual(ast.computed.map(item=>item.name.value),['productCount']);
-  assert.match(code,/\\"classes\\"/);assert.match(code,/\\"iteration\\"/);assert.doesNotMatch(code,/eval\(|new Function|innerHTML/);
+  assert.match(code,/"classes"/);assert.match(code,/"iteration"/);assert.doesNotMatch(code,/eval\(|new Function|innerHTML/);
 });
 
 test('class, computed, and action errors retain source locations',()=>{

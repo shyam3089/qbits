@@ -39,7 +39,10 @@ Run build before tests: browser tests check both development and `dist/site`.
 Linux systems may need `npx playwright install --with-deps firefox`.
 The CLI produces an ES module: import its default mount function and call
 `mount(element, runtime)` using the exports from `runtime/index.ts` (or its compiled
-output). Optional third-argument props override defaults. The return value disposes
+output). Optional third-argument props override defaults. An optional fourth argument
+seeds typed list state from API records; the list declaration supplies its item schema,
+for example `mount(element, runtime, {}, {products: apiProducts})`. Records are copied
+into reactive class instances and validated before DOM commit. The return value disposes
 the component, nested instances and listeners. Source component/CSS imports are
 retained for Vite; a CLI output module must retain resolvable import paths.
 Use the Vite build for a complete production application.

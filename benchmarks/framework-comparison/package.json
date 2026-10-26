@@ -1,0 +1,39 @@
+{
+  "name": "qubits-framework-comparison",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "node scripts/generate-qubits.mjs",
+    "build:qubits": "vite build --config vite.qubits.config.ts",
+    "build:react": "vite build --config vite.react.config.ts",
+    "build:vue": "vite build --config vite.vue.config.ts",
+    "build:angular": "ng build --configuration production",
+    "build": "npm run generate && npm run build:qubits && npm run build:react && npm run build:vue && npm run build:angular",
+    "verify": "node scripts/run.mjs --verify-only",
+    "bench": "node scripts/run.mjs"
+  },
+  "dependencies": {
+    "@angular/common": "21.2.25",
+    "@angular/compiler": "21.2.25",
+    "@angular/core": "21.2.25",
+    "@angular/platform-browser": "21.2.25",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "rxjs": "7.8.2",
+    "tslib": "2.8.1",
+    "vue": "3.5.44"
+  },
+  "devDependencies": {
+    "@angular/build": "21.2.28",
+    "@angular/cli": "21.2.28",
+    "@angular/compiler-cli": "21.2.25",
+    "@types/node": "22.19.13",
+    "playwright": "1.64.1",
+    "typescript": "5.9.3",
+    "vite": "7.3.7"
+  },
+  "overrides": {
+    "undici": "7.30.1"
+  }
+}
+

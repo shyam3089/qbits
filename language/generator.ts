@@ -52,7 +52,7 @@ export function generate(ast:Component):string {
   function node(value:Exclude<ViewNode,{kind:'conditional'}>):unknown {
     if(value.kind==='iteration')return {kind:value.kind,item:value.item.value,collection:expression(value.collection),key:expression(value.key),children:nodes(value.children)};
     const attributes:Record<string,unknown>={};
-    const flags:Record<string,number>={text:1,value:2,checked:4};
+    const flags:Record<string,number>={text:1,value:2,checked:4,class:8,type:16};
     let staticBindings=0;
     for(const [key,item] of Object.entries(value.attributes)){const generated=expression(item) as {kind:string};attributes[key]=generated;if(generated.kind==='literal')staticBindings|=flags[key]??0;}
     return {kind:'element',tag:value.tag.value,component:componentImports.findIndex(item=>item.name!.value===value.tag.value),attributes,...(staticBindings?{static:staticBindings}:{}),children:nodes(value.children),...(value.handler?{handler:{kind:value.handler.kind,event:value.handler.event.value,statements:value.handler.statements.map(statement)}}:{})};
@@ -60,5 +60,6 @@ export function generate(ast:Component):string {
   const classes=Object.fromEntries(ast.classes.map(declaration=>[declaration.name.value,{fields:declaration.fields.map(field=>({name:field.name.value,initial:expression(field.initial)})),computed:Object.fromEntries(declaration.computed.map(item=>[item.name.value,expression(item.expression)])),actions:Object.fromEntries(declaration.actions.map(action=>[action.name.value,action.statements.map(statement)]))}]));
   const imports=ast.imports.map(item=>item.name?`import c${componentImports.indexOf(item)} from ${JSON.stringify(item.path.value)};`:`import ${JSON.stringify(item.path.value)};`).join('\n');
   const model={props:Object.fromEntries(ast.props.map(prop=>[prop.name.value,prop.initial.value])),classes,states:Object.fromEntries(ast.states.map(state=>[state.name.value,expression(state.initial)])),computed:Object.fromEntries(ast.computed.map(item=>[item.name.value,expression(item.expression)])),init:ast.init.map(statement),cleanup:ast.cleanup.map(statement),roots:nodes(ast.roots)};
-  return `${imports}\nexport const componentName=${JSON.stringify(ast.name.value)};\nexport const model=JSON.parse(${JSON.stringify(JSON.stringify(model))});\nexport default function mount(target,runtime,props={}){return runtime.mountComponent(target,model,[${componentImports.map((_,index)=>`c${index}`).join(',')}],props)}\n`;
+  const serialized=JSON.stringify(model).replaceAll('"__proto__":','["__proto__"]:');
+  return `${imports}\nexport const componentName=${JSON.stringify(ast.name.value)};\nexport const model=${serialized};\nexport default function mount(target,runtime,props={},state={}){const components=[${componentImports.map((_,index)=>`c${index}`).join(',')}];return Object.keys(state).length?runtime.mountComponentWithState(target,model,components,props,state):runtime.mountComponent(target,model,components,props)}\n`;
 }

@@ -61,6 +61,33 @@ test('all numeric entry paths reject non-finite and unsafe integers before mount
   }finally{await browser.close();}
 });
 
+test('API-fed typed lists preserve keyed identity, updates and safety',async()=>{
+  const source=`class Item:
+    id = 0
+    name = ""
+    value = 0
+    action increment:
+        value = value + 1
+component ApiRows:
+    items = [Item(0, "schema", 0)]
+    section:
+        for item in items key=item.id:
+            div class="row":
+                span class="name" text=item.name
+                span class="value" text=str(item.value)
+                button class="increment" text="Increase":
+                    on click:
+                        item.increment()
+                button class="move" text="Move first":
+                    on click:
+                        items.move(item, 0)`;
+  const [runtime,moduleCode]=await Promise.all([readFile('dist/lib/runtime/index.js','utf8'),Promise.resolve(compile(source).code)]),browser=await firefox.launch({headless:true});
+  try{const page=await browser.newPage();const result=await page.evaluate(async({runtime,moduleCode})=>{const urls=[runtime,moduleCode].map(value=>URL.createObjectURL(new Blob([value],{type:'text/javascript'})));try{const api=await import(urls[0]),component=await import(urls[1]),host=document.createElement('main'),dispose=component.default(host,api,{}, {items:[{id:1,name:'One',value:0},{id:2,name:'Two',value:0},{id:3,name:'Three',value:0}]});const retained=host.querySelectorAll('.row')[2];(host.querySelectorAll('.increment')[1] as HTMLButtonElement).click();(host.querySelectorAll('.move')[2] as HTMLButtonElement).click();const snapshot={names:[...host.querySelectorAll('.name')].map(node=>node.textContent),values:[...host.querySelectorAll('.value')].map(node=>node.textContent),retained:host.querySelectorAll('.row')[0]===retained};dispose();const invalid=[];for(const state of [{missing:[]},{items:[{id:1,name:'One',value:0,extra:true}]},{items:[{id:Number.NaN,name:'One',value:0}]}]){const target=document.createElement('main');try{component.default(target,api,{},state);invalid.push('accepted');}catch(error){invalid.push(`${error.name}:${error.message}:${target.childNodes.length}`);}}return {snapshot,invalid};}finally{urls.forEach(value=>URL.revokeObjectURL(value));}},{runtime,moduleCode});
+    assert.deepEqual(result.snapshot,{names:['Three','One','Two'],values:['0','0','1'],retained:true});
+    assert.match(result.invalid[0],/^TypeError:Unknown initial state missing:0$/);assert.match(result.invalid[1],/^TypeError:Unknown field extra/);assert.match(result.invalid[2],/^RangeError:State exceeded safe integer range:0$/);
+  }finally{await browser.close();}
+});
+
 test('all four-row permutations use the minimum number of range moves and retain focused child instances', async () => {
   const permutations = (items: number[]): number[][] => items.length ? items.flatMap((item, index) => permutations(items.filter((_, i) => i !== index)).map(rest => [item, ...rest])) : [[]];
   const source = `import Row from "./Row.qb"
