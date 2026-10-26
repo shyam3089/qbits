@@ -253,16 +253,40 @@ export async function retentionProbe(runtimeSource, modules) {
   const urls = [runtimeSource, modules['./Row.qb']].map(source => URL.createObjectURL(new Blob([source], {type: 'text/javascript'})));
   try {
     const runtime = await import(urls[0]), row = await import(urls[1]);
-    const handles = [], props = [], nodes = [];
+    const handles = [], hosts = [], props = [], nodes = [];
     for (let i = 0; i < 30; i++) {
       const supplied = {label: 'Probe'}, host = document.createElement('main');
       document.body.append(host);
       const dispose = row.default(host, runtime, supplied);
-      props.push(new WeakRef(supplied)); nodes.push(new WeakRef(host.firstChild));
+      hosts.push(new WeakRef(host)); props.push(new WeakRef(supplied)); nodes.push(new WeakRef(host.firstChild));
       dispose(); host.remove(); handles.push(dispose);
     }
-    globalThis.__qubitsRetentionProbe = {handles, props, nodes};
+    globalThis.__qubitsRetentionProbe = {handles, hosts, props, nodes};
   } finally {urls.forEach(value => URL.revokeObjectURL(value));}
+}
+
+export async function staticValidationProbe(runtimeSource) {
+  const url=URL.createObjectURL(new Blob([runtimeSource],{type:'text/javascript'}));
+  try {
+    const api=await import(url),invalid=[Number.NaN,Number.POSITIVE_INFINITY,Number.MAX_SAFE_INTEGER+1],attributes=[['text',1],['value',2],['class',8],['type',16]],failures=[];
+    const empty=()=>({props:{},classes:{},states:{},computed:{},init:[],cleanup:[],roots:[]});
+    const attempt=(model,props={},state={},limits={})=>{const host=document.createElement('main'),sibling=document.createElement('aside');host.append(sibling);try{api.mountComponentWithState(host,model,[],props,state,limits);failures.push('accepted');}catch(error){failures.push(`${error.name}:${error.message}:${host.childNodes.length}:${host.firstChild===sibling}`);}};
+    for(const [name,flag] of attributes)for(const value of invalid)for(const staticFlag of [0,flag])attempt({...empty(),roots:[{kind:'element',tag:'input',component:-1,static:staticFlag,attributes:{[name]:{kind:'literal',value}},children:[]}]});
+    for(const staticFlag of [0,4])attempt({...empty(),roots:[{kind:'element',tag:'input',component:-1,static:staticFlag,attributes:{checked:{kind:'literal',value:1}},children:[]}]});
+    attempt(empty(),{class:Number.NaN});
+    attempt({...empty(),states:{value:{kind:'literal',value:Number.NaN}}});
+    attempt({...empty(),classes:{Item:{fields:[{name:'value',initial:{kind:'literal',value:0}}],computed:{},actions:{}}},states:{item:{kind:'construct',name:'Item',arguments:[{kind:'literal',value:Number.POSITIVE_INFINITY}]}}});
+    attempt({...empty(),classes:{Item:{fields:[{name:'value',initial:{kind:'literal',value:0}}],computed:{},actions:{}}},states:{item:{kind:'construct',name:'Item',arguments:[{kind:'literal',value:'wrong'}]}}});
+    attempt({...empty(),classes:{Item:{fields:[{name:'value',initial:{kind:'reference',name:'other'}}],computed:{},actions:{}}},states:{item:{kind:'construct',name:'Item',arguments:[{kind:'literal',value:0}]}}});
+    attempt(empty(),new Proxy({},{ownKeys(){throw new Error('proxy blocked');}}));
+    attempt(empty(),Object.defineProperty({},'class',{enumerable:true,get(){throw new Error('getter blocked');}}));
+    attempt(empty(),{},new Proxy({},{ownKeys(){throw new Error('state proxy blocked');}}));
+    const getter={kind:'literal'};Object.defineProperty(getter,'value',{get(){throw new Error('literal getter blocked');}});
+    attempt({...empty(),roots:[{kind:'element',tag:'p',component:-1,static:1,attributes:{text:getter},children:[]}]});
+    const valid={...empty(),roots:[{kind:'element',tag:'input',component:-1,static:2,attributes:{value:{kind:'literal',value:'safe'}},children:[]}]},host=document.createElement('main'),dispose=api.mountComponent(host,valid,[],{}, {maxDomNodes:1});
+    const exact={value:host.firstChild.value,nodes:host.childNodes.length};dispose();dispose();dispose.refresh();
+    return {failures,exact,empty:host.childNodes.length===0};
+  } finally {URL.revokeObjectURL(url);}
 }
 
 export async function benchmarkSuite(runtimeSource, modules, mountModules, distinctModules={}, staticCatalogModules={}, {samples=21, operations=1000, reorderSamples=15}={}) {

@@ -51,6 +51,7 @@ try {
       const retention = await page.evaluate(() => {
         const probe = (globalThis as any).__qubitsRetentionProbe;
         const observed = {retainedDisposedHandles: probe.handles.length,
+          reachableMountHosts: probe.hosts.filter((ref: WeakRef<object>) => ref.deref()).length,
           reachablePropObjects: probe.props.filter((ref: WeakRef<object>) => ref.deref()).length,
           reachableDOMNodes: probe.nodes.filter((ref: WeakRef<object>) => ref.deref()).length};
         delete (globalThis as any).__qubitsRetentionProbe; return observed;
