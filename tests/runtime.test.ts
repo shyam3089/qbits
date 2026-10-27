@@ -31,6 +31,36 @@ test('transactions roll back duplicate keys and overflow while preserving subscr
   } finally {await browser.close();}
 });
 
+test('child events update parent state through keyed component lists in Firefox',async()=>{
+  const frame=compile(`component Frame:
+    section:
+        slot`,'Frame.qb');
+  const childModule=compile(`component ProductCard(product_id = 0, title = "Product"):
+    section:
+        h2 text=title
+        button text="Add to cart":
+            on click:
+                emit add_to_cart(product_id)`,'ProductCard.qb');
+  const parent=compile(`import ProductCard from "./ProductCard.qb"
+import Frame from "./Frame.qb"
+component Store:
+    cart = 0
+    product_ids = [41, 42]
+    Frame:
+        h1 text="Cart: " + str(cart)
+        for id in product_ids key=id:
+            ProductCard product_id=id title="Pack " + str(id):
+                on add_to_cart(product_id):
+                    cart = cart + product_id
+                    product_ids.move(id, 0)`,'Store.qb',{components:new Map([['ProductCard',childModule.ast],['Frame',frame.ast]])}).code.replace('./ProductCard.qb','__CHILD__').replace('./Frame.qb','__FRAME__');
+  const runtime=await readFile('dist/lib/runtime/index.js','utf8');
+  const browser=await firefox.launch({headless:true});
+  try{const page=await browser.newPage();const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
+    const result=await page.evaluate(async({runtime,child,frame,parent})=>{const runtimeUrl=URL.createObjectURL(new Blob([runtime],{type:'text/javascript'})),childUrl=URL.createObjectURL(new Blob([child],{type:'text/javascript'})),frameUrl=URL.createObjectURL(new Blob([frame],{type:'text/javascript'})),parentUrl=URL.createObjectURL(new Blob([parent.replace('__CHILD__',childUrl).replace('__FRAME__',frameUrl)],{type:'text/javascript'}));try{const api=await import(runtimeUrl),app=await import(parentUrl),host=document.createElement('div');document.body.append(host);const dispose=app.default(host,api),buttons=[...host.querySelectorAll('button')],second=buttons[1];second.click();return {cart:host.querySelector('h1')?.textContent,order:[...host.querySelectorAll('h2')].map(item=>item.textContent),retained:host.querySelectorAll('button')[0]===second,errors:0,dispose:typeof dispose};}finally{URL.revokeObjectURL(parentUrl);URL.revokeObjectURL(frameUrl);URL.revokeObjectURL(childUrl);URL.revokeObjectURL(runtimeUrl);}}, {runtime,child:childModule.code,frame:frame.code,parent});
+    assert.deepEqual(result,{cart:'Cart: 42',order:['Pack 42','Pack 41'],retained:true,errors:0,dispose:'function'});assert.deepEqual(errors,[]);
+  }finally{await browser.close();}
+});
+
 test('structural preparation failures preserve committed identity and post-commit cleanup stays consistent',async()=>{
   const [runtime,helper]=await Promise.all([readFile('dist/lib/runtime/index.js','utf8'),readFile('tests/helpers/reactivity-browser.mjs','utf8')]);
   const browser=await firefox.launch({headless:true});

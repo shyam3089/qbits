@@ -32,6 +32,27 @@ test('one default slot accepts typed parent content without adding expression sy
   assert.throws(()=>compile('component Bad:\n    visible = true\n    if visible:\n        slot'),/cannot be inside if or for/);
 });
 
+test('child events declare stable typed payloads and parent handlers are checked',()=>{
+  const childModule=compile('component ProductCard(product_id = 0):\n    button text="Add to cart":\n        on click:\n            emit add_to_cart(product_id)'),child=childModule.ast;
+  const source='import ProductCard from "./ProductCard.qb"\ncomponent Store:\n    cart_count = 0\n    ProductCard product_id=42:\n        on add_to_cart(product_id):\n            cart_count = cart_count + product_id';
+  const {ast,code}=compile(source,'Store.qb',{components:new Map([['ProductCard',child]])});
+  assert.deepEqual(child.emits,[{name:'add_to_cart',payload:'number'}]);
+  const card=ast.roots[0];assert.equal(card.kind,'element');if(card.kind==='element'){assert.equal(card.handler?.payloadType,'number');assert.equal(card.handler?.parameter?.value,'product_id');}
+  assert.match(childModule.code,/"add_to_cart":"number"/);assert.match(code,/"payloadType":"number"/);assert.match(code,/"parameter":"product_id"/);
+  const invalid=[
+    'component C:\n    button:\n        on click:\n            emit save(item)',
+    'component C:\n    button:\n        on click:\n            emit save(1)\n            emit save("wrong")',
+    'import ProductCard from "./ProductCard.qb"\ncomponent Store:\n    ProductCard:\n        on missing:\n            count = 1',
+    'import ProductCard from "./ProductCard.qb"\ncomponent Store:\n    ProductCard:\n        on add_to_cart(product_id):\n            count = product_id',
+  ];
+  assert.throws(()=>compile(invalid[0]),/Unknown state/);assert.throws(()=>compile(invalid[1]),/same payload type/);
+  assert.throws(()=>compile(invalid[2],'Store.qb',{components:new Map([['ProductCard',child]])}),/Unknown event/);
+  assert.throws(()=>compile(invalid[3],'Store.qb',{components:new Map([['ProductCard',child]])}),/Unknown state/);
+  assert.throws(()=>compile('component C:\n    button:\n        on click:\n            emit save(1, 2)'),/at most one payload/);
+  const empty=compile('component C:\n    button:\n        on click:\n            emit saved');assert.deepEqual(empty.ast.emits,[{name:'saved',payload:null}]);
+  const emptyParent=compile('import C from "./C.qb"\ncomponent P:\n    count = 0\n    C:\n        on saved:\n            count = count + 1','P.qb',{components:new Map([['C',empty.ast]])});assert.match(emptyParent.code,/"event":"saved"/);
+});
+
 test('props are read-only and expressions and class attributes are checked',()=>{
   const invalid:[string,RegExp][]=[
     ['component C(label = "a"):\n    button text=label:\n        on click:\n            label = label + 1',/read-only/],
@@ -156,6 +177,10 @@ test('module graph validates props, missing files, suffixes, cycles and transiti
   try {
     await writeFile(join(temp,'Counter.css'),counterCSS);await writeFile(counter,counterSource());await writeFile(join(temp,'Greeting'+ext),greetingSource());await writeFile(join(temp,'NotificationSetting'+ext),notificationSettingSource());await writeFile(join(temp,'Catalog'+ext),catalogSource());await writeFile(app,appSource(identity));
     assert.ok(compileFile(app).code);
+    const product=join(temp,'ProductCard'+ext);await writeFile(product,'component ProductCard(product_id = 0):\n    button text="Add":\n        on click:\n            emit add_to_cart(product_id)');
+    const eventApp=`import ProductCard from "./ProductCard${ext}"\ncomponent App:\n    total = 0\n    ProductCard product_id=4:\n        on add_to_cart(product_id):\n            total = total + product_id`;
+    assert.match(compileFile(app,eventApp).code,/"payloadType":"number"/);
+    assert.throws(()=>compileFile(app,eventApp.replace('add_to_cart(product_id):','unknown(product_id):')),/Unknown event/);
     const layout=join(temp,'Layout'+ext);await writeFile(layout,'component Layout(title = ""):\n    section:\n        h2 text=title\n        slot');
     assert.ok(check(`import Layout from "./Layout${ext}"\ncomponent App:\n    Layout title="Reusable":\n        p text="Parent content"`).code);
     expect(`import Counter from "./Counter${ext}"\ncomponent App:\n    Counter:\n        p text="Not accepted"`,/does not accept content/);

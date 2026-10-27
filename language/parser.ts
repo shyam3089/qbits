@@ -16,7 +16,7 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
   function nestedExpression<T>(span:Token['span'],run:()=>T):T {if(++expressionDepth>limits.maxExpressionDepth)fail(source,filename,span,`Expression nesting exceeds the configured limit of ${limits.maxExpressionDepth} levels`);try{return run();}finally{expressionDepth--;}}
   function id():Node<string> {
     const token=take('identifier');
-    if(['component','import','from','text','class','computed','action','for','in','key','str','len','on','init','cleanup','if','else','and','not','var','let','const','true','false'].includes(token.value)) fail(source,filename,token.span,`Reserved word ${JSON.stringify(token.value)} cannot be an identifier`);
+    if(['component','import','from','text','class','computed','action','for','in','key','str','len','on','emit','init','cleanup','if','else','and','not','var','let','const','true','false'].includes(token.value)) fail(source,filename,token.span,`Reserved word ${JSON.stringify(token.value)} cannot be an identifier`);
     return {value:token.value,span:token.span};
   }
   function literal():Node<Literal> {
@@ -72,6 +72,11 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
   }
   const block=()=>{symbol(':');take('NEWLINE');take('INDENT');};
   function statement(eventKind?:string):Statement {
+    if(at('emit')) {
+      const start=word('emit').span.start,event=id(),args=at('(')?argumentsList():{values:[],end:event.span.end};
+      if(args.values.length>1)fail(source,filename,event.span,'Emitted events accept at most one payload');
+      take('NEWLINE');return {kind:'emit',event,payload:args.values[0],span:{start,end:args.end}};
+    }
     const start=peek().span.start;const target=atom();
     if(at('=')) {
       symbol('=');
@@ -88,11 +93,11 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
   function statements(eventKind?:string):Statement[] {const result:Statement[]=[];while(peek().kind!=='DEDENT'&&peek().kind!=='eof')result.push(statement(eventKind));return result;}
   function handler():Handler {
     const start=word('on').span.start;const event=take('identifier');
-    if(!['click','input','change'].includes(event.value))fail(source,filename,event.span,`Unsupported event ${JSON.stringify(event.value)}`);
+    let parameter:Node<string>|undefined;if(at('(')){symbol('(');parameter=id();symbol(')');}
     block();const body=statements(event.value);take('DEDENT');
     if(!body.length)fail(source,filename,event.span,'Event handler requires at least one statement');
     const legacyKind=event.value==='click'&&body.length===1&&body[0].kind==='assign'&&body[0].value.kind==='literal'&&typeof body[0].value.value==='boolean'?'clickBoolean':event.value;
-    return {event:{value:event.value,span:event.span} as Node<'click'|'input'|'change'>,kind:legacyKind as Handler['kind'],statements:body,span:{start,end:body.at(-1)!.span.end}};
+    return {event:{value:event.value,span:event.span},parameter,kind:legacyKind as Handler['kind'],statements:body,span:{start,end:body.at(-1)!.span.end}};
   }
   function element():ElementNode {
     const tag=id();const attributes:Record<string,Expression>={};const indentedAttributes:string[]=[];const children:ViewNode[]=[];
@@ -149,5 +154,5 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     } else roots.push(view());
   }
   take('DEDENT');take('eof');if(!roots.length)fail(source,filename,name.span,'Component requires at least one root element');
-  return {kind:'Component',name,span:{start,end:roots.at(-1)!.span.end},imports,classes,props,states,computed:derived,init,cleanup,roots};
+  return {kind:'Component',name,span:{start,end:roots.at(-1)!.span.end},imports,classes,props,states,computed:derived,init,cleanup,roots,emits:[]};
 }

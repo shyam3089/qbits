@@ -1,0 +1,9 @@
+import ProductCard from "./ProductCard.qb"
+
+component Store:
+    cart = 0
+    main:
+        h1 text="Cart: " + str(cart)
+        ProductCard product_id=42 title="Trail Pack":
+            on add_to_cart(product_id):
+                cart = cart + product_id

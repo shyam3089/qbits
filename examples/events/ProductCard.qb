@@ -1,0 +1,6 @@
+component ProductCard(product_id = 0, title = "Product"):
+    section class="product-card":
+        h2 text=title
+        button text="Add to cart":
+            on click:
+                emit add_to_cart(product_id)

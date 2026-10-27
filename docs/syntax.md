@@ -1,4 +1,4 @@
-# Qubits syntax through Phase 3D.1
+# Qubits syntax through Phase 3D.2
 
 One default component is declared per file. Imports precede the component.
 The Phase 1 counter remains valid:
@@ -31,7 +31,7 @@ Relative default imports use the configured source extension; see the generated
 [example](examples.md) for the current identity. An imported component is instantiated
 by its local import name. Named attributes supply props. Omitted props retain defaults.
 Unknown props, incompatible value types, and assignments to props are errors.
-Component instances do not accept event handlers directly.
+Named child events may be handled on component instances; see [Events and lifecycle](#events-and-lifecycle).
 
 ## Component composition
 
@@ -64,8 +64,7 @@ Parent updates remain reactive, while nested component state and keyed identity 
 preserved normally. The layout owns the insertion point; disposing it also disposes
 the projected content. A component without `slot` rejects supplied content. One
 unnamed slot is supported per component, and its marker must be in the static layout,
-not inside `if` or `for`. Named slots, fallback slot content, and component-level
-event handlers are not supported.
+not inside `if` or `for`. Named slots and fallback slot content are not supported.
 
 Phase 2B adds the approved text-input form:
 
@@ -233,6 +232,34 @@ typed statements: state/field assignment, a parameterless class action, or a lis
 `append`, `remove`, or `move`. `event.value` is a string available only to input
 handlers; `event.checked` is a boolean available only to change handlers. Calls,
 members, and values outside the documented forms are compile errors.
+
+Components can emit named events from an event handler or class action with `emit name`
+or `emit name(payload)`. Payloads are one string, number, or boolean expression. Each
+event has one consistent payload type. A parent handles a child event by indenting an
+`on name(parameter):` block under that component instance. Payload parameters are local,
+read-only values; handlers can update parent state and list state using the existing
+typed statements. Use `on name:` for an event without a payload. Unknown events,
+payload mismatches, and undeclared payload parameters are compile errors. Event handlers
+work through nested and slotted components and inside keyed iterations.
+
+```text
+component ProductCard(product_id = 0):
+    button text="Add to cart":
+        on click:
+            emit add_to_cart(product_id)
+```
+
+```text
+import ProductCard from "./ProductCard.qb"
+
+component Store:
+    cart = 0
+    ProductCard product_id=42:
+        on add_to_cart(product_id):
+            cart = cart + product_id
+```
+
+See [the ProductCard example](../examples/events/Store.qb) and its [child component](../examples/events/ProductCard.qb).
 
 ```text
 component LifecycleExample:

@@ -22,16 +22,19 @@ export interface Computed {name:Node<string>;expression:Expression;span:Span}
 export type Statement =
   | {kind:'assign';target:Expression;value:Expression;span:Span}
   | {kind:'eventAssign';target:Expression;member:Node<'value'|'checked'>;span:Span}
-  | {kind:'call';target:Expression;method:Node<string>;arguments:Expression[];span:Span};
+  | {kind:'call';target:Expression;method:Node<string>;arguments:Expression[];span:Span}
+  | {kind:'emit';event:Node<string>;payload?:Expression;payloadType?:EventPayloadType;span:Span};
+export type EventPayloadType = 'string'|'number'|'boolean';
+export interface EmittedEvent {name:string;payload:EventPayloadType|null}
 export interface Action {name:Node<string>;statements:Statement[];span:Span}
 export interface ClassDecl {name:Node<string>;fields:State[];computed:Computed[];actions:Action[];span:Span}
-export interface Handler {event:Node<'click'|'input'|'change'>;kind?:'click'|'clickBoolean'|'input'|'change';statements:Statement[];span:Span}
+export interface Handler {event:Node<string>;parameter?:Node<string>;payloadType?:EventPayloadType|null;kind?:'click'|'clickBoolean'|'input'|'change';statements:Statement[];span:Span}
 export interface ElementNode {kind:'element';tag:Node<string>;attributes:Record<string,Expression>;indentedAttributes:string[];children:ViewNode[];handler?:Handler;span:Span}
 export interface ConditionalNode {kind:'conditional';condition:ConditionExpression;consequent:ViewNode[];alternate:ViewNode[];span:Span}
 export interface IterationNode {kind:'iteration';item:Node<string>;collection:Expression;key:Expression;children:ViewNode[];span:Span}
 export interface SlotNode {kind:'slot';span:Span}
 export type ViewNode = ElementNode | ConditionalNode | IterationNode | SlotNode;
 export interface Component {
-  kind:'Component';name:Node<string>;span:Span;imports:Import[];classes:ClassDecl[];props:Prop[];states:State[];computed:Computed[];init:Statement[];cleanup:Statement[];roots:ViewNode[];
+  kind:'Component';name:Node<string>;span:Span;imports:Import[];classes:ClassDecl[];props:Prop[];states:State[];computed:Computed[];init:Statement[];cleanup:Statement[];roots:ViewNode[];emits:EmittedEvent[];
 }
 export interface Diagnostic {filename:string;line:number;column:number;span:Span;message:string}

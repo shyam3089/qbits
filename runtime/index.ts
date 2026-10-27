@@ -6,15 +6,15 @@ type Value=Primitive|Instance|Value[];
 type InitialState=Readonly<Record<string,readonly unknown[]>>;
 type Expr={kind:'literal';value:Primitive}|{kind:'reference';name:string}|{kind:'member';object:Expr;name:string}|{kind:'str'|'len';argument:Expr}|{kind:'add';left:Expr;right:Expr}|{kind:'construct';name:string;arguments:Expr[]}|{kind:'list';items:Expr[]};
 type ConditionExpr={kind:'literal';value:Primitive}|{kind:'reference';name:string}|{kind:'member';object:Expr;name:string}|{kind:'not';argument:ConditionExpr}|{kind:'equal'|'notEqual'|'and';left:ConditionExpr;right:ConditionExpr};
-type Statement={kind:'assign';target:Expr;value:Expr}|{kind:'eventAssign';target:Expr;member:'value'|'checked'}|{kind:'call';target:Expr;method:string;arguments:Expr[]};
-interface Handler {kind?:string;event:'click'|'input'|'change';statements:Statement[]}
+type Statement={kind:'assign';target:Expr;value:Expr}|{kind:'eventAssign';target:Expr;member:'value'|'checked'}|{kind:'call';target:Expr;method:string;arguments:Expr[]}|{kind:'emit';event:string;payload?:Expr};
+interface Handler {kind?:string;event:string;parameter?:string;payloadType?:'string'|'number'|'boolean'|null;statements:Statement[]}
 interface ElementView {kind:'element';tag:string;component:number;attributes:Record<string,Expr>;static?:number;children:View[];handler?:Handler}
 interface ConditionalView {kind:'conditional';condition:ConditionExpr;consequent:View[];alternate:View[]}
 interface IterationView {kind:'iteration';item:string;collection:Expr;key:Expr;children:View[]}
 interface SlotView {kind:'slot'}
 type View=ElementView|ConditionalView|IterationView|SlotView;
 interface ClassModel {fields:{name:string;initial:Expr}[];computed:Record<string,Expr>;actions:Record<string,Statement[]>}
-interface Model {props:Record<string,Primitive>;classes:Record<string,ClassModel>;states:Record<string,Expr>;computed:Record<string,Expr>;init:Statement[];cleanup:Statement[];roots:View[]}
+interface Model {props:Record<string,Primitive>;events?:Record<string,'string'|'number'|'boolean'|null>;classes:Record<string,ClassModel>;states:Record<string,Expr>;computed:Record<string,Expr>;init:Statement[];cleanup:Statement[];roots:View[]}
 interface Signal<T=Value>{value:T;subscribers:Set<ReactiveEffect>;derive?:ReactiveEffect;dirty?:boolean}
 interface Instance {__class:string;fields:Record<string,Signal>;computed:Record<string,Expr>;actions:Record<string,Statement[]>;scope:Scope}
 type Scope=Record<string,Signal|Instance|(()=>Value)>;
@@ -25,8 +25,8 @@ type ReactiveEffect=(()=>void)&{dependencies:Set<Signal>;disposed:boolean;comput
 type Dispose=(()=>void)&{refresh?:()=>void};
 type ContentMount=(target:Element|DocumentFragment,runtime:RuntimeApi)=>Dispose;
 type CleanupBag=(()=>void)[]&{nodes?:number};
-interface RuntimeApi {mountComponent:(target:Element,model:Model,components:Mount[],props?:Record<string,Primitive>)=>Dispose;mountComponentWithState?:(target:Element,model:Model,components:Mount[],props:Record<string,Primitive>,state:InitialState)=>Dispose;mountComponentWithContent?:(target:Element,model:Model,components:Mount[],props:Record<string,Primitive>,state:InitialState,content:ContentMount)=>Dispose;mountCounter:(target:Element,model:CounterModel)=>()=>void}
-type Mount=(target:Element,runtime:RuntimeApi,props?:Record<string,Primitive>,state?:InitialState,content?:ContentMount)=>Dispose;
+interface RuntimeApi {mountComponent:(target:Element,model:Model,components:Mount[],props?:Record<string,Primitive>,limits?:Partial<RuntimeLimits>,depth?:number,events?:Record<string,(payload?:Primitive)=>void>)=>Dispose;mountComponentWithState?:(target:Element,model:Model,components:Mount[],props:Record<string,Primitive>,state:InitialState,limits?:Partial<RuntimeLimits>,depth?:number,events?:Record<string,(payload?:Primitive)=>void>)=>Dispose;mountComponentWithContent?:(target:Element,model:Model,components:Mount[],props:Record<string,Primitive>,state:InitialState,content:ContentMount,limits?:Partial<RuntimeLimits>,depth?:number,events?:Record<string,(payload?:Primitive)=>void>)=>Dispose;mountCounter:(target:Element,model:CounterModel)=>()=>void}
+type Mount=(target:Element,runtime:RuntimeApi,props?:Record<string,Primitive>,state?:InitialState,content?:ContentMount,events?:Record<string,(payload?:Primitive)=>void>)=>Dispose;
 type CommitHook=()=>unknown[]|void;
 let activeEffect:ReactiveEffect|undefined;
 let batchDepth=0,flushing=false;
@@ -113,25 +113,25 @@ function orderedIndices(positions:number[]):Set<number> {
   const result=new Set<number>();let index=tails[tails.length-1];while(index!==undefined&&index>=0){result.add(index);index=previous[index];}return result;
 }
 
-export function mountComponent(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>={},limitOverrides:Partial<RuntimeLimits>={},componentDepth=0):Dispose {
-  return mountComponentWithState(target,model,components,supplied,{},limitOverrides,componentDepth);
+export function mountComponent(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>={},limitOverrides:Partial<RuntimeLimits>={},componentDepth=0,events:Record<string,(payload?:Primitive)=>void>={}):Dispose {
+  return mountComponentWithState(target,model,components,supplied,{},limitOverrides,componentDepth,events);
 }
 
-export function mountComponentWithState(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,limitOverrides:Partial<RuntimeLimits>={},componentDepth=0):Dispose {
-  const limits=resolveRuntimeLimits(limitOverrides),budget:ResourceBudget={limits,components:0,records:0,domNodes:0,effects:0,work:0,workDepth:0};return mountComponentTree(target,model,components,supplied,initialState,limits,componentDepth,budget);
+export function mountComponentWithState(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,limitOverrides:Partial<RuntimeLimits>={},componentDepth=0,events:Record<string,(payload?:Primitive)=>void>={}):Dispose {
+  const limits=resolveRuntimeLimits(limitOverrides),budget:ResourceBudget={limits,components:0,records:0,domNodes:0,effects:0,work:0,workDepth:0};return mountComponentTree(target,model,components,supplied,initialState,limits,componentDepth,budget,undefined,events);
 }
 
-export function mountComponentWithContent(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,content:ContentMount,limitOverrides:Partial<RuntimeLimits>={},componentDepth=0):Dispose {
-  const limits=resolveRuntimeLimits(limitOverrides),budget:ResourceBudget={limits,components:0,records:0,domNodes:0,effects:0,work:0,workDepth:0};return mountComponentTree(target,model,components,supplied,initialState,limits,componentDepth,budget,content);
+export function mountComponentWithContent(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,content:ContentMount,limitOverrides:Partial<RuntimeLimits>={},componentDepth=0,events:Record<string,(payload?:Primitive)=>void>={}):Dispose {
+  const limits=resolveRuntimeLimits(limitOverrides),budget:ResourceBudget={limits,components:0,records:0,domNodes:0,effects:0,work:0,workDepth:0};return mountComponentTree(target,model,components,supplied,initialState,limits,componentDepth,budget,content,events);
 }
 
-function mountComponentTree(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,limits:RuntimeLimits,componentDepth:number,budget:ResourceBudget,content?:ContentMount):Dispose {
+function mountComponentTree(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,limits:RuntimeLimits,componentDepth:number,budget:ResourceBudget,content?:ContentMount,events:Record<string,(payload?:Primitive)=>void>={}):Dispose {
   if(componentDepth>=limits.maxComponentDepth)throw new RangeError(`Component nesting exceeds the configured limit of ${limits.maxComponentDepth}`);
   reserve(budget,'components',1,limits.maxComponentInstances,'Component instances');const reservation:Reservation={released:false};
-  try{return withWork(budget,()=>mountComponentInternal(target,model,components,supplied,initialState,limits,componentDepth,budget,reservation,content));}catch(error){releaseComponent(budget,reservation);throw error;}
+  try{return withWork(budget,()=>mountComponentInternal(target,model,components,supplied,initialState,limits,componentDepth,budget,reservation,content,events));}catch(error){releaseComponent(budget,reservation);throw error;}
 }
 
-function mountComponentInternal(target:Element|undefined,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,limits:RuntimeLimits,componentDepth:number,budget:ResourceBudget,componentReservation:Reservation,content?:ContentMount):Dispose {
+function mountComponentInternal(target:Element|undefined,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,limits:RuntimeLimits,componentDepth:number,budget:ResourceBudget,componentReservation:Reservation,content?:ContentMount,events:Record<string,(payload?:Primitive)=>void>={}):Dispose {
   const scope=Object.create(null) as Scope,classDefaults=new Map<string,Primitive[]>(),ownedEffects:ReactiveEffect[]=[];const cleanups:CleanupBag=[];let disposed=false;
   const track=(run:()=>void,bag=ownedEffects)=>{const effect=createEffect(run,budget,undefined,limits.maxUpdatesPerFlush);bag.push(effect);return effect;};
   for(const key of Object.keys(supplied))if(key!=='class'&&!Object.hasOwn(model.props,key))throw new TypeError(`Unknown prop ${key}`);
@@ -188,7 +188,10 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
   function execute(statements:Statement[],local=scope,event?:Event):void {
     transact(()=>{consumeWork(budget,statements.length);for(const statement of statements){
       if(statement.kind==='assign')write(resolveTarget(statement.target,local),evaluate(statement.value,local));
-      else if(statement.kind==='eventAssign'){
+      else if(statement.kind==='emit'){
+        const expected=model.events?.[statement.event];if(!model.events||!Object.hasOwn(model.events,statement.event))throw new TypeError(`Undeclared event ${statement.event}`);const payload=statement.payload?evaluate(statement.payload,local):undefined;
+        if((payload===undefined?null:typeof payload)!==expected)throw new TypeError(`Invalid payload for event ${statement.event}`);if(typeof payload==='number')assertNumber(payload);const listener=events[statement.event];if(listener)listener(payload as Primitive|undefined);
+      } else if(statement.kind==='eventAssign'){
         const element=event?.currentTarget;if(!(element instanceof HTMLInputElement))throw new TypeError('Event value requires an input element');write(resolveTarget(statement.target,local),statement.member==='value'?element.value:element.checked);
       } else {
         const owner=evaluate(statement.target,local);const args=statement.arguments.map(argument=>evaluate(argument,local));
@@ -209,7 +212,7 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
   }
   function disposeBag(effects:ReactiveEffect[],callbacks:CleanupBag):void {for(const effect of effects)stop(effect);effects.length=0;const failures:unknown[]=[];for(const callback of callbacks.reverse())try{untracked(callback);}catch(error){failures.push(error);}callbacks.length=0;if(failures.length===1)throw failures[0];if(failures.length)throw new AggregateError(failures,'Multiple cleanup operations failed');}
   function forceDisable():unknown {if(disposed)return;disposed=true;let failure:unknown;try{disposeBag(ownedEffects,cleanups);}catch(error){failure=error;}finally{for(const name of Object.keys(scope))delete scope[name];supplied={};components=[];content=undefined;releaseComponent(budget,componentReservation);}return failure;}
-  const childRuntime:RuntimeApi={mountComponent:(childTarget,childModel,childComponents,childProps={})=>mountComponentTree(childTarget,childModel,childComponents,childProps,{},limits,componentDepth+1,budget),mountComponentWithState:(childTarget,childModel,childComponents,childProps,state)=>mountComponentTree(childTarget,childModel,childComponents,childProps,state,limits,componentDepth+1,budget),mountComponentWithContent:(childTarget,childModel,childComponents,childProps,state,childContent)=>mountComponentTree(childTarget,childModel,childComponents,childProps,state,limits,componentDepth+1,budget,childContent),mountCounter};
+  const childRuntime:RuntimeApi={mountComponent:(childTarget,childModel,childComponents,childProps={},_childLimits={},_childDepth=0,childEvents={})=>mountComponentTree(childTarget,childModel,childComponents,childProps,{},limits,componentDepth+1,budget,undefined,childEvents),mountComponentWithState:(childTarget,childModel,childComponents,childProps,state,_childLimits={},_childDepth=0,childEvents={})=>mountComponentTree(childTarget,childModel,childComponents,childProps,state,limits,componentDepth+1,budget,undefined,childEvents),mountComponentWithContent:(childTarget,childModel,childComponents,childProps,state,childContent,_childLimits={},_childDepth=0,childEvents={})=>mountComponentTree(childTarget,childModel,childComponents,childProps,state,limits,componentDepth+1,budget,childContent,childEvents),mountCounter};
   const makeComment=(document:Document,value:string):Comment=>{reserve(budget,'domNodes',1,limits.maxDomNodes,'Framework DOM nodes');try{return document.createComment(value);}catch(error){release(budget,'domNodes');throw error;}};
   const makeElement=(document:Document,tag:string):Element=>{reserve(budget,'domNodes',1,limits.maxDomNodes,'Framework DOM nodes');try{return document.createElement(tag);}catch(error){release(budget,'domNodes');throw error;}};
   const makeText=(document:Document,value:string):Text=>{reserve(budget,'domNodes',1,limits.maxDomNodes,'Framework DOM nodes');try{return document.createTextNode(value);}catch(error){release(budget,'domNodes');throw error;}};
@@ -282,7 +285,8 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
       for(const [key,value] of Object.entries(view.attributes))Object.defineProperty(input,key,{enumerable:true,configurable:true,get:()=>evaluate(value,local) as Primitive});
       if(forward)Object.defineProperty(input,'class',{enumerable:true,configurable:true,get:()=>[view.attributes.class?evaluate(view.attributes.class,local):'',forward].filter(Boolean).join(' ')});
       const project:ContentMount|undefined=view.children.length?(contentTarget,contentRuntime)=>{const contentEffects:ReactiveEffect[]=[],contentCleanups:CleanupBag=[];let contentDisposed=false;const dispose:Dispose=()=>{if(contentDisposed)return;contentDisposed=true;disposeBag(contentEffects,contentCleanups);};try{for(const child of view.children)create(child,contentTarget,local,'',contentEffects,contentCleanups,true,contentRuntime);}catch(error){try{dispose();}catch(cleanup){throw new AggregateError([error,cleanup],'Component content mounting and recovery failed',{cause:error});}throw error;}return dispose;}:undefined;
-      const dispose=untracked(()=>components[view.component](parent as Element,componentRuntime,input,{},project));callbacks.push(dispose);
+      const childEvents:Record<string,(payload?:Primitive)=>void>=Object.create(null);if(view.handler)Object.defineProperty(childEvents,view.handler.event,{value:(payload?:Primitive)=>{if(view.handler!.parameter){if(payload===undefined||typeof payload!==view.handler!.payloadType)throw new TypeError(`Invalid payload for event ${view.handler!.event}`);const localHandler=Object.create(local) as Scope;localHandler[view.handler!.parameter]=signal(payload);execute(view.handler!.statements,localHandler);}else{if(payload!==undefined)throw new TypeError(`Unexpected payload for event ${view.handler!.event}`);execute(view.handler!.statements,local);}},enumerable:true});
+      const dispose=untracked(()=>components[view.component](parent as Element,componentRuntime,input,{},project,childEvents));callbacks.push(dispose);
       // Refresh only the child prop signals; the child and its local state stay
       // mounted. Each child binding independently tracks those signals.
       if(dispose.refresh)track(()=>dispose.refresh!(),effects);return;
