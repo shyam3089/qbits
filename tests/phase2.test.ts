@@ -51,6 +51,21 @@ test('child events declare stable typed payloads and parent handlers are checked
   assert.throws(()=>compile('component C:\n    button:\n        on click:\n            emit save(1, 2)'),/at most one payload/);
   const empty=compile('component C:\n    button:\n        on click:\n            emit saved');assert.deepEqual(empty.ast.emits,[{name:'saved',payload:null}]);
   const emptyParent=compile('import C from "./C.qb"\ncomponent P:\n    count = 0\n    C:\n        on saved:\n            count = count + 1','P.qb',{components:new Map([['C',empty.ast]])});assert.match(emptyParent.code,/"event":"saved"/);
+  const lifecycle=compile('component C(name = "service"):\n    on init:\n        emit status(name + " ready")\n    on cleanup:\n        emit status(name + " closed")\n    div');
+  assert.deepEqual(lifecycle.ast.emits,[{name:'status',payload:'string'}]);
+  assert.throws(()=>compile('component C:\n    on init:\n        emit status("ready")\n    on cleanup:\n        emit status(1)\n    div'),/same payload type/);
+});
+
+test('shared state declarations and imports are typed and data-only',()=>{
+  const shared=compile('shared Cart:\n    count = 0\n    total = 0','Cart.qb');
+  assert.equal(shared.ast.kind,'SharedState');assert.match(shared.code,/Object\.freeze/);
+  const consumer=compile('import Cart from "./Cart.qb"\ncomponent Summary:\n    button text=str(Cart.count):\n        on click:\n            Cart.count = Cart.count + 1','Summary.qb',{shared:new Map([['Cart',shared.ast]])});
+  assert.match(consumer.code,/"shared":\[\{"name":"Cart","index":0\}\]/);assert.match(consumer.code,/import s0/);
+  assert.match(compileFile(join('examples','shared-cart','AddToCart.qb')).code,/import s0/);
+  assert.throws(()=>compile('shared Bad:\n    value = other'),/defaults must be/);
+  assert.throws(()=>compile('import Other from "./Other.qb"\nshared Bad:\n    value = 0'),/cannot import/);
+  assert.throws(()=>compile('import Cart from "./Cart.qb"\ncomponent C:\n    p text=str(Cart.missing)','C.qb',{shared:new Map([['Cart',shared.ast]])}),/Unknown shared value/);
+  assert.throws(()=>compile('import Cart from "./Cart.qb"\ncomponent C:\n    button:\n        on click:\n            Cart.count = "wrong"','C.qb',{shared:new Map([['Cart',shared.ast]])}),/matching state type/);
 });
 
 test('props are read-only and expressions and class attributes are checked',()=>{

@@ -24,6 +24,10 @@ and disposal. Its
 serialized component model is the boundary with generated code. The legacy
 `mountCounter` runtime export remains available. User names never
 become JS identifiers. Literal text uses JSON serialization and DOM text nodes.
+Shared modules compile to frozen data descriptors. A root mount owns a descriptor-keyed
+signal registry inherited by its child runtime; no registry is global or shared between
+root mounts. Registry signals use the same dependency tracking and transaction journal
+as local signals, and root disposal releases the registry after lifecycle cleanup.
 Generated element records include a compact bitmask for compiler-proven literal
 text/value/checked bindings. Older runtimes ignore the additive field; newer runtimes
 skip effects and subscriptions for those static bindings while accepting older models.

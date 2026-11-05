@@ -1,0 +1,7 @@
+component Connection(name = "Service"):
+    on init:
+        emit status(name + " connected")
+    on cleanup:
+        emit status(name + " disconnected")
+
+    p text=name

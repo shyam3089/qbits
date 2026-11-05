@@ -2,7 +2,7 @@ export interface CounterModel {initial:number;prefix:string;step:number}
 export interface RuntimeLimits {maxCollectionItems:number;maxComponentDepth:number;maxUpdatesPerFlush:number;maxComponentInstances:number;maxListRecords:number;maxDomNodes:number;maxReactiveEffects:number;maxWorkPerOperation:number}
 export const defaultRuntimeLimits:Readonly<RuntimeLimits>=Object.freeze({maxCollectionItems:100_000,maxComponentDepth:256,maxUpdatesPerFlush:100_000,maxComponentInstances:100_000,maxListRecords:250_000,maxDomNodes:500_000,maxReactiveEffects:250_000,maxWorkPerOperation:1_000_000});
 type Primitive=string|number|boolean;
-type Value=Primitive|Instance|Value[];
+type Value=Primitive|Instance|SharedInstance|Value[];
 type InitialState=Readonly<Record<string,readonly unknown[]>>;
 type Expr={kind:'literal';value:Primitive}|{kind:'reference';name:string}|{kind:'member';object:Expr;name:string}|{kind:'str'|'len';argument:Expr}|{kind:'add';left:Expr;right:Expr}|{kind:'construct';name:string;arguments:Expr[]}|{kind:'list';items:Expr[]};
 type ConditionExpr={kind:'literal';value:Primitive}|{kind:'reference';name:string}|{kind:'member';object:Expr;name:string}|{kind:'not';argument:ConditionExpr}|{kind:'equal'|'notEqual'|'and';left:ConditionExpr;right:ConditionExpr};
@@ -14,10 +14,13 @@ interface IterationView {kind:'iteration';item:string;collection:Expr;key:Expr;c
 interface SlotView {kind:'slot'}
 type View=ElementView|ConditionalView|IterationView|SlotView;
 interface ClassModel {fields:{name:string;initial:Expr}[];computed:Record<string,Expr>;actions:Record<string,Statement[]>}
-interface Model {props:Record<string,Primitive>;events?:Record<string,'string'|'number'|'boolean'|null>;classes:Record<string,ClassModel>;states:Record<string,Expr>;computed:Record<string,Expr>;init:Statement[];cleanup:Statement[];roots:View[]}
+interface Model {props:Record<string,Primitive>;events?:Record<string,'string'|'number'|'boolean'|null>;shared?:{name:string;index:number}[];classes:Record<string,ClassModel>;states:Record<string,Expr>;computed:Record<string,Expr>;init:Statement[];cleanup:Statement[];roots:View[]}
 interface Signal<T=Value>{value:T;subscribers:Set<ReactiveEffect>;derive?:ReactiveEffect;dirty?:boolean}
 interface Instance {__class:string;fields:Record<string,Signal>;computed:Record<string,Expr>;actions:Record<string,Statement[]>;scope:Scope}
-type Scope=Record<string,Signal|Instance|(()=>Value)>;
+interface SharedDefinition {states:Record<string,Primitive>}
+interface SharedInstance {__shared:string;fields:Record<string,Signal>}
+type SharedRegistry=Map<SharedDefinition,SharedInstance>;
+type Scope=Record<string,Signal|Instance|SharedInstance|(()=>Value)>;
 type ResourceName='components'|'records'|'domNodes'|'effects';
 interface ResourceBudget {limits:RuntimeLimits;components:number;records:number;domNodes:number;effects:number;work:number;workDepth:number}
 interface Reservation {released:boolean}
@@ -25,7 +28,7 @@ type ReactiveEffect=(()=>void)&{dependencies:Set<Signal>;disposed:boolean;comput
 type Dispose=(()=>void)&{refresh?:()=>void};
 type ContentMount=(target:Element|DocumentFragment,runtime:RuntimeApi)=>Dispose;
 type CleanupBag=(()=>void)[]&{nodes?:number};
-interface RuntimeApi {mountComponent:(target:Element,model:Model,components:Mount[],props?:Record<string,Primitive>,limits?:Partial<RuntimeLimits>,depth?:number,events?:Record<string,(payload?:Primitive)=>void>)=>Dispose;mountComponentWithState?:(target:Element,model:Model,components:Mount[],props:Record<string,Primitive>,state:InitialState,limits?:Partial<RuntimeLimits>,depth?:number,events?:Record<string,(payload?:Primitive)=>void>)=>Dispose;mountComponentWithContent?:(target:Element,model:Model,components:Mount[],props:Record<string,Primitive>,state:InitialState,content:ContentMount,limits?:Partial<RuntimeLimits>,depth?:number,events?:Record<string,(payload?:Primitive)=>void>)=>Dispose;mountCounter:(target:Element,model:CounterModel)=>()=>void}
+interface RuntimeApi {mountComponent:(target:Element,model:Model,components:Mount[],props?:Record<string,Primitive>,limits?:Partial<RuntimeLimits>,depth?:number,events?:Record<string,(payload?:Primitive)=>void>,shared?:SharedDefinition[])=>Dispose;mountComponentWithState?:(target:Element,model:Model,components:Mount[],props:Record<string,Primitive>,state:InitialState,limits?:Partial<RuntimeLimits>,depth?:number,events?:Record<string,(payload?:Primitive)=>void>,shared?:SharedDefinition[])=>Dispose;mountComponentWithContent?:(target:Element,model:Model,components:Mount[],props:Record<string,Primitive>,state:InitialState,content:ContentMount,limits?:Partial<RuntimeLimits>,depth?:number,events?:Record<string,(payload?:Primitive)=>void>,shared?:SharedDefinition[])=>Dispose;mountCounter:(target:Element,model:CounterModel)=>()=>void}
 type Mount=(target:Element,runtime:RuntimeApi,props?:Record<string,Primitive>,state?:InitialState,content?:ContentMount,events?:Record<string,(payload?:Primitive)=>void>)=>Dispose;
 type CommitHook=()=>unknown[]|void;
 let activeEffect:ReactiveEffect|undefined;
@@ -113,35 +116,36 @@ function orderedIndices(positions:number[]):Set<number> {
   const result=new Set<number>();let index=tails[tails.length-1];while(index!==undefined&&index>=0){result.add(index);index=previous[index];}return result;
 }
 
-export function mountComponent(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>={},limitOverrides:Partial<RuntimeLimits>={},componentDepth=0,events:Record<string,(payload?:Primitive)=>void>={}):Dispose {
-  return mountComponentWithState(target,model,components,supplied,{},limitOverrides,componentDepth,events);
+export function mountComponent(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>={},limitOverrides:Partial<RuntimeLimits>={},componentDepth=0,events:Record<string,(payload?:Primitive)=>void>={},shared:SharedDefinition[]=[]):Dispose {
+  return mountComponentWithState(target,model,components,supplied,{},limitOverrides,componentDepth,events,shared);
 }
 
-export function mountComponentWithState(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,limitOverrides:Partial<RuntimeLimits>={},componentDepth=0,events:Record<string,(payload?:Primitive)=>void>={}):Dispose {
-  const limits=resolveRuntimeLimits(limitOverrides),budget:ResourceBudget={limits,components:0,records:0,domNodes:0,effects:0,work:0,workDepth:0};return mountComponentTree(target,model,components,supplied,initialState,limits,componentDepth,budget,undefined,events);
+export function mountComponentWithState(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,limitOverrides:Partial<RuntimeLimits>={},componentDepth=0,events:Record<string,(payload?:Primitive)=>void>={},shared:SharedDefinition[]=[]):Dispose {
+  const limits=resolveRuntimeLimits(limitOverrides),budget:ResourceBudget={limits,components:0,records:0,domNodes:0,effects:0,work:0,workDepth:0};return mountComponentTree(target,model,components,supplied,initialState,limits,componentDepth,budget,undefined,events,shared,new Map(),true);
 }
 
-export function mountComponentWithContent(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,content:ContentMount,limitOverrides:Partial<RuntimeLimits>={},componentDepth=0,events:Record<string,(payload?:Primitive)=>void>={}):Dispose {
-  const limits=resolveRuntimeLimits(limitOverrides),budget:ResourceBudget={limits,components:0,records:0,domNodes:0,effects:0,work:0,workDepth:0};return mountComponentTree(target,model,components,supplied,initialState,limits,componentDepth,budget,content,events);
+export function mountComponentWithContent(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,content:ContentMount,limitOverrides:Partial<RuntimeLimits>={},componentDepth=0,events:Record<string,(payload?:Primitive)=>void>={},shared:SharedDefinition[]=[]):Dispose {
+  const limits=resolveRuntimeLimits(limitOverrides),budget:ResourceBudget={limits,components:0,records:0,domNodes:0,effects:0,work:0,workDepth:0};return mountComponentTree(target,model,components,supplied,initialState,limits,componentDepth,budget,content,events,shared,new Map(),true);
 }
 
-function mountComponentTree(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,limits:RuntimeLimits,componentDepth:number,budget:ResourceBudget,content?:ContentMount,events:Record<string,(payload?:Primitive)=>void>={}):Dispose {
+function mountComponentTree(target:Element,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,limits:RuntimeLimits,componentDepth:number,budget:ResourceBudget,content:ContentMount|undefined,events:Record<string,(payload?:Primitive)=>void>,shared:SharedDefinition[],sharedRegistry:SharedRegistry,ownsSharedRegistry=false):Dispose {
   if(componentDepth>=limits.maxComponentDepth)throw new RangeError(`Component nesting exceeds the configured limit of ${limits.maxComponentDepth}`);
   reserve(budget,'components',1,limits.maxComponentInstances,'Component instances');const reservation:Reservation={released:false};
-  try{return withWork(budget,()=>mountComponentInternal(target,model,components,supplied,initialState,limits,componentDepth,budget,reservation,content,events));}catch(error){releaseComponent(budget,reservation);throw error;}
+  try{return withWork(budget,()=>mountComponentInternal(target,model,components,supplied,initialState,limits,componentDepth,budget,reservation,content,events,shared,sharedRegistry,ownsSharedRegistry));}catch(error){releaseComponent(budget,reservation);if(ownsSharedRegistry)sharedRegistry.clear();throw error;}
 }
 
-function mountComponentInternal(target:Element|undefined,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,limits:RuntimeLimits,componentDepth:number,budget:ResourceBudget,componentReservation:Reservation,content?:ContentMount,events:Record<string,(payload?:Primitive)=>void>={}):Dispose {
+function mountComponentInternal(target:Element|undefined,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,limits:RuntimeLimits,componentDepth:number,budget:ResourceBudget,componentReservation:Reservation,content:ContentMount|undefined,events:Record<string,(payload?:Primitive)=>void>,shared:SharedDefinition[],sharedRegistry:SharedRegistry,ownsSharedRegistry:boolean):Dispose {
   const scope=Object.create(null) as Scope,classDefaults=new Map<string,Primitive[]>(),ownedEffects:ReactiveEffect[]=[];const cleanups:CleanupBag=[];let disposed=false;
   const track=(run:()=>void,bag=ownedEffects)=>{const effect=createEffect(run,budget,undefined,limits.maxUpdatesPerFlush);bag.push(effect);return effect;};
   for(const key of Object.keys(supplied))if(key!=='class'&&!Object.hasOwn(model.props,key))throw new TypeError(`Unknown prop ${key}`);
   let forwardClass='';if(Object.hasOwn(supplied,'class')){const value=supplied.class;if(typeof value!=='string')throw new TypeError('Invalid prop class');forwardClass=value;}
   for(const [name,initial] of Object.entries(model.props)){consumeWork(budget);const value=Object.hasOwn(supplied,name)?supplied[name]:initial;if(typeof value!==typeof initial)throw new TypeError(`Invalid prop ${name}`);scope[name]=signal(value);}
-  const getSignal=(name:string,local:Scope):Signal=>{const value=local[name];if(!value||typeof value==='function'||'__class'in value)throw new TypeError(`Unknown writable value ${name}`);return value;};
+  for(const entry of model.shared??[]){if(Object.hasOwn(scope,entry.name)||!Number.isSafeInteger(entry.index)||entry.index<0)throw new TypeError(`Invalid shared state ${entry.name}`);const definition=shared[entry.index];if(!definition||Object.getPrototypeOf(definition)!==Object.prototype||!definition.states||Object.getPrototypeOf(definition.states)!==Object.prototype)throw new TypeError(`Invalid shared state definition ${entry.name}`);let instance=sharedRegistry.get(definition);if(!instance){const fields:Record<string,Signal>=Object.create(null);for(const [name,value] of Object.entries(definition.states)){consumeWork(budget);if(!['string','number','boolean'].includes(typeof value))throw new TypeError(`Invalid shared value ${name}`);assertNumber(value);fields[name]=signal(value);}instance={__shared:entry.name,fields};sharedRegistry.set(definition,instance);}scope[entry.name]=instance;}
+  const getSignal=(name:string,local:Scope):Signal=>{const value=local[name];if(!value||typeof value==='function'||'__class'in value||'__shared'in value)throw new TypeError(`Unknown writable value ${name}`);return value;};
   function evaluate(expression:Expr,local=scope):Value {
     if(expression.kind==='literal'){assertNumber(expression.value);return expression.value;}
-    if(expression.kind==='reference'){const value=local[expression.name];if(!value)throw new TypeError(`Unknown value ${expression.name}`);return typeof value==='function'?value():'__class'in value?value:read(value);}
-    if(expression.kind==='member'){const owner=evaluate(expression.object,local);if(!owner||typeof owner!=='object'||Array.isArray(owner)||!('__class'in owner))throw new TypeError('Member access requires a class instance');const field=owner.fields[expression.name];if(field)return read(field);const computed=owner.computed[expression.name];if(computed)return evaluate(computed,owner.scope);throw new TypeError(`Unknown member ${expression.name}`);}
+    if(expression.kind==='reference'){const value=local[expression.name];if(!value)throw new TypeError(`Unknown value ${expression.name}`);return typeof value==='function'?value():'__class'in value||'__shared'in value?value:read(value);}
+    if(expression.kind==='member'){const owner=evaluate(expression.object,local);if(!owner||typeof owner!=='object'||Array.isArray(owner)||!('__class'in owner)&&!('__shared'in owner))throw new TypeError('Member access requires a class instance or shared state');const field=owner.fields[expression.name];if(field)return read(field);if('__class'in owner){const computed=owner.computed[expression.name];if(computed)return evaluate(computed,owner.scope);}throw new TypeError(`Unknown member ${expression.name}`);}
     if(expression.kind==='str')return String(evaluate(expression.argument,local));
     if(expression.kind==='len'){const value=evaluate(expression.argument,local);if(!Array.isArray(value))throw new TypeError('len requires a list');return value.length;}
     if(expression.kind==='add'){const left=evaluate(expression.left,local),right=evaluate(expression.right,local);if(typeof left==='number'&&typeof right==='number'){const result=left+right;assertNumber(result);return result;}return String(left)+String(right);}
@@ -182,7 +186,7 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
   try{for(const [name,expression] of Object.entries(model.computed)){const source=getSignal(name,scope);ownedEffects.push(createEffect(()=>write(source,evaluate(expression)),budget,source,limits.maxUpdatesPerFlush));}}catch(error){disposeBag(ownedEffects,cleanups);throw error;}
   function resolveTarget(target:Expr,local:Scope):Signal {
     if(target.kind==='reference')return getSignal(target.name,local);
-    if(target.kind==='member'){const owner=evaluate(target.object,local);if(!owner||typeof owner!=='object'||Array.isArray(owner)||!('__class'in owner))throw new TypeError('Member assignment requires an instance');const result=owner.fields[target.name];if(!result)throw new TypeError(`Member ${target.name} is read-only or unknown`);return result;}
+    if(target.kind==='member'){const owner=evaluate(target.object,local);if(!owner||typeof owner!=='object'||Array.isArray(owner)||!('__class'in owner)&&!('__shared'in owner))throw new TypeError('Member assignment requires an instance or shared state');const result=owner.fields[target.name];if(!result)throw new TypeError(`Member ${target.name} is read-only or unknown`);return result;}
     throw new TypeError('Invalid assignment target');
   }
   function execute(statements:Statement[],local=scope,event?:Event):void {
@@ -211,8 +215,8 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
     if(expression.kind==='not')return !evaluateCondition(expression.argument,local);const left=evaluateCondition(expression.left,local);if(expression.kind==='and')return Boolean(left)&&Boolean(evaluateCondition(expression.right,local));const right=evaluateCondition(expression.right,local);return expression.kind==='equal'?left===right:left!==right;
   }
   function disposeBag(effects:ReactiveEffect[],callbacks:CleanupBag):void {for(const effect of effects)stop(effect);effects.length=0;const failures:unknown[]=[];for(const callback of callbacks.reverse())try{untracked(callback);}catch(error){failures.push(error);}callbacks.length=0;if(failures.length===1)throw failures[0];if(failures.length)throw new AggregateError(failures,'Multiple cleanup operations failed');}
-  function forceDisable():unknown {if(disposed)return;disposed=true;let failure:unknown;try{disposeBag(ownedEffects,cleanups);}catch(error){failure=error;}finally{for(const name of Object.keys(scope))delete scope[name];supplied={};components=[];content=undefined;releaseComponent(budget,componentReservation);}return failure;}
-  const childRuntime:RuntimeApi={mountComponent:(childTarget,childModel,childComponents,childProps={},_childLimits={},_childDepth=0,childEvents={})=>mountComponentTree(childTarget,childModel,childComponents,childProps,{},limits,componentDepth+1,budget,undefined,childEvents),mountComponentWithState:(childTarget,childModel,childComponents,childProps,state,_childLimits={},_childDepth=0,childEvents={})=>mountComponentTree(childTarget,childModel,childComponents,childProps,state,limits,componentDepth+1,budget,undefined,childEvents),mountComponentWithContent:(childTarget,childModel,childComponents,childProps,state,childContent,_childLimits={},_childDepth=0,childEvents={})=>mountComponentTree(childTarget,childModel,childComponents,childProps,state,limits,componentDepth+1,budget,childContent,childEvents),mountCounter};
+  function forceDisable():unknown {if(disposed)return;disposed=true;let failure:unknown;try{disposeBag(ownedEffects,cleanups);}catch(error){failure=error;}finally{for(const name of Object.keys(scope))delete scope[name];supplied={};components=[];content=undefined;events={};shared=[];if(ownsSharedRegistry)sharedRegistry.clear();releaseComponent(budget,componentReservation);}return failure;}
+  const childRuntime:RuntimeApi={mountComponent:(childTarget,childModel,childComponents,childProps={},_childLimits={},_childDepth=0,childEvents={},childShared=[])=>mountComponentTree(childTarget,childModel,childComponents,childProps,{},limits,componentDepth+1,budget,undefined,childEvents,childShared,sharedRegistry),mountComponentWithState:(childTarget,childModel,childComponents,childProps,state,_childLimits={},_childDepth=0,childEvents={},childShared=[])=>mountComponentTree(childTarget,childModel,childComponents,childProps,state,limits,componentDepth+1,budget,undefined,childEvents,childShared,sharedRegistry),mountComponentWithContent:(childTarget,childModel,childComponents,childProps,state,childContent,_childLimits={},_childDepth=0,childEvents={},childShared=[])=>mountComponentTree(childTarget,childModel,childComponents,childProps,state,limits,componentDepth+1,budget,childContent,childEvents,childShared,sharedRegistry),mountCounter};
   const makeComment=(document:Document,value:string):Comment=>{reserve(budget,'domNodes',1,limits.maxDomNodes,'Framework DOM nodes');try{return document.createComment(value);}catch(error){release(budget,'domNodes');throw error;}};
   const makeElement=(document:Document,tag:string):Element=>{reserve(budget,'domNodes',1,limits.maxDomNodes,'Framework DOM nodes');try{return document.createElement(tag);}catch(error){release(budget,'domNodes');throw error;}};
   const makeText=(document:Document,value:string):Text=>{reserve(budget,'domNodes',1,limits.maxDomNodes,'Framework DOM nodes');try{return document.createTextNode(value);}catch(error){release(budget,'domNodes');throw error;}};
@@ -240,7 +244,7 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
       type Record={start:Comment;end:Comment;item:Signal;index:number;effects:ReactiveEffect[];cleanups:CleanupBag};
       const records=new Map<Primitive,Record>(),keyScope=Object.create(local) as Scope,keyItem=signal<Value>('');keyScope[view.item]=keyItem;
       let update:ReactiveEffect|undefined;
-      callbacks.push(()=>{if(update)stop(update);const failures:unknown[]=[];try{for(const record of records.values())try{disposeBag(record.effects,record.cleanups);}catch(error){failures.push(error);}}finally{records.clear();anchor.remove();release(budget,'domNodes');}if(failures.length===1)throw failures[0];if(failures.length)throw new AggregateError(failures,'Iteration disposal failed');});parent.append(anchor);
+      callbacks.push(()=>{if(update)stop(update);const failures:unknown[]=[],ordered=[...records.values()];try{for(let index=ordered.length-1;index>=0;index--)try{disposeBag(ordered[index].effects,ordered[index].cleanups);}catch(error){failures.push(error);}}finally{records.clear();anchor.remove();release(budget,'domNodes');}if(failures.length===1)throw failures[0];if(failures.length)throw new AggregateError(failures,'Iteration disposal failed');});parent.append(anchor);
       const move=(record:Record,before:Node)=>{
         const fragment=document.createDocumentFragment(),focused=document.activeElement;
         let restore=false,start:number|null=null,end:number|null=null,direction:'forward'|'backward'|'none'|null=null;
@@ -260,7 +264,7 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
         // statements, or static attributes read while constructing records.
         untracked(()=>{
           const prepared:Record[]=[],planned:Record[]=[];
-          const disposePrepared=()=>{const failures:unknown[]=[];for(const record of prepared)try{disposeBag(record.effects,record.cleanups);}catch(error){failures.push(error);}if(failures.length)throw new AggregateError(failures,'Prepared record cleanup failed');};
+          const disposePrepared=()=>{const failures:unknown[]=[];for(let index=prepared.length-1;index>=0;index--)try{disposeBag(prepared[index].effects,prepared[index].cleanups);}catch(error){failures.push(error);}if(failures.length)throw new AggregateError(failures,'Prepared record cleanup failed');};
           try{for(let index=0;index<items.length;index++){const key=keys[index],item=items[index];
             const existing=records.get(key);if(existing){write(existing.item,item);planned.push(existing);continue;}
             reserve(budget,'records',1,limits.maxListRecords,'List records');let start:Comment|undefined,end:Comment|undefined;
@@ -276,7 +280,7 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
           let last=-1,reordered=false;for(const record of planned)if(record.index>=0){if(record.index<last)reordered=true;last=record.index;}
           const stable=reordered?orderedIndices(planned.map(record=>record.index)):undefined;
           if(!prepared.length&&!removed.length&&!reordered)return;
-          stageStructure(()=>{const cleanupErrors:unknown[]=[];try{let before:Node=anchor;for(let index=planned.length-1;index>=0;index--){const record=planned[index];if(record.index<0)before.parentNode!.insertBefore(record.start.parentNode!,before);else if(stable&&!stable.has(index)&&record.end.nextSibling!==before)move(record,before);before=record.start;record.index=index;}}catch(error){try{disposePrepared();}catch(cleanup){throw new AggregateError([error,cleanup],'Structural commit and staged cleanup failed',{cause:error});}throw error;}records.clear();keys.forEach((key,index)=>records.set(key,planned[index]));for(const record of removed)try{disposeBag(record.effects,record.cleanups);}catch(error){cleanupErrors.push(error);}return cleanupErrors;},disposePrepared);
+          stageStructure(()=>{const cleanupErrors:unknown[]=[];try{let before:Node=anchor;for(let index=planned.length-1;index>=0;index--){const record=planned[index];if(record.index<0)before.parentNode!.insertBefore(record.start.parentNode!,before);else if(stable&&!stable.has(index)&&record.end.nextSibling!==before)move(record,before);before=record.start;record.index=index;}}catch(error){try{disposePrepared();}catch(cleanup){throw new AggregateError([error,cleanup],'Structural commit and staged cleanup failed',{cause:error});}throw error;}records.clear();keys.forEach((key,index)=>records.set(key,planned[index]));for(let index=removed.length-1;index>=0;index--)try{disposeBag(removed[index].effects,removed[index].cleanups);}catch(error){cleanupErrors.push(error);}return cleanupErrors;},disposePrepared);
         });
       },budget,undefined,limits.maxUpdatesPerFlush);effects.push(update);return;
     }
@@ -299,7 +303,7 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
     parent.append(element);for(const child of view.children)create(child,element,local,'',effects,callbacks,false,componentRuntime);
   }
   const refresh=()=>{if(disposed)return;transact(()=>{for(const [name,initial] of Object.entries(model.props)){const value=Object.hasOwn(supplied,name)?supplied[name]:initial;if(typeof value!==typeof initial)throw new TypeError(`Invalid prop ${name}`);write(getSignal(name,scope),value);}},forceDisable,budget);};
-  const dispose:Dispose=()=>{if(disposed)return;return withWork(budget,()=>{disposed=true;const failures:unknown[]=[];try{disposeBag(ownedEffects,cleanups);}catch(error){failures.push(error);}try{untracked(()=>execute(model.cleanup));}catch(error){failures.push(error);}finally{for(const name of Object.keys(scope))delete scope[name];classDefaults.clear();supplied={};components=[];content=undefined;releaseComponent(budget,componentReservation);}if(failures.length===1)throw failures[0];if(failures.length)throw new AggregateError(failures,'Component disposal failed');});};
+  const dispose:Dispose=()=>{if(disposed)return;return withWork(budget,()=>{disposed=true;const failures:unknown[]=[];try{disposeBag(ownedEffects,cleanups);}catch(error){failures.push(error);}try{untracked(()=>execute(model.cleanup));}catch(error){failures.push(error);}finally{for(const name of Object.keys(scope))delete scope[name];classDefaults.clear();supplied={};components=[];content=undefined;events={};shared=[];if(ownsSharedRegistry)sharedRegistry.clear();releaseComponent(budget,componentReservation);}if(failures.length===1)throw failures[0];if(failures.length)throw new AggregateError(failures,'Component disposal failed');});};
   let contentMounted=false;try{execute(model.init);for(const root of model.roots)create(root,target!,scope,forwardClass,ownedEffects,cleanups,true);if(content&&!contentMounted)throw new TypeError('Component does not accept content');}catch(error){try{dispose();}catch(cleanup){throw new AggregateError([error,cleanup],'Component mounting and recovery failed',{cause:error});}throw error;}finally{target=undefined;}dispose.refresh=refresh;return dispose;
 }
 

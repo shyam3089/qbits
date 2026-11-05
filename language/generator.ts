@@ -1,6 +1,7 @@
 import type {Component,ConditionExpression,Expression,Statement,ViewNode} from './ast.js';
 
 export function generate(ast:Component):string {
+  if(ast.kind==='SharedState'){const states=JSON.stringify(Object.fromEntries(ast.states.map(state=>[state.name.value,(state.initial as {value:unknown}).value]))).replaceAll('"__proto__":','["__proto__"]:');return `export const sharedName=${JSON.stringify(ast.name.value)};\nexport default Object.freeze({states:Object.freeze(${states})});\n`;}
   function expression(value:Expression):unknown {
     if(value.kind==='literal')return {kind:value.kind,value:value.value};
     if(value.kind==='reference')return {kind:value.kind,name:value.name};
@@ -39,7 +40,7 @@ export function generate(ast:Component):string {
     return {kind:value.kind,left,right};
   }
   const statement=(value:Statement):unknown=>value.kind==='assign'?{kind:value.kind,target:expression(value.target),value:expression(value.value)}:value.kind==='eventAssign'?{kind:value.kind,target:expression(value.target),member:value.member.value}:value.kind==='emit'?{kind:value.kind,event:value.event.value,...(value.payload?{payload:expression(value.payload)}:{})}:{kind:value.kind,target:expression(value.target),method:value.method.value,arguments:value.arguments.map(expression)};
-  const componentImports=ast.imports.filter(item=>item.name);
+  const componentImports=ast.imports.filter(item=>item.name&&item.kind!=='shared'),sharedImports=ast.imports.filter(item=>item.name&&item.kind==='shared');
   function nodes(values:ViewNode[]):unknown[]{
     const result:unknown[]=[];
     for(const value of values)if(value.kind==='conditional'){
@@ -59,8 +60,8 @@ export function generate(ast:Component):string {
     return {kind:'element',tag:value.tag.value,component:componentImports.findIndex(item=>item.name!.value===value.tag.value),attributes,...(staticBindings?{static:staticBindings}:{}),children:nodes(value.children),...(value.handler?{handler:{kind:value.handler.kind,event:value.handler.event.value,...(value.handler.parameter?{parameter:value.handler.parameter.value}:{}),...(value.handler.payloadType!==undefined?{payloadType:value.handler.payloadType}:{}),statements:value.handler.statements.map(statement)}}:{})};
   }
   const classes=Object.fromEntries(ast.classes.map(declaration=>[declaration.name.value,{fields:declaration.fields.map(field=>({name:field.name.value,initial:expression(field.initial)})),computed:Object.fromEntries(declaration.computed.map(item=>[item.name.value,expression(item.expression)])),actions:Object.fromEntries(declaration.actions.map(action=>[action.name.value,action.statements.map(statement)]))}]));
-  const imports=ast.imports.map(item=>item.name?`import c${componentImports.indexOf(item)} from ${JSON.stringify(item.path.value)};`:`import ${JSON.stringify(item.path.value)};`).join('\n');
-  const model={props:Object.fromEntries(ast.props.map(prop=>[prop.name.value,prop.initial.value])),events:Object.fromEntries(ast.emits.map(event=>[event.name,event.payload])),classes,states:Object.fromEntries(ast.states.map(state=>[state.name.value,expression(state.initial)])),computed:Object.fromEntries(ast.computed.map(item=>[item.name.value,expression(item.expression)])),init:ast.init.map(statement),cleanup:ast.cleanup.map(statement),roots:nodes(ast.roots)};
+  const imports=ast.imports.map(item=>item.name?(item.kind==='shared'?`import s${sharedImports.indexOf(item)} from ${JSON.stringify(item.path.value)};`:`import c${componentImports.indexOf(item)} from ${JSON.stringify(item.path.value)};`):`import ${JSON.stringify(item.path.value)};`).join('\n');
+  const model={props:Object.fromEntries(ast.props.map(prop=>[prop.name.value,prop.initial.value])),events:Object.fromEntries(ast.emits.map(event=>[event.name,event.payload])),shared:sharedImports.map((item,index)=>({name:item.name!.value,index})),classes,states:Object.fromEntries(ast.states.map(state=>[state.name.value,expression(state.initial)])),computed:Object.fromEntries(ast.computed.map(item=>[item.name.value,expression(item.expression)])),init:ast.init.map(statement),cleanup:ast.cleanup.map(statement),roots:nodes(ast.roots)};
   const serialized=JSON.stringify(model).replaceAll('"__proto__":','["__proto__"]:');
-  return `${imports}\nexport const componentName=${JSON.stringify(ast.name.value)};\nexport const model=${serialized};\nexport default function mount(target,runtime,props={},state={},content,events={}){const components=[${componentImports.map((_,index)=>`c${index}`).join(',')}];if(content){if(!runtime.mountComponentWithContent)throw new TypeError('Runtime does not support component content');return runtime.mountComponentWithContent(target,model,components,props,state,content,{},0,events)}return Object.keys(state).length?runtime.mountComponentWithState(target,model,components,props,state,{},0,events):runtime.mountComponent(target,model,components,props,{},0,events)}\n`;
+  return `${imports}\nexport const componentName=${JSON.stringify(ast.name.value)};\nexport const model=${serialized};\nexport default function mount(target,runtime,props={},state={},content,events={}){const components=[${componentImports.map((_,index)=>`c${index}`).join(',')}],shared=[${sharedImports.map((_,index)=>`s${index}`).join(',')}];if(content){if(!runtime.mountComponentWithContent)throw new TypeError('Runtime does not support component content');return runtime.mountComponentWithContent(target,model,components,props,state,content,{},0,events,shared)}return Object.keys(state).length?runtime.mountComponentWithState(target,model,components,props,state,{},0,events,shared):runtime.mountComponent(target,model,components,props,{},0,events,shared)}\n`;
 }

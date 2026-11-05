@@ -1,0 +1,5 @@
+import Cart from "./Cart.qb"
+
+component CartSummary:
+    p text="Items: " + str(Cart.count)
+    p text="Total: " + str(Cart.total)

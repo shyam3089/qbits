@@ -1,0 +1,6 @@
+import CartSummary from "./CartSummary.qb"
+import AddToCart from "./AddToCart.qb"
+
+component App:
+    CartSummary
+    AddToCart price=25

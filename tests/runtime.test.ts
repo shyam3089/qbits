@@ -387,21 +387,21 @@ component Retained(label = "Owned"):
     const behavior=await page.evaluate(async({runtime,child,parent})=>{
       const urls=[runtime,child].map(source=>URL.createObjectURL(new Blob([source],{type:'text/javascript'}))),parentURL=URL.createObjectURL(new Blob([parent.replace(JSON.stringify('./Child.qb'),JSON.stringify(urls[1]))],{type:'text/javascript'}));urls.push(parentURL);
       try{
-        const api=await import(urls[0]),component=await import(urls[2]),handles=[],hosts=[],nodes=[],props=[];
+        const api=await import(urls[0]),component=await import(urls[2]),handles=[],hosts=[],nodes=[],props=[],eventMaps=[];
         for(let cycle=0;cycle<30;cycle++){
-          const host=document.createElement('main'),sibling=document.createElement('aside'),supplied={label:'Owned'};host.append(sibling);document.body.append(host);
-          const dispose=component.default(host,api,supplied),root=host.querySelector('section'),button=host.querySelector('button');button.click();
+          const host=document.createElement('main'),sibling=document.createElement('aside'),supplied={label:'Owned'},eventMap={unused:supplied.toString.bind(supplied)};host.append(sibling);document.body.append(host);
+          const dispose=component.default(host,api,supplied,{},undefined,eventMap),root=host.querySelector('section'),button=host.querySelector('button');button.click();
           if(button.textContent!=='Owned1'||host.firstChild!==sibling)throw new Error('Nested ownership changed');
-          hosts.push(new WeakRef(host));nodes.push(new WeakRef(root));props.push(new WeakRef(supplied));dispose();dispose();dispose.refresh();button.click();
+          hosts.push(new WeakRef(host));nodes.push(new WeakRef(root));props.push(new WeakRef(supplied));eventMaps.push(new WeakRef(eventMap));dispose();dispose();dispose.refresh();button.click();
           if(host.childNodes.length!==1||host.firstChild!==sibling||button.textContent!=='Owned1')throw new Error('Disposal was not isolated and idempotent');
           host.remove();handles.push(dispose);
         }
-        (globalThis as any).__disposedHostProbe={handles,hosts,nodes,props};return {handles:handles.length};
+        (globalThis as any).__disposedHostProbe={handles,hosts,nodes,props,eventMaps};return {handles:handles.length};
       }finally{urls.forEach(url=>URL.revokeObjectURL(url));}
     },{runtime,child,parent});
     assert.equal(behavior.handles,30);await page.requestGC();
-    const retained=await page.evaluate(()=>{const probe=(globalThis as any).__disposedHostProbe;return {handles:probe.handles.length,hosts:probe.hosts.filter((ref:WeakRef<object>)=>ref.deref()).length,nodes:probe.nodes.filter((ref:WeakRef<object>)=>ref.deref()).length,props:probe.props.filter((ref:WeakRef<object>)=>ref.deref()).length};});
-    assert.deepEqual(retained,{handles:30,hosts:0,nodes:0,props:0});
+    const retained=await page.evaluate(()=>{const probe=(globalThis as any).__disposedHostProbe;return {handles:probe.handles.length,hosts:probe.hosts.filter((ref:WeakRef<object>)=>ref.deref()).length,nodes:probe.nodes.filter((ref:WeakRef<object>)=>ref.deref()).length,props:probe.props.filter((ref:WeakRef<object>)=>ref.deref()).length,eventMaps:probe.eventMaps.filter((ref:WeakRef<object>)=>ref.deref()).length};});
+    assert.deepEqual(retained,{handles:30,hosts:0,nodes:0,props:0,eventMaps:0});
   }finally{await browser.close();}
 });
 
@@ -423,5 +423,132 @@ test('static bindings validate numbers and hostile host values with mount rollba
     assert.match(result.failures[34],/^Error:literal getter blocked:1:true$/);
     assert.ok(result.failures.slice(35).every(value=>/^RangeError:State exceeded safe integer range:1:true$/.test(value)),JSON.stringify(result.failures));
     assert.deepEqual(result.exact,{value:'safe',nodes:1});assert.equal(result.empty,true);
+  }finally{await browser.close();}
+});
+
+test('lifecycle hooks are ordered, exactly once, and safe across slots, keys, failures and repeated disposal',async()=>{
+  const leaf=compile(`component Leaf(label = "", value = 0):
+    count = 0
+    on init:
+        emit trace("mount " + label)
+        count = value + 1
+    on cleanup:
+        emit trace("cleanup " + label)
+    span text=label`,'Leaf.qb');
+  const wrapper=compile(`component Wrapper:
+    on init:
+        emit trace("mount wrapper")
+    on cleanup:
+        emit trace("cleanup wrapper")
+    section:
+        slot`,'Wrapper.qb');
+  const appSource=`import Leaf from "./Leaf.qb"
+import Wrapper from "./Wrapper.qb"
+class Item:
+    id = 0
+    label = ""
+    value = 0
+component App:
+    one = Item(1, "one", 0)
+    two = Item(2, "two", 0)
+    bad = Item(3, "bad", 9007199254740991)
+    items = [one, two]
+    visible = true
+    on init:
+        emit trace("mount app")
+    on cleanup:
+        emit trace("cleanup app")
+    Wrapper:
+        on trace(message):
+            emit trace(message)
+        if visible:
+            for item in items key=item.id:
+                Leaf label=item.label value=item.value:
+                    on trace(message):
+                        emit trace(message)
+    button text="move":
+        on click:
+            items.move(two, 0)
+    button text="hide":
+        on click:
+            visible = false
+    button text="show":
+        on click:
+            visible = true
+    button text="remove one":
+        on click:
+            items.remove(one)
+    button text="append bad":
+        on click:
+            items.append(bad)`;
+  const app=compile(appSource,'App.qb',{components:new Map([['Leaf',leaf.ast],['Wrapper',wrapper.ast]])}).code.replace('./Leaf.qb','__LEAF__').replace('./Wrapper.qb','__WRAPPER__');
+  const fault=compile(`component Fault:
+    count = 0
+    on init:
+        emit trace("mount fault")
+    on cleanup:
+        emit trace("cleanup fault")
+        count = 9007199254740991
+        count = count + 1
+    div`,'Fault.qb');
+  const runtime=await readFile('dist/lib/runtime/index.js','utf8'),browser=await firefox.launch({headless:true});
+  try{
+    const page=await browser.newPage(),mountErrors:string[]=[];page.on('pageerror',error=>mountErrors.push(error.message));
+    const result=await page.evaluate(async({runtime,leaf,wrapper,app,fault})=>{
+      const runtimeUrl=URL.createObjectURL(new Blob([runtime],{type:'text/javascript'})),leafUrl=URL.createObjectURL(new Blob([leaf],{type:'text/javascript'})),wrapperUrl=URL.createObjectURL(new Blob([wrapper],{type:'text/javascript'})),appUrl=URL.createObjectURL(new Blob([app.replace('__LEAF__',leafUrl).replace('__WRAPPER__',wrapperUrl)],{type:'text/javascript'})),faultUrl=URL.createObjectURL(new Blob([fault],{type:'text/javascript'})),urls=[runtimeUrl,leafUrl,wrapperUrl,appUrl,faultUrl];
+      try{
+        const api=await import(runtimeUrl),application=await import(appUrl),faultModule=await import(faultUrl),log:string[]=[],events:any={};events.trace=log.push.bind(log);
+        const host=document.createElement('main');document.body.append(host);const dispose=application.default(host,api,{}, {},undefined,events),buttons=[...host.querySelectorAll('button')];
+        const initial=[...log];buttons[0].click();const afterMove=[...log];buttons[1].click();const afterHide=[...log];buttons[2].click();const afterShow=[...log];buttons[3].click();const afterRemove=[...log];buttons[4].click();const afterFailure=[...log],labels=[...host.querySelectorAll('span')].map(node=>node.textContent);dispose();dispose();const final=[...log],empty=host.childNodes.length===0;host.remove();
+        const faultHost=document.createElement('main'),faultLog:string[]=[],faultEvents:any={};faultEvents.trace=faultLog.push.bind(faultLog);document.body.append(faultHost);const disposeFault=faultModule.default(faultHost,api,{}, {},undefined,faultEvents);let cleanupError='';try{disposeFault();}catch(error){cleanupError=(error as Error).message;}disposeFault();const faultEmpty=faultHost.childNodes.length===0;faultHost.remove();
+        return{initial,afterMove,afterHide,afterShow,afterRemove,afterFailure,labels,final,empty,faultLog,cleanupError,faultEmpty};
+      }finally{urls.forEach(URL.revokeObjectURL);}
+    },{runtime,leaf:leaf.code,wrapper:wrapper.code,app,fault:fault.code});
+    assert.deepEqual(result,{initial:['mount app','mount wrapper','mount one','mount two'],afterMove:['mount app','mount wrapper','mount one','mount two'],afterHide:['mount app','mount wrapper','mount one','mount two','cleanup one','cleanup two'],afterShow:['mount app','mount wrapper','mount one','mount two','cleanup one','cleanup two','mount two','mount one'],afterRemove:['mount app','mount wrapper','mount one','mount two','cleanup one','cleanup two','mount two','mount one','cleanup one'],afterFailure:['mount app','mount wrapper','mount one','mount two','cleanup one','cleanup two','mount two','mount one','cleanup one','mount bad','cleanup bad'],labels:['two'],final:['mount app','mount wrapper','mount one','mount two','cleanup one','cleanup two','mount two','mount one','cleanup one','mount bad','cleanup bad','cleanup two','cleanup wrapper','cleanup app'],empty:true,faultLog:['mount fault','cleanup fault'],cleanupError:'State exceeded safe integer range',faultEmpty:true});
+    await page.waitForTimeout(0);assert.deepEqual(mountErrors,['State exceeded safe integer range']);
+  }finally{await browser.close();}
+});
+
+test('shared state is fine-grained, transactional and isolated per app across slotted keyed children',async()=>{
+  const cart=compile('shared Cart:\n    count = 0\n    total = 0','Cart.qb');
+  const shared=new Map([['Cart',cart.ast]]);
+  const summary=compile('import Cart from "./Cart.qb"\ncomponent Summary:\n    p text=str(Cart.count) + ":" + str(Cart.total)','Summary.qb',{shared});
+  const add=compile('import Cart from "./Cart.qb"\ncomponent Add(amount = 1, label = "add"):\n    button text=label:\n        on click:\n            Cart.count = Cart.count + 1\n            Cart.total = Cart.total + amount','Add.qb',{shared});
+  const frame=compile('component Frame:\n    section:\n        slot','Frame.qb');
+  const appSource=`import Summary from "./Summary.qb"
+import Add from "./Add.qb"
+import Frame from "./Frame.qb"
+component App:
+    one = 1
+    two = 2
+    ids = [one, two]
+    visible = true
+    Summary
+    Frame:
+        if visible:
+            for id in ids key=id:
+                Add amount=id label="add " + str(id)
+    Add amount=9007199254740991 label="bad"
+    button text="move":
+        on click:
+            ids.move(two, 0)
+    button text="hide":
+        on click:
+            visible = false
+    button text="show":
+        on click:
+            visible = true`;
+  const app=compile(appSource,'App.qb',{components:new Map([['Summary',summary.ast],['Add',add.ast],['Frame',frame.ast]])}).code.replace('./Summary.qb','__SUMMARY__').replace('./Add.qb','__ADD__').replace('./Frame.qb','__FRAME__');
+  const runtime=await readFile('dist/lib/runtime/index.js','utf8'),browser=await firefox.launch({headless:true});
+  try{
+    const page=await browser.newPage(),errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
+    const result=await page.evaluate(async({runtime,cart,summary,add,frame,app})=>{
+      const runtimeUrl=URL.createObjectURL(new Blob([runtime],{type:'text/javascript'})),cartUrl=URL.createObjectURL(new Blob([cart],{type:'text/javascript'})),summaryUrl=URL.createObjectURL(new Blob([summary.replace('./Cart.qb',cartUrl)],{type:'text/javascript'})),addUrl=URL.createObjectURL(new Blob([add.replace('./Cart.qb',cartUrl)],{type:'text/javascript'})),frameUrl=URL.createObjectURL(new Blob([frame],{type:'text/javascript'})),appUrl=URL.createObjectURL(new Blob([app.replace('__SUMMARY__',summaryUrl).replace('__ADD__',addUrl).replace('__FRAME__',frameUrl)],{type:'text/javascript'})),urls=[runtimeUrl,cartUrl,summaryUrl,addUrl,frameUrl,appUrl];
+      try{
+        const api=await import(runtimeUrl),application=await import(appUrl),first=document.createElement('main'),second=document.createElement('main');document.body.append(first,second);const disposeFirst=application.default(first,api),disposeSecond=application.default(second,api),firstButtons=[...first.querySelectorAll('button')],retained=firstButtons[1];
+        firstButtons[0].click();const updated=first.querySelector('p')?.textContent,isolated=second.querySelector('p')?.textContent;firstButtons[3].click();const moved=first.querySelectorAll('button')[0]===retained;firstButtons[2].click();const rolledBack=first.querySelector('p')?.textContent;firstButtons[4].click();retained.click();const hidden=first.querySelector('p')?.textContent;first.querySelectorAll('button')[3].click();const remounted=[...first.querySelectorAll('button')].find(node=>node.textContent==='add 2')!;remounted.click();const afterRemount=first.querySelector('p')?.textContent;disposeFirst();disposeFirst();remounted.click();const empty=first.childNodes.length===0;const secondStill=second.querySelector('p')?.textContent;disposeSecond();first.remove();second.remove();return{updated,isolated,moved,rolledBack,hidden,afterRemount,empty,secondStill};
+      }finally{urls.forEach(URL.revokeObjectURL);}
+    },{runtime,cart:cart.code,summary:summary.code,add:add.code,frame:frame.code,app});
+    await page.waitForTimeout(0);assert.deepEqual(result,{updated:'1:1',isolated:'0:0',moved:true,rolledBack:'1:1',hidden:'1:1',afterRemount:'2:3',empty:true,secondStill:'0:0'});assert.deepEqual(errors,['State exceeded safe integer range']);
   }finally{await browser.close();}
 });

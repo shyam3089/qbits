@@ -1,0 +1,17 @@
+import Connection from "./Connection.qb"
+
+component App:
+    connected = true
+    status = "Waiting"
+
+    button text="Disconnect":
+        on click:
+            connected = false
+    button text="Reconnect":
+        on click:
+            connected = true
+    p text=status
+    if connected:
+        Connection name="Notifications":
+            on status(message):
+                status = message

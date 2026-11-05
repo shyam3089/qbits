@@ -3,16 +3,19 @@ import {fail} from './diagnostics.js';
 import {resolveCompilerLimits,type CompilerLimits} from './limits.js';
 
 export const elements=new Set(['main','section','div','h1','h2','h3','h4','h5','h6','p','span','label','button','input','ul','ol','li']);
-export interface ValidationOptions {sourceExtension?:string;components?:Map<string,Component>;limits?:Partial<CompilerLimits>}
-type Type='string'|'number'|'boolean'|'unknown'|`class:${string}`|`list:${string}`;
+export interface ValidationOptions {sourceExtension?:string;components?:Map<string,Component>;shared?:Map<string,Component>;limits?:Partial<CompilerLimits>}
+type Type='string'|'number'|'boolean'|'unknown'|`class:${string}`|`shared:${string}`|`list:${string}`;
 
 export function validate(ast:Component,source:string,filename='<input>',options:ValidationOptions={}):void {
   const limits=resolveCompilerLimits(options.limits);
   const error=(span:Span,message:string):never=>fail(source,filename,span,message);
+  if(ast.kind==='SharedState'){
+    const names=new Set<string>();for(const state of ast.states){if(names.has(state.name.value)||state.name.value==='class')error(state.name.span,'Duplicate or reserved shared state name');names.add(state.name.value);const initial=state.initial;if(initial.kind!=='literal')error(initial.span,'Shared state defaults must be string, number, or boolean literals');if(initial.kind==='literal'&&typeof initial.value==='number'&&!Number.isSafeInteger(initial.value))error(initial.span,'Numeric literals must be safe integers');}return;
+  }
   const imported=new Set<string>();
   for(const entry of ast.imports) {
     if(!/^\.\.?\//.test(entry.path.value)||/[?#\\]/.test(entry.path.value))error(entry.path.span,'Imports must use plain relative module paths');
-    if(entry.name){if(options.sourceExtension&&!entry.path.value.endsWith(options.sourceExtension))error(entry.path.span,`Component import must use configured extension ${options.sourceExtension}`);if(imported.has(entry.name.value)||elements.has(entry.name.value))error(entry.name.span,'Duplicate or reserved component import');imported.add(entry.name.value);}
+    if(entry.name){if(options.sourceExtension&&!entry.path.value.endsWith(options.sourceExtension))error(entry.path.span,`Named import must use configured extension ${options.sourceExtension}`);if(imported.has(entry.name.value)||elements.has(entry.name.value))error(entry.name.span,'Duplicate or reserved named import');imported.add(entry.name.value);if(options.shared?.has(entry.name.value))entry.kind='shared';else if(options.components?.has(entry.name.value))entry.kind='component';}
     else if(!entry.path.value.endsWith('.css'))error(entry.path.span,'Side-effect imports support external .css files only');
   }
   const classes=new Map<string,ClassDecl>();
@@ -38,7 +41,8 @@ export function validate(ast:Component,source:string,filename='<input>',options:
     if(expression.kind==='literal')return primitive(expression.value);
     if(expression.kind==='reference')return env.get(expression.name)??error(expression.span,`Unknown state or prop ${JSON.stringify(expression.name)}`);
     if(expression.kind==='member'){
-      const owner=type(expression.object,env);if(!owner.startsWith('class:'))error(expression.object.span,'Member access requires a class instance');
+      const owner=type(expression.object,env);if(owner.startsWith('shared:')){const store=options.shared?.get(owner.slice(7)),member=store?.states.find(state=>state.name.value===expression.name.value);return member&&member.initial.kind==='literal'?primitive(member.initial.value):error(expression.name.span,`Unknown shared value ${JSON.stringify(expression.name.value)} on ${owner.slice(7)}`);}
+      if(!owner.startsWith('class:'))error(expression.object.span,'Member access requires a class instance or shared state');
       const member=classEnvs.get(owner.slice(6))?.get(expression.name.value);return member??error(expression.name.span,`Unknown member ${JSON.stringify(expression.name.value)} on ${owner.slice(6)}`);
     }
     if(expression.kind==='construct'){
@@ -63,19 +67,19 @@ export function validate(ast:Component,source:string,filename='<input>',options:
   const emitted=new Map<string,EventPayloadType|null>();ast.emits=[];
   const registerEmit=(statement:Extract<Statement,{kind:'emit'}>,scope:Map<string,Type>):void=>{const payload=statement.payload?type(statement.payload,scope):null;if(payload!==null&&!['string','number','boolean'].includes(payload))error(statement.payload!.span,'Event payloads must be strings, numbers, or booleans');const resolved=payload as EventPayloadType|null;if(emitted.has(statement.event.value)&&emitted.get(statement.event.value)!==resolved)error(statement.span,`Event ${JSON.stringify(statement.event.value)} must always emit the same payload type`);emitted.set(statement.event.value,resolved);statement.payloadType=resolved??undefined;};
   for(const declaration of classes.values()){const classEnv=classEnvs.get(declaration.name.value)!;validateComputed(declaration.computed,classEnv);for(const action of declaration.actions)validateStatements(action.statements,classEnv,new Set(declaration.fields.map(field=>field.name.value)),undefined,true,true);}
-  const env=new Map<string,Type>();const writable=new Set<string>();
+  const env=new Map<string,Type>();const writable=new Set<string>();for(const [name] of options.shared??[])env.set(name,`shared:${name}`);
   for(const prop of ast.props){if(env.has(prop.name.value)||prop.name.value==='class')error(prop.name.span,'Duplicate or reserved declaration');env.set(prop.name.value,primitive(prop.initial.value));}
   for(const state of ast.states){if(env.has(state.name.value)||classes.has(state.name.value)||imported.has(state.name.value)||state.name.value==='class')error(state.name.span,'Duplicate or reserved declaration');const actual=type(state.initial,env);if(actual==='list:unknown')error(state.initial.span,'Empty list state needs an item to infer its type');env.set(state.name.value,actual);writable.add(state.name.value);}
   for(const item of ast.computed){if(env.has(item.name.value))error(item.name.span,'Duplicate or reserved declaration');env.set(item.name.value,'unknown');}
   validateComputed(ast.computed,env);
   function targetType(target:Expression,scope:Map<string,Type>,write:Set<string>):Type {
     if(target.kind==='reference'){if(!scope.has(target.name))error(target.span,`Unknown state ${JSON.stringify(target.name)}`);if(!write.has(target.name))error(target.span,`Cannot assign read-only value ${JSON.stringify(target.name)}`);return scope.get(target.name)!;}
-    if(target.kind==='member'){const owner=type(target.object,scope);if(!owner.startsWith('class:'))error(target.span,'Assignment target must be state or an instance field');const className=owner.slice(6);if(!classFields.get(className)!.has(target.name.value))error(target.name.span,'Computed values and actions are read-only');return classEnvs.get(className)!.get(target.name.value)!;}
+    if(target.kind==='member'){const owner=type(target.object,scope);if(owner.startsWith('shared:'))return type(target,scope);if(!owner.startsWith('class:'))error(target.span,'Assignment target must be local state, shared state, or an instance field');const className=owner.slice(6);if(!classFields.get(className)!.has(target.name.value))error(target.name.span,'Computed values and actions are read-only');return classEnvs.get(className)!.get(target.name.value)!;}
     return error(target.span,'Assignment target must be state or an instance field');
   }
   function validateStatements(statements:Statement[],scope:Map<string,Type>,write:Set<string>,event?:'click'|'input'|'change',insideClass=false,allowEmit=false):void {
     for(const statement of statements){
-      if(statement.kind==='emit'){if(!allowEmit)error(statement.span,'emit is supported only inside event handlers and actions');registerEmit(statement,scope);}
+      if(statement.kind==='emit'){if(!allowEmit)error(statement.span,'emit is supported only inside lifecycle hooks, event handlers, and actions');registerEmit(statement,scope);}
       else if(statement.kind==='assign'){
         const expected=targetType(statement.target,scope,write);
         if(event==='click'&&statement.value.kind==='literal'&&typeof statement.value.value==='boolean'&&expected!=='boolean')error(statement.target.span,'Boolean click assignments require boolean state');
@@ -98,7 +102,7 @@ export function validate(ast:Component,source:string,filename='<input>',options:
       }
     }
   }
-  validateStatements(ast.init,env,writable);validateStatements(ast.cleanup,env,writable);
+  validateStatements(ast.init,env,writable,undefined,false,true);validateStatements(ast.cleanup,env,writable,undefined,false,true);
   function conditionType(expression:ConditionExpression,scope:Map<string,Type>):Type {
     if(expression.kind==='literal')return primitive(expression.value);if(expression.kind==='reference'){if(!scope.has(expression.name))error(expression.span,`Unknown name ${JSON.stringify(expression.name)} in condition`);return type(expression as Expression,scope);}if(expression.kind==='member')return type(expression as Expression,scope);
     if(expression.kind==='not'){const actual=conditionType(expression.argument,scope);if(actual!=='boolean')error(expression.argument.span,`not requires a boolean operand, received ${actual}`);return 'boolean';}
@@ -114,7 +118,7 @@ export function validate(ast:Component,source:string,filename='<input>',options:
   let slotCount=0;
   function visit(view:ViewNode,scope=env,scopeWritable=writable,dynamic=false):void {
     if(view.kind==='slot'){if(dynamic)error(view.span,'slot cannot be inside if or for');if(++slotCount>1)error(view.span,'Component accepts one default slot');return;}
-    if(view.kind==='conditional'){const actual=conditionType(view.condition,scope),reactive=new Set([...scopeWritable,...ast.computed.map(item=>item.name.value)]);if(!reactiveConditionReference(view.condition,reactive))error(view.condition.span,'Conditional condition must reference local state or a computed value');if(actual!=='boolean')error(view.condition.span,`Conditional condition must evaluate to boolean, received ${actual}`);view.consequent.forEach(child=>visit(child,scope,scopeWritable,true));view.alternate.forEach(child=>visit(child,scope,scopeWritable,true));return;}
+    if(view.kind==='conditional'){const actual=conditionType(view.condition,scope),reactive=new Set([...scopeWritable,...ast.computed.map(item=>item.name.value),...options.shared?.keys()??[]]);if(!reactiveConditionReference(view.condition,reactive))error(view.condition.span,'Conditional condition must reference local state, computed state, or shared state');if(actual!=='boolean')error(view.condition.span,`Conditional condition must evaluate to boolean, received ${actual}`);view.consequent.forEach(child=>visit(child,scope,scopeWritable,true));view.alternate.forEach(child=>visit(child,scope,scopeWritable,true));return;}
     if(view.kind==='iteration'){
       const collection=type(view.collection,scope);if(!collection.startsWith('list:'))error(view.collection.span,'Iteration source must be a list');const itemType=collection.slice(5) as Type;const childScope=new Map(scope);childScope.set(view.item.value,itemType);const keyType=type(view.key,childScope);if(!['string','number','boolean'].includes(keyType))error(view.key.span,'Iteration key must be a string, number, or boolean');if(!references(view.key,view.item.value))error(view.key.span,'Iteration key must reference the iteration item');const childWritable=new Set(scopeWritable);view.children.forEach(child=>visit(child,childScope,childWritable,true));return;
     }

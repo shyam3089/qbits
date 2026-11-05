@@ -1,0 +1,3 @@
+shared Cart:
+    count = 0
+    total = 0

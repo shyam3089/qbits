@@ -25,8 +25,10 @@ export function compileFile(filename:string,source?:string,watch?:(path:string)=
   for(let cursor=0;cursor<pending.length;cursor++){
     const record=pending[cursor],ast=parse(record.text,record.file,options.limits);record.ast=ast;
     const complexity=measureComponentComplexity(ast);if(totalComplexity+complexity>graphLimits.maxAggregateComplexity)fail(record.text,record.file,ast.span,`Project complexity exceeds the configured limit of ${graphLimits.maxAggregateComplexity} AST objects`);totalComplexity+=complexity;
-    validate(ast,record.text,record.file,{sourceExtension:identity.sourceExtension,limits:options.limits});
     for(const entry of ast.imports){
+      if(!/^\.\.?\//.test(entry.path.value)||/[?#\\]/.test(entry.path.value))fail(record.text,record.file,entry.path.span,'Imports must use plain relative module paths');
+      if(entry.name&&!entry.path.value.endsWith(identity.sourceExtension))fail(record.text,record.file,entry.path.span,`Named import must use configured extension ${identity.sourceExtension}`);
+      if(!entry.name&&!entry.path.value.endsWith('.css'))fail(record.text,record.file,entry.path.span,'Side-effect imports support external .css files only');
       const path=resolve(dirname(record.file),entry.path.value);watch?.(path);let resolved:string;
       try{resolved=realpathSync(path);if(!statSync(resolved).isFile())throw new Error('Not a file');}
       catch{fail(record.text,record.file,entry.path.span,`Missing import ${JSON.stringify(entry.path.value)}`);}
@@ -57,9 +59,9 @@ export function compileFile(filename:string,source?:string,watch?:(path:string)=
 
   const rootCounts=new Map<Component,number|null>();
   for(let index=order.length-1;index>=0;index--){
-    const record=order[index],ast=record.ast!,components=new Map<string,Component>();
-    for(const dependency of record.dependencies)components.set(dependency.entry.name!.value,dependency.record.ast!);
-    validate(ast,record.text,record.file,{sourceExtension:identity.sourceExtension,components,limits:options.limits});
+    const record=order[index],ast=record.ast!,components=new Map<string,Component>(),shared=new Map<string,Component>();
+    for(const dependency of record.dependencies){const imported=dependency.record.ast!;dependency.entry.kind=imported.kind==='SharedState'?'shared':'component';(imported.kind==='SharedState'?shared:components).set(dependency.entry.name!.value,imported);}
+    validate(ast,record.text,record.file,{sourceExtension:identity.sourceExtension,components,shared,limits:options.limits});
     function check(nodes:Component['roots']):void {for(const node of nodes){if(node.kind==='slot')continue;if(node.kind==='conditional'){check(node.consequent);check(node.alternate);continue;}if(node.kind==='iteration'){check(node.children);continue;}const child=components.get(node.tag.value);if(child&&node.attributes.class&&rootCounts.get(child)!==1)fail(record.text,record.file,node.attributes.class.span,'Ambiguous class forwarding: component must resolve to a single root element');check(node.children);}}
     function count(nodes:Component['roots']):number|null {let total=0;for(const node of nodes){if(node.kind==='iteration'||node.kind==='slot')return null;if(node.kind==='conditional'){const consequent=count(node.consequent),alternate=node.alternate.length?count(node.alternate):0;if(consequent===null||alternate===null||consequent!==alternate)return null;total+=consequent;continue;}const child=components.get(node.tag.value),resolved=child?rootCounts.get(child):1;if(resolved===undefined||resolved===null)return null;total+=resolved;}return total;}
     check(ast.roots);rootCounts.set(ast,count(ast.roots));

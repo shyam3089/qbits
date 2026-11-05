@@ -141,6 +141,13 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
   }
   const imports:Import[]=[];
   while(at('import')){const start=word('import').span.start;let name:Node<string>|undefined;if(peek().kind!=='string'){name=id();word('from');}const path=take('string');take('NEWLINE');imports.push({name,path:{value:path.value,span:path.span},span:{start,end:path.span.end}});}
+  if(at('shared')){
+    if(imports.length)fail(source,filename,imports[0].span,'Shared state modules cannot import other modules');
+    const start=word('shared').span.start,name=id();block();const states:State[]=[];
+    while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){const state=id();symbol('=');const initial=expression();take('NEWLINE');states.push({name:state,initial,span:{start:state.span.start,end:initial.span.end}});}
+    take('DEDENT');take('eof');if(!states.length)fail(source,filename,name.span,'Shared state requires at least one value');
+    return {kind:'SharedState',name,span:{start,end:states.at(-1)!.span.end},imports:[],classes:[],props:[],states,computed:[],init:[],cleanup:[],roots:[],emits:[]};
+  }
   const classes:ClassDecl[]=[];while(at('class'))classes.push(classDecl());
   const start=word('component').span.start;const name=id();const props:Prop[]=[];
   if(at('(')){cursor++;if(!at(')'))do{const prop=id();symbol('=');const initial=literal();props.push({name:prop,initial,span:{start:prop.span.start,end:initial.span.end}});if(!at(','))break;cursor++;}while(true);symbol(')');}

@@ -15,7 +15,7 @@ export type ConditionExpression =
   | {kind:'member';object:Expression;name:Node<string>;span:Span}
   | {kind:'not';argument:ConditionExpression;span:Span}
   | {kind:'equal'|'notEqual'|'and';left:ConditionExpression;right:ConditionExpression;span:Span};
-export interface Import {name?:Node<string>;path:Node<string>;span:Span}
+export interface Import {name?:Node<string>;path:Node<string>;span:Span;kind?:'component'|'shared'}
 export interface Prop {name:Node<string>;initial:Node<Literal>;span:Span}
 export interface State {name:Node<string>;initial:Expression;span:Span}
 export interface Computed {name:Node<string>;expression:Expression;span:Span}
@@ -35,6 +35,6 @@ export interface IterationNode {kind:'iteration';item:Node<string>;collection:Ex
 export interface SlotNode {kind:'slot';span:Span}
 export type ViewNode = ElementNode | ConditionalNode | IterationNode | SlotNode;
 export interface Component {
-  kind:'Component';name:Node<string>;span:Span;imports:Import[];classes:ClassDecl[];props:Prop[];states:State[];computed:Computed[];init:Statement[];cleanup:Statement[];roots:ViewNode[];emits:EmittedEvent[];
+  kind:'Component'|'SharedState';name:Node<string>;span:Span;imports:Import[];classes:ClassDecl[];props:Prop[];states:State[];computed:Computed[];init:Statement[];cleanup:Statement[];roots:ViewNode[];emits:EmittedEvent[];
 }
 export interface Diagnostic {filename:string;line:number;column:number;span:Span;message:string}

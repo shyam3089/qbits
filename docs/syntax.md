@@ -225,6 +225,39 @@ fields. Dependency cycles are errors. Runtime evaluation records the signals rea
 each DOM binding and reruns only subscribed bindings. Class computed members are lazy,
 so removing a list record leaves no class-level subscription behind.
 
+## Shared reactive state
+
+Declare a data-only shared module with `shared Name:` and literal typed defaults:
+
+```text
+shared Cart:
+    count = 0
+    total = 0
+```
+
+Unrelated components import the same module with the ordinary named-import syntax and
+read or assign its fields directly:
+
+```plaintext
+import Cart from "./Cart.qb"
+
+component AddToCart(price = 10):
+    button text="Add item":
+        on click:
+            Cart.count = Cart.count + 1
+            Cart.total = Cart.total + price
+```
+
+Each root component mount creates a separate shared-state registry. Descendants that
+import the same module descriptor share its signals; a second root mount receives fresh
+defaults. Reads subscribe only the consuming binding, and writes use the normal
+synchronous transaction and rollback rules. Disposed components unsubscribe, and root
+disposal releases the registry. Shared modules cannot import modules, contain views, or
+execute code; defaults are string, number, or boolean literals. Existing module graph,
+source, work, update, and safe-integer limits still apply.
+
+See the [shared-cart example](../examples/shared-cart/App.qb), its [store](../examples/shared-cart/Cart.qb), and [consumer](../examples/shared-cart/AddToCart.qb).
+
 ## Events and lifecycle
 
 `click`, text-input `input`, and checkbox `change` handlers accept one or more closed,
@@ -233,8 +266,8 @@ typed statements: state/field assignment, a parameterless class action, or a lis
 handlers; `event.checked` is a boolean available only to change handlers. Calls,
 members, and values outside the documented forms are compile errors.
 
-Components can emit named events from an event handler or class action with `emit name`
-or `emit name(payload)`. Payloads are one string, number, or boolean expression. Each
+Components can emit named events from a lifecycle hook, event handler, or class action
+with `emit name` or `emit name(payload)`. Payloads are one string, number, or boolean expression. Each
 event has one consistent payload type. A parent handles a child event by indenting an
 `on name(parameter):` block under that component instance. Payload parameters are local,
 read-only values; handlers can update parent state and list state using the existing
@@ -273,9 +306,17 @@ component LifecycleExample:
         value=""
 ```
 
-`on init` runs once before DOM mounting. `on cleanup` runs once when the component
-disposer is called. Disposal is idempotent and removes DOM nodes, event listeners,
+`on init` runs once before the component's DOM mounts. `on cleanup` runs once after its
+descendants and owned resources are disposed. Hooks may use the same typed statements
+as handlers and may `emit` an event to expose readiness or cleanup without executing
+arbitrary source code. Mount order is parent before descendants, in document order;
+cleanup order is descendants before their parent, in reverse current document order.
+This also applies to slotted and keyed children. A component whose mount starts and then
+fails is cleaned up; rollback cleans up only newly prepared components. Disposal is
+idempotent, including after a cleanup error, and removes DOM nodes, event listeners,
 conditional/list scopes, child instances, and reactive subscriptions.
+
+See [the lifecycle example](../examples/lifecycle/App.qb) and its [child component](../examples/lifecycle/Connection.qb).
 
 `class` on a component instance forwards to its single resolved root element,
 merging with existing classes and retaining defaults. Duplicate classes are removed.
