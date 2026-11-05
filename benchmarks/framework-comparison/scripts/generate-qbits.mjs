@@ -1,7 +1,7 @@
 import {mkdir, writeFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 
-const output = resolve(import.meta.dirname, '../src/qubits/generated');
+const output = resolve(import.meta.dirname, '../src/qbits/generated');
 await mkdir(output, {recursive: true});
 
 const rows = `class Item:

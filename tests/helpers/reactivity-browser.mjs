@@ -124,7 +124,7 @@ export async function verifyEdges(runtimeSource, modules) {
     const rowURL = url(modules['./Row.qb']), row = await import(rowURL);
     // Use the compiler-produced model with the real child mount. A wrapper also
     // lets us inject a host-JavaScript mounting/cleanup failure, without accepting
-    // arbitrary JavaScript in the Qubits language.
+    // arbitrary JavaScript in the Qbits language.
     const edges = await import(url(modules['./Edges.qb'].replace(JSON.stringify('./Row.qb'), JSON.stringify(rowURL))));
     const click = text => [...host.querySelectorAll('button')].find(node => node.textContent === text).click();
     const dispose = runtime.mountComponent(host, edges.model, [row.default]); disposers.push(dispose);
@@ -261,7 +261,7 @@ export async function retentionProbe(runtimeSource, modules) {
       hosts.push(new WeakRef(host)); props.push(new WeakRef(supplied)); nodes.push(new WeakRef(host.firstChild));
       dispose(); host.remove(); handles.push(dispose);
     }
-    globalThis.__qubitsRetentionProbe = {handles, hosts, props, nodes};
+    globalThis.__qbitsRetentionProbe = {handles, hosts, props, nodes};
   } finally {urls.forEach(value => URL.revokeObjectURL(value));}
 }
 

@@ -49,12 +49,12 @@ try {
       }, {helper, runtime, modules});
       await page.requestGC();
       const retention = await page.evaluate(() => {
-        const probe = (globalThis as any).__qubitsRetentionProbe;
+        const probe = (globalThis as any).__qbitsRetentionProbe;
         const observed = {retainedDisposedHandles: probe.handles.length,
           reachableMountHosts: probe.hosts.filter((ref: WeakRef<object>) => ref.deref()).length,
           reachablePropObjects: probe.props.filter((ref: WeakRef<object>) => ref.deref()).length,
           reachableDOMNodes: probe.nodes.filter((ref: WeakRef<object>) => ref.deref()).length};
-        delete (globalThis as any).__qubitsRetentionProbe; return observed;
+        delete (globalThis as any).__qbitsRetentionProbe; return observed;
       });
       const report={path,runtimeSha256:createHash('sha256').update(runtime).digest('hex'),runtimeBytes:Buffer.byteLength(runtime),runtimeGzipBytes:gzipSync(runtime).byteLength,performance,instrumented:result,retention};
       reports.push(report);console.log(JSON.stringify(report,null,2));

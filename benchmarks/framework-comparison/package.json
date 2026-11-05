@@ -1,14 +1,14 @@
 {
-  "name": "qubits-framework-comparison",
+  "name": "qbits-framework-comparison",
   "private": true,
   "type": "module",
   "scripts": {
-    "generate": "node scripts/generate-qubits.mjs",
-    "build:qubits": "vite build --config vite.qubits.config.ts",
+    "generate": "node scripts/generate-qbits.mjs",
+    "build:qbits": "vite build --config vite.qbits.config.ts",
     "build:react": "vite build --config vite.react.config.ts",
     "build:vue": "vite build --config vite.vue.config.ts",
     "build:angular": "ng build --configuration production",
-    "build": "npm run generate && npm run build:qubits && npm run build:react && npm run build:vue && npm run build:angular",
+    "build": "npm run generate && npm run build:qbits && npm run build:react && npm run build:vue && npm run build:angular",
     "verify": "node scripts/run.mjs --verify-only",
     "bench": "node scripts/run.mjs"
   },

@@ -1,7 +1,7 @@
-<!-- Generated for Qubits 0.1.0 by npm run sync. -->
+<!-- Generated for Qbits 0.1.0 by npm run sync. -->
 # create-qb
 
-Private local scaffolder for Qubits 0.1.0.
+Private local scaffolder for Qbits 0.1.0.
 Target: npm create qb myapp. Not published; availability is unverified.
 From a local installation: npm exec -- create-qb myapp --framework /absolute/main.tgz.
 Optional --package-manager npm|pnpm selects application commands (default npm). --vite /absolute/vite.tgz supports local verification. The manager writes its selected lockfile on install. No global install,

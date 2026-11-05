@@ -14,7 +14,7 @@ export interface CompilerLimits {
 }
 
 export interface ModuleGraphLimits {
-  /** Maximum distinct Qubits modules reachable from one entry. */
+  /** Maximum distinct Qbits modules reachable from one entry. */
   maxModules:number;
   /** Maximum import edges on any acyclic path from the entry module. */
   maxImportDepth:number;

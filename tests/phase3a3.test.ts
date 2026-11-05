@@ -9,7 +9,7 @@ import {compile,CompileError,measureComponentComplexity,parse,utf8Length} from '
 import {compileFile} from '../tooling/modules';
 import {languagePlugin} from '../tooling/vite';
 
-async function temporaryProject(run:(root:string)=>Promise<void>):Promise<void>{const root=await mkdtemp(join(tmpdir(),'qubits-phase3a3-'));try{await run(root);}finally{await rm(root,{recursive:true,force:true});}}
+async function temporaryProject(run:(root:string)=>Promise<void>):Promise<void>{const root=await mkdtemp(join(tmpdir(),'qbits-phase3a3-'));try{await run(root);}finally{await rm(root,{recursive:true,force:true});}}
 function message(run:()=>unknown):string{try{run();assert.fail('Expected failure');}catch(error){assert.ok(error instanceof CompileError||error instanceof RangeError);return error.message;}}
 
 test('module graph limits are aggregate, exact, cycle-safe, and iterative',async()=>temporaryProject(async root=>{

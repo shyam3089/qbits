@@ -1,4 +1,4 @@
-<!-- Generated for Qubits 0.1.0 by npm run sync. -->
+<!-- Generated for Qbits 0.1.0 by npm run sync. -->
 # Limitations
 
 Phase 3A.3 adds aggregate compiler-graph and shared component-tree budgets without changing .qb syntax. Reactive bindings remain dependency-based; child props refresh without remounting, and failed structural preparation retains committed identity, focus, selection and local state.

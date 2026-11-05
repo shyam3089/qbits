@@ -10,7 +10,7 @@ human review by someone other than the author. These are project policies, not
 technical enforcement of GitHub permissions. Maintainers must configure branch
 protection and access separately. This implementation changes neither.
 
-Software is licensed under Apache-2.0; see LICENSE and NOTICE. The Qubits name,
+Software is licensed under Apache-2.0; see LICENSE and NOTICE. The Qbits name,
 logo and official identity are addressed separately in TRADEMARKS.md. Packages
 remain private and unpublished. Publishing, deployment and visibility changes
 require separate authorization. GitHub Actions jobs remain disabled.

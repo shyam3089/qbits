@@ -1,4 +1,4 @@
-# Qubits — Agent Instructions
+# Qbits — Agent Instructions
 
 ## Mission
 Build a secure, fast, scalable UI framework for large applications. Prioritize correctness, fine-grained reactivity, small bundles, low memory use, and simple indentation-based `.qb` syntax. React/Angular/Vue performance is a benchmark goal, **not** an unverified claim.

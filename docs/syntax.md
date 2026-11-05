@@ -1,4 +1,4 @@
-# Qubits syntax through Phase 3D.2
+# Qbits syntax through Phase 3D.4
 
 One default component is declared per file. Imports precede the component.
 The Phase 1 counter remains valid:

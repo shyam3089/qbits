@@ -61,11 +61,16 @@ test('shared state declarations and imports are typed and data-only',()=>{
   assert.equal(shared.ast.kind,'SharedState');assert.match(shared.code,/Object\.freeze/);
   const consumer=compile('import Cart from "./Cart.qb"\ncomponent Summary:\n    button text=str(Cart.count):\n        on click:\n            Cart.count = Cart.count + 1','Summary.qb',{shared:new Map([['Cart',shared.ast]])});
   assert.match(consumer.code,/"shared":\[\{"name":"Cart","index":0\}\]/);assert.match(consumer.code,/import s0/);
-  assert.match(compileFile(join('examples','shared-cart','AddToCart.qb')).code,/import s0/);
   assert.throws(()=>compile('shared Bad:\n    value = other'),/defaults must be/);
   assert.throws(()=>compile('import Other from "./Other.qb"\nshared Bad:\n    value = 0'),/cannot import/);
   assert.throws(()=>compile('import Cart from "./Cart.qb"\ncomponent C:\n    p text=str(Cart.missing)','C.qb',{shared:new Map([['Cart',shared.ast]])}),/Unknown shared value/);
   assert.throws(()=>compile('import Cart from "./Cart.qb"\ncomponent C:\n    button:\n        on click:\n            Cart.count = "wrong"','C.qb',{shared:new Map([['Cart',shared.ast]])}),/matching state type/);
+});
+
+test('module graph classifies shared imports with the configured extension',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'qbits-shared-')),ext=identity.sourceExtension;
+  try{await writeFile(join(root,`Cart${ext}`),'shared Cart:\n    count = 0');await writeFile(join(root,`Add${ext}`),`import Cart from "./Cart${ext}"\ncomponent Add:\n    p text=str(Cart.count)`);assert.match(compileFile(join(root,`Add${ext}`)).code,/import s0/);}
+  finally{await rm(root,{recursive:true,force:true});}
 });
 
 test('props are read-only and expressions and class attributes are checked',()=>{
@@ -184,7 +189,7 @@ test('conditionals support typed equality, and, not, and an optional else branch
 });
 
 test('module graph validates props, missing files, suffixes, cycles and transitive root forwarding',async()=>{
-  const temp=await mkdtemp(join(tmpdir(),'qubits-modules-'));const ext=identity.sourceExtension;
+  const temp=await mkdtemp(join(tmpdir(),'qbits-modules-'));const ext=identity.sourceExtension;
   const counter=join(temp,'Counter'+ext),app=join(temp,'App'+ext);
   const check=(text:string)=>compileFile(app,text);
   const expect=(text:string,pattern:RegExp)=>assert.throws(()=>check(text),(e:unknown)=>e instanceof CompileError&&e.diagnostic.filename.startsWith(temp)&&pattern.test(e.message));

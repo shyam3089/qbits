@@ -1,9 +1,9 @@
-<!-- Generated for Qubits 0.1.0 by npm run sync. -->
+<!-- Generated for Qbits 0.1.0 by npm run sync. -->
 # Compilable examples
 
 Save as src/Counter.qb. Add Counter.css using ordinary CSS.
 
-```qubits
+```qbits
 import "./Counter.css"
 
 component Counter(label = "Count: "):
@@ -16,7 +16,7 @@ component Counter(label = "Count: "):
 
 Save as src/Greeting.qb:
 
-```qubits
+```qbits
 component Greeting:
     name = ""
     enabled = true
@@ -44,7 +44,7 @@ component Greeting:
 
 Save as src/NotificationSetting.qb:
 
-```qubits
+```qbits
 component NotificationSetting:
     enabled = false
 
@@ -66,7 +66,7 @@ component NotificationSetting:
 
 Save as src/Catalog.qb:
 
-```qubits
+```qbits
 class Product:
     id = 0
     name = ""
@@ -110,7 +110,7 @@ component Catalog:
 
 Save as src/App.qb:
 
-```qubits
+```qbits
 import Counter from "./Counter.qb"
 import Greeting from "./Greeting.qb"
 import NotificationSetting from "./NotificationSetting.qb"

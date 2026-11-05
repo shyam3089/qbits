@@ -1,6 +1,6 @@
-# qubits
+# qbits
 A declarative UI language and framework for building reactive web interfaces, designed for simplicity, extensibility, and excellent developer tooling.
-# Qubits UI — Phase 3D.1
+# Qbits UI — Phase 3D.1
 
 A small UI language compiling to browser JavaScript. Components support nested
 standard elements, numeric/string/boolean local state, read-only typed props with literal defaults,
@@ -76,7 +76,7 @@ See the [changelog](CHANGELOG.md), [release notes](RELEASE_NOTES.md),
 [contributing](CONTRIBUTING.md), [governance](GOVERNANCE.md), and [security](SECURITY.md).
 Software is licensed under [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for
 creator attribution, [third-party notices](THIRD_PARTY_NOTICES.md), and
-[brand guidance](TRADEMARKS.md) for the Qubits name and logo. Packages remain private
+[brand guidance](TRADEMARKS.md) for the Qbits name and logo. Packages remain private
 and unpublished. GitHub Actions jobs are disabled; their configuration is retained
 for future review. Nothing here publishes packages or deploys a website.
 

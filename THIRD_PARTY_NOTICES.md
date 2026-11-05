@@ -1,7 +1,7 @@
 # Third-party licenses
 
-Qubits' original code is licensed under Apache-2.0. Dependencies keep their own
-licenses and copyright notices; the Qubits license does not replace them.
+Qbits' original code is licensed under Apache-2.0. Dependencies keep their own
+licenses and copyright notices; the Qbits license does not replace them.
 
 The current package-lock.json records these dependency licenses:
 
@@ -21,7 +21,7 @@ includes MIT and Unicode data/software notices; preserve those when distributing
 TypeScript. Each other dependency's supplied license/notice files remain authoritative
 for those packages. No existing third-party notice has been removed or relicensed.
 
-The framework and scaffolder tarballs contain Qubits code, docs and notices; they
+The framework and scaffolder tarballs contain Qbits code, docs and notices; they
 do not vendor node_modules or bundle these build/test dependencies. The browser
 runtime has no third-party imports. Vite's small module-preload helper may appear
 in example application builds; its MIT license and bundled notices are in the
@@ -36,5 +36,5 @@ separately downloaded browsers and operating-system libraries. Before distributi
 bundled third-party code or browser binaries, include their actual license texts,
 copyright notices and any required notices. Recheck dependency and bundle changes.
 
-Official Qubits license text source:
+Official Qbits license text source:
 [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0.txt).

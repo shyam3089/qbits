@@ -1,7 +1,7 @@
-<!-- Generated for Qubits 0.1.0 by npm run sync. -->
+<!-- Generated for Qbits 0.1.0 by npm run sync. -->
 # Agent entry point
 
-Use only this installed version (0.1.0) of Qubits. Load guidance by topic:
+Use only this installed version (0.1.0) of Qbits. Load guidance by topic:
 - [syntax](syntax.md): approved indentation grammar through Phase 3D.1.
 - [examples](examples.md): compilable counters, forms, conditions, classes and keyed lists.
 - [commands](commands.md): setup, checks, init, docs and builds.

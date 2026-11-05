@@ -1,10 +1,10 @@
-<!-- Generated for Qubits 0.1.0 by npm run sync. -->
+<!-- Generated for Qbits 0.1.0 by npm run sync. -->
 # Local packages and onboarding
 
 The target command is npm create qb myapp, which requires the
 create-qb registry package. It is not published and name availability
 is unverified. Do not run that registry command expecting this implementation.
-The main package is qubits, with separate /runtime, /compiler and /vite
+The main package is qbits, with separate /runtime, /compiler and /vite
 entry points, plus the local qb binary.
 
 From the framework repository, pack both private packages locally:
@@ -19,7 +19,7 @@ mkdir ../local-scaffold-runner
 cd ../local-scaffold-runner
 npm init -y
 npm install --ignore-scripts ../create-qb-0.1.0.tgz
-npm exec --offline -- create-qb ../myapp --framework ../qubits-0.1.0.tgz
+npm exec --offline -- create-qb ../myapp --framework ../qbits-0.1.0.tgz
 cd ../myapp
 npm install
 npm run check
@@ -36,14 +36,14 @@ No global install is used. npm install creates package-lock.json. To select pnpm
 For an existing app, run from its root (replace the tarball path if necessary):
 
 ```sh
-npm install --ignore-scripts /absolute/qubits-0.1.0.tgz
+npm install --ignore-scripts /absolute/qbits-0.1.0.tgz
 npm exec --offline -- qb init
 npm run qb -- docs --agent
 npm run qb -- check src --json
 ```
 
 Install a compatible Vite version separately if needed. Merge languagePlugin() from
-qubits/vite into the existing Vite plugins array manually. init does
+qbits/vite into the existing Vite plugins array manually. init does
 not rewrite Vite config or application files. It preserves existing AGENTS.md text
 and conflicting scripts. See commands.md for conflicts and non-src layouts.
 Do not use npm exec by name until the intended local package is installed.

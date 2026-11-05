@@ -1,4 +1,4 @@
-<!-- Generated for Qubits 0.1.0 by npm run sync. -->
+<!-- Generated for Qbits 0.1.0 by npm run sync. -->
 # Package managers
 
 The intended entry remains npm create qb myapp; no global tool
@@ -21,7 +21,7 @@ the corresponding lockfile. npm uses normal project-local node_modules.
 pnpm uses its existing shared content-addressable store and project-specific linking
 and resolution. Shared package contents can save disk space, while each project's
 lockfile preserves its own dependency resolutions. Two apps can use different versions.
-No application dependencies are installed globally. Qubits does not configure a store
+No application dependencies are installed globally. Qbits does not configure a store
 location, implement a resolver/cache/registry, or perform linking, integrity checking,
 or store cleanup: these belong to the selected package manager. Disk savings depend
 on package overlap, filesystem and manager configuration. See [pnpm motivation](https://pnpm.io/motivation).

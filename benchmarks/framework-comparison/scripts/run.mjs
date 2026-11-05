@@ -6,7 +6,7 @@ import {gzipSync} from 'node:zlib';
 import {firefox} from 'playwright';
 
 const root = resolve(import.meta.dirname, '..');
-const frameworks = ['qubits', 'react', 'angular', 'vue'];
+const frameworks = ['qbits', 'react', 'angular', 'vue'];
 const workloads = ['rows-1k', 'rows-10k', 'nested', 'catalog'];
 const repetitions = {
   'rows-1k': {update: 20, reorder: 10},
@@ -115,10 +115,10 @@ try {
     process.stdout.write(`round ${round + 1}/${rounds}${measured ? ' measured' : ' warmup'}\n`);
   }
   for (const workload of workloads) {
-    const expected = verification[workload].qubits.dom;
+    const expected = verification[workload].qbits.dom;
     for (const framework of frameworks) {
       const actual = verification[workload][framework].dom;
-      if (actual.hash !== expected.hash || actual.elements !== expected.elements) throw new Error(`${framework}/${workload}: DOM differs from Qubits`);
+      if (actual.hash !== expected.hash || actual.elements !== expected.elements) throw new Error(`${framework}/${workload}: DOM differs from Qbits`);
     }
   }
   if (verifyOnly) {process.stdout.write(`verified ${frameworks.length} frameworks x ${workloads.length} workloads in Firefox ${browser.version()}\n`);}
@@ -131,7 +131,7 @@ try {
       generatedAt: new Date().toISOString(),
       baselineCommit: (await gitRevision()).trim(),
       environment: {node: process.version, firefox: browser.version(), platform: `${process.platform} ${process.arch}`, warmups, samples, paired: true, cache: 'fresh Firefox context and no-store responses per observation'},
-      versions: {qubits: packageJson.version ?? 'workspace-0.1.0', react: packageJson.dependencies.react, angular: packageJson.dependencies['@angular/core'], vue: packageJson.dependencies.vue},
+      versions: {qbits: packageJson.version ?? 'workspace-0.1.0', react: packageJson.dependencies.react, angular: packageJson.dependencies['@angular/core'], vue: packageJson.dependencies.vue},
       methodology: {productionBuilds: true, workloads, repetitions, operationTiming: 'performance.now around fixed click batches through framework settlement, divided to per-operation milliseconds', coldStartup: 'navigation start to benchmark API installation; fresh context, warm OS filesystem cache', domVerification: 'SHA-256 of exact descendant tag, attributes, and non-whitespace text tree plus interaction assertions'},
       memory: {...memorySupport, measured: false, reason: 'Firefox exposes neither performance.memory nor measureUserAgentSpecificMemory in this environment'},
       gzipJsBytes: sizes,

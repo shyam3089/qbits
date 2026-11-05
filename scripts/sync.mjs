@@ -6,10 +6,11 @@ const root = new URL('../', import.meta.url);
 async function sync(path, content) {
   const url = new URL(path, root); const before = await readFile(url, 'utf8').catch(() => '');
   const normalized = value => value.replace(/\r\n/g, '\n');
-  if (normalized(before) === normalized(content)) return;
+  const normalizedContent = normalized(content);
+  if (normalized(before) === normalizedContent) return;
   if (process.argv.includes('--check')) throw new Error(`Run npm run sync: ${path} is stale`);
   await mkdir(new URL('.',url),{recursive:true});
-  await writeFile(url, before.includes('\r\n') ? content.replace(/\n/g, '\r\n') : content);
+  await writeFile(url, before.includes('\r\n') ? normalizedContent.replace(/\n/g, '\r\n') : normalizedContent);
 }
 const manifest = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));
 manifest.name = identity.packageName;
