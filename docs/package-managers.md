@@ -1,8 +1,8 @@
-<!-- Generated for Qbits 0.1.0 by npm run sync. -->
+<!-- Generated for Qbits 0.1.0-beta.1 by npm run sync. -->
 # Package managers
 
 The intended entry remains npm create qb myapp; no global tool
-is required. It is unpublished/unverified. For local tarballs follow local-packages.md,
+is required. This candidate is not published. For local tarballs follow local-packages.md,
 adding --package-manager pnpm to the creator invocation for pnpm, or
 --package-manager npm (the default). The scaffolder never installs dependencies.
 

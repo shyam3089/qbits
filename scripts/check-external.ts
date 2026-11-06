@@ -86,8 +86,9 @@ try {
   await writeFile(join(runner,'package.json'),'{"private":true}');
   run(runner,['install','--offline','--ignore-scripts','--no-audit','--no-fund',creator]);
   const absentApp = join(temp,'no-registry');
-  assert.notEqual(run(runner,['exec','--offline','--',identity.createPackageName,absentApp],false).status,0,'Private scaffolding must require an explicit local main package');
-  await assert.rejects(lstat(absentApp),{code:'ENOENT'});
+  run(runner,['exec','--offline','--',identity.createPackageName,absentApp]);
+  const registryManifest = JSON.parse(await readFile(join(absentApp,'package.json'),'utf8'));
+  assert.equal(registryManifest.dependencies[identity.packageName],JSON.parse(await readFile(join(root,'package.json'),'utf8')).version,'Public scaffolding must use the matching framework version');
   const app = join(temp,'myapp');
   // Exercise the advertised npm create entry point using the installed local
   // creator. Offline mode prevents resolving an unrelated registry package.
@@ -106,10 +107,10 @@ try {
   const installed = join(app,'node_modules',identity.packageName);
   assert.ok(!(await realpath(installed)).startsWith(root),'Framework must be installed from tarball, not linked to checkout');
   const manifest = JSON.parse(await readFile(join(installed,'package.json'),'utf8'));
-  assert.equal(manifest.private,true); assert.equal(manifest.scripts?.postinstall,undefined);
+  assert.equal(manifest.private,undefined); assert.equal(manifest.scripts?.postinstall,undefined);
   assert.equal(Object.keys(manifest.bin)[0],identity.cliName);
   assert.equal(JSON.parse(await readFile(join(runner,'node_modules',identity.createPackageName,'package.json'),'utf8')).version,manifest.version);
-  for (const topic of ['agent','syntax','examples','commands','security','limitations']) assert.ok((await readFile(join(installed,'docs',topic + '.md'),'utf8')).length);
+  for (const topic of ['agent','api','syntax','examples','commands','security','limitations']) assert.ok((await readFile(join(installed,'docs',topic + '.md'),'utf8')).length);
   for (const link of beforeInstall.matchAll(/\]\(([^)]+)\)/g)) assert.ok((await lstat(resolve(app,link[1]))).isFile(),`Missing installed agent link ${link[1]}`);
   assert.match(appRun(app,['run',identity.cliName,'--','docs','--agent']).stdout,new RegExp(manifest.version.replaceAll('.','\\.')));
   const custom = '# Existing app policies\n\nKeep this exact text.\n\n' + beforeInstall;

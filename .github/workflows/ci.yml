@@ -59,7 +59,8 @@ jobs:
       - run: npm run sync:check
       - run: npm run build
       - run: npm run test:docs
-      - run: npm run test:unit
-      - run: npm run test:browser
+      - run: npm test
       - run: npm run test:rename
       - run: npm run test:external
+      - run: npm pack --dry-run --json
+      - run: npm pack ./packages/create --dry-run --json

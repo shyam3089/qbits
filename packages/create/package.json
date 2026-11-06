@@ -1,7 +1,20 @@
 {
   "name": "create-qb",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.1.0-beta.1",
+  "description": "Create a Qbits application.",
+  "keywords": [
+    "create",
+    "scaffold",
+    "vite"
+  ],
+  "homepage": "https://github.com/shyam3089/qubits#readme",
+  "bugs": "https://github.com/shyam3089/qubits/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shyam3089/qubits.git",
+    "directory": "packages/create"
+  },
+  "author": "Shyam Mohan",
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
@@ -18,6 +31,10 @@
   ],
   "engines": {
     "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "frameworkViteRange": "^6.3.5"
 }

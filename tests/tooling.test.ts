@@ -49,6 +49,7 @@ test('init preserves existing instructions/scripts and is idempotent', async () 
 test('agent docs identify the installed version and topic files', () => {
   const result = invoke(process.cwd(),['docs','--agent']); assert.equal(result.status,0,result.stderr);
   assert.match(result.stdout,/installed docs/); assert.match(result.stdout,/syntax.md/); assert.match(result.stdout,/security.md/);
+  const api = invoke(process.cwd(),['docs','api']); assert.equal(api.status,0,api.stderr); assert.match(api.stdout,/beta API/);
   assert.equal(invoke(process.cwd(),['docs','../identity']).status,1);
 });
 test('managed instructions update only their own section', () => {

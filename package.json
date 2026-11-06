@@ -1,18 +1,54 @@
 {
   "name": "qbits",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.1.0-beta.1",
+  "description": "A small, typed, indentation-based UI language and reactive browser runtime.",
+  "keywords": [
+    "ui",
+    "reactive",
+    "compiler",
+    "vite"
+  ],
+  "homepage": "https://github.com/shyam3089/qubits#readme",
+  "bugs": "https://github.com/shyam3089/qubits/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shyam3089/qubits.git"
+  },
+  "author": "Shyam Mohan",
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
-    "./compiler": "./dist/lib/language/index.js",
-    "./runtime": "./dist/lib/runtime/index.js",
-    "./vite": "./dist/lib/tooling/vite.js"
+    "./compiler": {
+      "types": "./dist/lib/language/index.d.ts",
+      "import": "./dist/lib/language/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/lib/runtime/index.d.ts",
+      "import": "./dist/lib/runtime/index.js"
+    },
+    "./vite": {
+      "types": "./dist/lib/tooling/vite.d.ts",
+      "import": "./dist/lib/tooling/vite.js"
+    }
   },
   "files": [
     "dist/lib",
     "identity.json",
-    "docs",
+    "docs/agent.md",
+    "docs/api.md",
+    "docs/architecture.md",
+    "docs/commands.md",
+    "docs/examples.md",
+    "docs/identity.md",
+    "docs/limitations.md",
+    "docs/local-packages.md",
+    "docs/manifest.json",
+    "docs/package-managers.md",
+    "docs/performance.md",
+    "docs/reactivity.md",
+    "docs/renaming.md",
+    "docs/security.md",
+    "docs/syntax.md",
     "SECURITY.md",
     "GOVERNANCE.md",
     "CONTRIBUTING.md",
@@ -60,6 +96,10 @@
     "vite": {
       "optional": true
     }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "bin": {
     "qb": "dist/lib/tooling/cli.js"

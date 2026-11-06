@@ -1,27 +1,18 @@
-# qbits
-A declarative UI language and framework for building reactive web interfaces, designed for simplicity, extensibility, and excellent developer tooling.
-# Qbits UI
+# Qbits
 
-A small UI language compiling to browser JavaScript. Components support nested
-standard elements, numeric/string/boolean local state, read-only typed props with literal defaults,
-relative component imports, static classes, text and checkbox input binding, typed state conditions and ordinary external CSS imports.
-Phase 2D adds file-local data classes, computed values, typed keyed lists, closed
-event actions, and component initialization/cleanup. Use `text=expression` and
-`str(value)` for safe text content. Blocks use spaces and colon headers; newlines end statements.
-Phase 3A.3 preserves that syntax while adding iterative module-graph limits, shared
-runtime resource budgets, transactional rollback, compiler-marked static bindings,
-and repeatable Firefox performance measurements.
-Phase 3D.1 adds one default `slot` for reusable parent-child layouts. Slotted content
-retains its parent's reactive scope, keyed identity, rollback behavior, and cleanup.
-See the [composition example](examples/composition/App.qb).
-The example mounts two independent counters. Instance classes merge into a single
-root element's defaults; ambiguous forwarding is an error.
-See the [grammar](docs/syntax.md) and [identity reference](docs/identity.md).
+Qbits is a small, typed, indentation-based UI language that compiles to browser
+JavaScript. It provides fine-grained reactivity, keyed lists, components, one default
+slot, shared reactive state, typed child events, lifecycle hooks, and safe text/property
+rendering without executing source expressions.
 
-Requires Node.js 22+ and npm. To create a new app, follow the
-[local scaffolding quick start](docs/local-packages.md). `npm create qb myapp`
-is the intended registry command, but this scaffolder and framework are private
-and unpublished; use the documented local tarballs to get this implementation.
+The supported beta surface is frozen in the [API reference](docs/api.md). See the
+[complete grammar](docs/syntax.md), [compilable examples](docs/examples.md), and
+[current limitations](docs/limitations.md). The client-side router and low-level
+compiler/runtime internals are experimental as described in the API reference.
+
+Requires Node.js 22+ and npm or pnpm. This beta candidate is not published. Until a
+release is explicitly authorized, follow the [local package quick start](docs/local-packages.md).
+After both packages are published, the intended registry command is `npm create qb myapp`.
 
 To work on the framework itself, run from the repository root:
 
@@ -59,10 +50,8 @@ appear in Vite's overlay; fixing source reloads the app without restarting Vite.
 Component HMR/state preservation is not implemented; state resets on reload.
 
 Follow [local package/scaffolder setup](docs/local-packages.md) to create an app
-with locally packed private packages. It documents the target registry command,
-the distinct main/scaffolder packages, and explicit onboarding for existing apps.
-While packages are private, the scaffolder requires an explicit local main-package
-tarball; it never assumes registry availability. Commands use local binaries, with no global
+from release-candidate tarballs. It documents the distinct main/scaffolder packages
+and explicit onboarding for existing apps. Commands use local binaries, with no global
 installs. See [commands](docs/commands.md) for machine-readable checking and init.
 The generator accepts `--package-manager npm|pnpm` (default npm). See
 [package managers](docs/package-managers.md) for selected commands, optional shared
@@ -81,25 +70,13 @@ See the [changelog](CHANGELOG.md), [release notes](RELEASE_NOTES.md),
 [contributing](CONTRIBUTING.md), [governance](GOVERNANCE.md), and [security](SECURITY.md).
 Software is licensed under [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for
 creator attribution, [third-party notices](THIRD_PARTY_NOTICES.md), and
-[brand guidance](TRADEMARKS.md) for the Qbits name and logo. Packages remain private
-and unpublished. GitHub Actions jobs are disabled; their configuration is retained
-for future review. Nothing here publishes packages or deploys a website.
+[brand guidance](TRADEMARKS.md) for the Qbits name and logo. Packages are configured
+as public beta candidates but remain unpublished. GitHub Actions jobs are disabled;
+their configuration is retained for review. Nothing here publishes packages or deploys a website.
 
-Conditions support `==`, `!=`, `and`, `or`, and `not`, with parentheses for grouping.
-Optional client-side routing supports static paths, `<name>` parameters and a 404
-fallback; see [routing syntax](docs/syntax.md#client-side-routing).
-Classes omit inheritance, custom
-constructors, access modifiers, static members, action parameters, and unrestricted
-methods. Populated homogeneous lists infer their type; empty primitive or class-record
-lists use `[] as Type`.
-ordering comparisons, filtering/sorting/index expressions, additional controls,
-nested routing, SSR, plugins, LSP/editor extensions, native targets, and a registry are
-deferred. Named/fallback slots and state-preserving HMR are also deferred.
-No performance claim is made without a benchmark.
-
-Phase 2E adds synchronous reactive batching, computed dependency ordering, tracked
-child prop updates, and keyed reconciliation that minimizes retained range moves.
-DOM identity, child state, focus and selection are preserved; unchanged values skip
-DOM writes. Disposal releases subscriptions, listeners and retained state, including
-failed mounts. Run `npm run bench:reactivity` after building. See
-[measurements and validation](docs/performance.md) for the baseline comparison and limitations.
+Qbits batches synchronous reactive changes, orders computed dependencies, updates
+child props without remounting, and reconciles keyed ranges while preserving DOM
+identity, child state, focus, and selection. Disposal releases subscriptions, listeners,
+and retained state, including failed mounts. No performance claim is made without a
+measurement; the existing methodology and results remain in
+[performance documentation](docs/performance.md).
