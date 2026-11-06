@@ -19,7 +19,7 @@ mkdir ../local-scaffold-runner
 cd ../local-scaffold-runner
 npm init -y
 npm install --ignore-scripts ../create-qb-0.1.0.tgz
-npm exec --offline -- create-qb ../myapp --framework ../qbits-0.1.0.tgz
+npm create qb --offline -- ../myapp --framework ../qbits-0.1.0.tgz
 cd ../myapp
 npm install
 npm run check
@@ -29,7 +29,10 @@ npm run dev
 
 Use fresh runner/app directories. The creator refuses existing targets. Local file
 paths are resolved before creation. This installs the intended scaffolder from its
-tarball, never by an unverified registry name. Vite and transitive dependencies may
+tarball, never by an unverified registry name. Offline npm create uses that locally
+installed initializer; it does not verify or fetch a registry release. Open the URL
+printed by the dev server. Edit src/Counter.qb, then save to reload.
+Stop the server with Ctrl+C; use another terminal in the app directory to run checks. Vite and transitive dependencies may
 be fetched by npm install; --vite /absolute/vite.tgz can pin a local Vite tarball.
 No global install is used. npm install creates package-lock.json. To select pnpm, add --package-manager pnpm to the creator invocation, then use pnpm install, pnpm run dev, pnpm run check and pnpm run build. pnpm creates only pnpm-lock.yaml. See [package managers](package-managers.md) for shared storage and non-global tool options.
 

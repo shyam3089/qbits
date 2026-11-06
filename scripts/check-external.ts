@@ -89,7 +89,9 @@ try {
   assert.notEqual(run(runner,['exec','--offline','--',identity.createPackageName,absentApp],false).status,0,'Private scaffolding must require an explicit local main package');
   await assert.rejects(lstat(absentApp),{code:'ENOENT'});
   const app = join(temp,'myapp');
-  run(runner,['exec','--offline','--',identity.createPackageName,app,'--framework',main,'--vite',vite,'--package-manager',manager]);
+  // Exercise the advertised npm create entry point using the installed local
+  // creator. Offline mode prevents resolving an unrelated registry package.
+  run(runner,['create',identity.createCommand,'--offline','--',app,'--framework',main,'--vite',vite,'--package-manager',manager]);
   assert.notEqual(run(runner,['exec','--offline','--',identity.createPackageName,app,'--framework',main],false).status,0,'Scaffolder must refuse an existing target');
   const beforeInstall = await readFile(join(app,'AGENTS.md'),'utf8');
   appRun(app,manager === 'npm' ? ['install','--offline=false','--prefer-offline','--ignore-scripts','--no-audit','--no-fund'] : ['install','--ignore-scripts','--no-frozen-lockfile']);
@@ -158,11 +160,13 @@ try {
   await reloadAfterEdit(sourcePath,broken);
   await page.waitForFunction(() => {
     const text = document.querySelector('vite-error-overlay')?.shadowRoot?.textContent ?? '';
-    return text.includes('Unknown state') && /Counter[^\n]*:6:56/.test(text);
+    return text.includes('Unknown state') && /Counter[^\n]*:6:56/.test(text) && text.includes('Hint: Declare');
   });
   console.log('Located syntax error appeared in the browser overlay.');
   const failed = appRun(app,['exec','--offline','--',identity.cliName,'check','src','--json'],false);
   assert.equal(failed.status,1); assert.equal(JSON.parse(failed.stdout).diagnostics[0].line,6);
+  const failedBuild=appRun(app,['run','build'],false),buildError=failedBuild.stdout+failedBuild.stderr;
+  assert.notEqual(failedBuild.status,0);assert.match(buildError,/Unknown state or prop/);assert.match(buildError,/6\s*\|[^\n]*missing/);assert.match(buildError,/Hint: Declare/);
   await reloadAfterEdit(sourcePath,original.replace('text=label','text="Recovered: " + label'));
   await page.getByRole('button',{name:'Recovered: First: 0',exact:true}).waitFor();
   await page.waitForFunction(() => !document.querySelector('vite-error-overlay'));

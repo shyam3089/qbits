@@ -19,7 +19,9 @@ export function languagePlugin(options:CompileFileOptions={}): Plugin {
       catch (error) {
         if (!(error instanceof CompileError)) throw error;
         const d = error.diagnostic;
-        this.error({message: d.message+(error.hint?`\nHint: ${error.hint}`:''), id: d.filename, frame:error.frame, loc: {file: d.filename, line: d.line, column: d.column - 1}, pos: d.span.start});
+        // Vite displays loc.column verbatim. Do not pass a child-file offset:
+        // Vite would interpret it against the parent currently being transformed.
+        this.error({message: d.message+(error.hint?`\nHint: ${error.hint}`:''), id: d.filename, frame:error.frame, loc: {file: d.filename, line: d.line, column: d.column}});
       }
     }};
 }

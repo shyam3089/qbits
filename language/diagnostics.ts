@@ -12,15 +12,19 @@ export class CompileError extends Error {
 // Keep source-derived terminal output inert, including invalid control characters.
 function visible(value:string):string {return value.replace(/[\u0000-\u001f\u007f-\u009f]/g,char=>char==='\t'?'    ':`\\u${char.charCodeAt(0).toString(16).padStart(4,'0')}`);}
 function sourceFrame(source:string,diagnostic:Diagnostic):string {
-  const line=source.split(/\r\n|\r|\n/)[diagnostic.line-1]??'',column=Math.min(line.length,Math.max(0,diagnostic.column-1));
-  const start=Math.max(0,column-70),end=Math.min(line.length,Math.max(column+1,start+140));
-  const prefix=start?'...':'',text=prefix+visible(line.slice(start,end))+(end<line.length?'...':'');
-  const caret=prefix.length+visible(line.slice(start,column)).length,label=String(diagnostic.line);
+  // The tokenizer can reject oversized source before reading it. Build only a
+  // bounded window, even on that path, without splitting/scanning the whole input.
+  const offset=Math.min(source.length,Math.max(0,diagnostic.span.start)),lineStart=Math.max(0,offset-diagnostic.column+1);
+  const start=Math.max(lineStart,offset-70),end=Math.min(source.length,Math.max(offset+1,start+140));
+  const line=source.slice(start,end).split(/[\r\n]/,1)[0],column=Math.min(line.length,offset-start);
+  const prefix=start>lineStart?'...':'',next=start+line.length,more=next<source.length&&source[next]!=='\r'&&source[next]!=='\n';
+  const text=prefix+visible(line)+(more?'...':'');
+  const caret=prefix.length+visible(line.slice(0,column)).length,label=String(diagnostic.line);
   return `${label} | ${text}\n${' '.repeat(label.length)} | ${' '.repeat(caret)}^`;
 }
 function suggestion(message:string):string|undefined {
   // Existing diagnostics with a concrete remedy already explain their fix.
-  if(/\buse\b|for example|for instance/i.test(message))return;
+  if(/\buse (?:str\(|<)|for example|for instance/i.test(message))return;
   if(/indent|Tabs are not allowed/i.test(message))return 'Use spaces and keep the same indentation width for each block.';
   if(/Expected :/.test(message))return 'End block headers with : and indent the following lines.';
   if(/Missing import|Imports must use|Named import must use/.test(message))return 'Check the relative path, filename case, and extension; import CSS without a component name.';

@@ -1,6 +1,6 @@
 # qbits
 A declarative UI language and framework for building reactive web interfaces, designed for simplicity, extensibility, and excellent developer tooling.
-# Qbits UI — Phase 3D.1
+# Qbits UI
 
 A small UI language compiling to browser JavaScript. Components support nested
 standard elements, numeric/string/boolean local state, read-only typed props with literal defaults,
@@ -18,7 +18,12 @@ The example mounts two independent counters. Instance classes merge into a singl
 root element's defaults; ambiguous forwarding is an error.
 See the [grammar](docs/syntax.md) and [identity reference](docs/identity.md).
 
-Requires Node.js 22+ and npm. From the repository root:
+Requires Node.js 22+ and npm. To create a new app, follow the
+[local scaffolding quick start](docs/local-packages.md). `npm create qb myapp`
+is the intended registry command, but this scaffolder and framework are private
+and unpublished; use the documented local tarballs to get this implementation.
+
+To work on the framework itself, run from the repository root:
 
 ```sh
 npm ci
@@ -80,12 +85,15 @@ creator attribution, [third-party notices](THIRD_PARTY_NOTICES.md), and
 and unpublished. GitHub Actions jobs are disabled; their configuration is retained
 for future review. Nothing here publishes packages or deploys a website.
 
-Conditions support `==`, `!=`, `and`, and `not`. Classes omit inheritance, custom
+Conditions support `==`, `!=`, `and`, `or`, and `not`, with parentheses for grouping.
+Optional client-side routing supports static paths, `<name>` parameters and a 404
+fallback; see [routing syntax](docs/syntax.md#client-side-routing).
+Classes omit inheritance, custom
 constructors, access modifiers, static members, action parameters, and unrestricted
 methods. Populated homogeneous lists infer their type; empty primitive or class-record
-lists use `[] as Type`. `or`,
+lists use `[] as Type`.
 ordering comparisons, filtering/sorting/index expressions, additional controls,
-routing, SSR, plugins, LSP/editor extensions, native targets, and a registry are
+nested routing, SSR, plugins, LSP/editor extensions, native targets, and a registry are
 deferred. Named/fallback slots and state-preserving HMR are also deferred.
 No performance claim is made without a benchmark.
 

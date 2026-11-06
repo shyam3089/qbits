@@ -31,6 +31,6 @@ try {
     }
   } catch (error) { await rm(target, {recursive:true, force:true}); throw error; }
   const commands = managerCommands(manager);
-  console.log(`${identity.displayName}: created ${target}. Next: cd ${JSON.stringify(name)}, ${commands.install}, ${commands.run('dev')}. Installation generates ${commands.lockfile}. No dependencies were installed.`);
+  console.log(`${identity.displayName}: created ${target}. Next: cd ${JSON.stringify(name)}, ${commands.install}, ${commands.run('check')}, ${commands.run('dev')}. Open the local URL printed by Vite; stop with Ctrl+C. Installation generates ${commands.lockfile}. No dependencies were installed.`);
   if (manager === 'pnpm' && spawnSync('pnpm',['--version'],{shell:process.platform === 'win32',windowsHide:true,stdio:'ignore',timeout:10000}).status !== 0) console.log('pnpm is unavailable on PATH. Opt in to a non-global tool download with npm exec --package=pnpm -- pnpm install, or scaffold a new app with --package-manager npm. No global tool was installed.');
 } catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; }
