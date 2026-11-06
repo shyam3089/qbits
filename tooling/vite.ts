@@ -2,7 +2,6 @@ import type { Plugin } from 'vite';
 import {compileFile,type CompileFileOptions} from './modules.js';
 import { CompileError } from '../language/diagnostics.js';
 import { identity, isSource, metadata } from './config.js';
-import { readFileSync } from 'node:fs';
 export function languagePlugin(options:CompileFileOptions={}): Plugin {
   return {name: `${identity.languageId}-compiler`, enforce: 'pre',
     handleHotUpdate(context) {
@@ -20,9 +19,7 @@ export function languagePlugin(options:CompileFileOptions={}): Plugin {
       catch (error) {
         if (!(error instanceof CompileError)) throw error;
         const d = error.diagnostic;
-        const lines = readFileSync(d.filename,'utf8').split(/\r\n|\r|\n/);
-        const frame = `${d.line} | ${lines[d.line-1]}\n${' '.repeat(String(d.line).length)} | ${' '.repeat(d.column-1)}^`;
-        this.error({message: error.message, id: d.filename, frame, loc: {file: d.filename, line: d.line, column: d.column - 1}, pos: d.span.start});
+        this.error({message: d.message+(error.hint?`\nHint: ${error.hint}`:''), id: d.filename, frame:error.frame, loc: {file: d.filename, line: d.line, column: d.column - 1}, pos: d.span.start});
       }
     }};
 }

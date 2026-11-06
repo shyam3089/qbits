@@ -2,7 +2,7 @@
 import { readFile, writeFile, readdir, lstat } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CompileError, type Diagnostic } from '../language/index.js';
+import { CompileError, formatCompileError, type Diagnostic } from '../language/index.js';
 import { identity, isSource, metadata } from './config.js';
 import { initialize } from './onboarding.js';
 import {compileFile,type CompileFileOptions} from './modules.js';
@@ -16,7 +16,9 @@ function graphOptions(values:string[]):{values:string[];options:CompileFileOptio
 type CheckDiagnostic = Diagnostic & {kind: 'syntax' | 'io'};
 async function check(paths: string[]): Promise<void> {
   const parsed=graphOptions(paths),json=parsed.values.includes('--json'),files:string[] = [],diagnostics: CheckDiagnostic[] = [];
-  const io = (filename: string, message: string) => diagnostics.push({kind:'io',filename,line:1,column:1,span:{start:0,end:0},message});
+  const seen=new Set<string>(),details=new Map<CheckDiagnostic,CompileError>();
+  const report=(diagnostic:CheckDiagnostic,error?:CompileError)=>{const key=JSON.stringify(diagnostic);if(seen.has(key))return;seen.add(key);diagnostics.push(diagnostic);if(error)details.set(diagnostic,error);};
+  const io = (filename: string, message: string) => report({kind:'io',filename,line:1,column:1,span:{start:0,end:0},message});
   async function visit(path: string, explicit = false): Promise<void> {
     try {
       const info = await lstat(path);
@@ -33,12 +35,12 @@ async function check(paths: string[]): Promise<void> {
   }
   for (const file of [...new Set(files)]) {
     try { compileFile(file,undefined,undefined,parsed.options); }
-    catch (error) { if (error instanceof CompileError) diagnostics.push({...error.diagnostic,kind:'syntax'}); else io(file,error instanceof Error ? error.message : String(error)); }
+    catch (error) { if (error instanceof CompileError) report({...error.diagnostic,kind:'syntax'},error); else io(file,error instanceof Error ? error.message : String(error)); }
   }
   if (!files.length && !diagnostics.length) io(resolve(inputs[0] ?? 'src'),`No ${identity.sourceExtension} source files found`);
   const result = {schemaVersion:1, ok:diagnostics.length === 0, filesChecked:new Set(files).size, diagnostics};
   if (json) console.log(JSON.stringify(result));
-  else { for (const d of diagnostics) console.error(`${d.filename}:${d.line}:${d.column}: ${d.message}`); console.log(`${identity.displayName}: checked ${result.filesChecked} file(s), ${diagnostics.length} error(s)`); }
+  else { for (const d of diagnostics) {const detail=details.get(d);console.error(detail?formatCompileError(detail):`${d.filename}:${d.line}:${d.column}: ${d.message}`);} console.log(`${identity.displayName}: checked ${result.filesChecked} file(s), ${diagnostics.length} error(s)`); }
   if (!result.ok) process.exitCode = 1;
 }
 try {
@@ -58,4 +60,8 @@ try {
     await writeFile(output,metadata() + result.code);
     console.log(`${identity.displayName}: compiled ${input} -> ${output}`);
   }
-} catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; }
+} catch (error) {
+  if(args[0]==='check'&&args.includes('--json'))console.log(JSON.stringify({schemaVersion:1,ok:false,filesChecked:0,diagnostics:[{kind:'io',filename:'<command line>',line:1,column:1,span:{start:0,end:0},message:error instanceof Error?error.message:String(error)}]}));
+  else console.error(error instanceof CompileError?formatCompileError(error):error instanceof Error?error.message:String(error));
+  process.exitCode = 1;
+}
