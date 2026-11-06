@@ -195,7 +195,7 @@ component Store:
     router:
         route "/":
             p text="Home"
-        route "/products/:id":
+        route "/products/<id>":
             p text="Product " + id
             button text="Home":
                 on click:
@@ -212,8 +212,9 @@ write another mount's route state. Back/forward reflects the document URL in eac
 Host `pushState` calls alone do not notify routers.
 
 Routes match whole paths, case sensitively. Static segments use ASCII letters,
-digits, underscores and hyphens. `:name` captures one decoded segment. More static
+digits, underscores and hyphens. `<name>` captures one decoded segment. More static
 segments win; duplicates and equally specific overlapping patterns are rejected.
+Legacy `:name` patterns are rejected; replace `/products/:id` with `/products/<id>`.
 Parameters can feed text, conditions and child props. A parameter change within
 the same route retains its components and local state; switching route branches
 stages new content before disposing old content, using existing lifecycle ordering.

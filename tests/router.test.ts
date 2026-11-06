@@ -12,7 +12,7 @@ test('module graph validates routed component props and dynamic root forwarding'
   const directory=await mkdtemp(join(tmpdir(),'qbits-router-')),ext=identity.sourceExtension;
   try{
     await writeFile(join(directory,'Leaf'+ext),'component Leaf(id = ""):\n    p text=id');
-    await writeFile(join(directory,'Routes'+ext),`import Leaf from "./Leaf${ext}"\ncomponent Routes:\n    router:\n        route "/:id":\n            Leaf id=id\n        route "*":\n            p text="404"`);
+    await writeFile(join(directory,'Routes'+ext),`import Leaf from "./Leaf${ext}"\ncomponent Routes:\n    router:\n        route "/<id>":\n            Leaf id=id\n        route "*":\n            p text="404"`);
     const file=join(directory,'App'+ext),source=`import Routes from "./Routes${ext}"\ncomponent App:\n    Routes`;
     await writeFile(file,source);assert.doesNotThrow(()=>compileFile(file));
     assert.throws(()=>compileFile(file,source+' class="page"'),/Ambiguous class forwarding/);
@@ -28,27 +28,30 @@ test('routing syntax validates patterns, scopes, fallbacks and navigation',()=>{
             button text="Open":
                 on click:
                     navigate "/products/1"
-        route "/products/:id":
+        route "/products/<id>":
             p text=id
             if id != "":
                 p text="Product"
         route "*":
             p text="Not found"`).code;
   assert.match(code,/"kind":"router"/);assert.match(code,/"kind":"navigate"/);
+  assert.match(code,/"path":"\/products\/<id>"/);
+  const legacy='component App:\n    router:\n        route "/products/:id":\n            p text="legacy"\n        route "*":\n            p text="404"';
+  assert.throws(()=>compile(legacy,'legacy.qb'),error=>error instanceof CompileError&&error.diagnostic.line===3&&/Legacy :name.*use <name>/.test(error.message));
   assert.doesNotThrow(()=>compile('component Existing:\n    navigate = ""\n    button:\n        on click:\n            navigate = "value"\n    p text=navigate'));
   const rejects=(body:string,pattern:RegExp)=>assert.throws(()=>compile('component App:\n'+body,'routes.qb'),error=>error instanceof CompileError&&pattern.test(error.message));
-  for(const path of ['products','//host','/a/','/a?b','/a/../b','/a/%2f','/a/:__proto__','/a/:id/:id','/a/:not'])
+  for(const path of ['products','//host','/a/','/a?b','/a/../b','/a/%2f','/a/<__proto__>','/a/<id>/<id>','/a/<not>','/a/<id','/a/id>','/a/<>','/a/<id>suffix','/a/<<id>>','/a/prefix<id>'])
     rejects(`    router:\n        route "${path}":\n            p text="bad"\n        route "*":\n            p text="404"`,/Route|route/);
   rejects('    router:\n        route "/":\n            p text="home"',/final route/);
   rejects('    router:\n        route "*":\n            p text="404"\n        route "/":\n            p text="home"',/must be last/);
-  rejects('    router:\n        route "/a/:id":\n            p text=id\n        route "/a/:name":\n            p text=name\n        route "*":\n            p text="404"',/ambiguous/);
+  rejects('    router:\n        route "/a/<id>":\n            p text=id\n        route "/a/<name>":\n            p text=name\n        route "*":\n            p text="404"',/ambiguous/);
   rejects('    route "/":\n        p text="home"',/directly inside router/);
-  rejects('    router:\n        route "/:id":\n            button:\n                on click:\n                    id = "changed"\n        route "*":\n            p text="404"',/read-only/);
-  rejects('    id = "state"\n    router:\n        route "/:id":\n            p text=id\n        route "*":\n            p text="404"',/shadowed/);
+  rejects('    router:\n        route "/<id>":\n            button:\n                on click:\n                    id = "changed"\n        route "*":\n            p text="404"',/read-only/);
+  rejects('    id = "state"\n    router:\n        route "/<id>":\n            p text=id\n        route "*":\n            p text="404"',/shadowed/);
   rejects('    button:\n        on click:\n            navigate 1',/string path/);
   for(const path of ['//evil.test','javascript:alert(1)','/a/../b','/a/%2f','/a/%zz'])rejects(`    button:\n        on click:\n            navigate "${path}"`,/absolute path|URL/);
   rejects('    on init:\n        navigate "/"\n    p text="home"',/only in event handlers/);
-  rejects('    router:\n        route "/:id":\n            p text=id\n        route "*":\n            p text="404"\n    p text=id',/Unknown state or prop/);
+  rejects('    router:\n        route "/<id>":\n            p text=id\n        route "*":\n            p text="404"\n    p text=id',/Unknown state or prop/);
   rejects('    enabled = true\n    if enabled:\n        router:\n            route "*":\n                p text="404"',/static router/);
   rejects('    router:\n        route "*":\n            router:\n                route "*":\n                    p text="404"',/nested or dynamic/);
   const many=Array.from({length:256},(_,i)=>`        route "/p${i}":\n            p text="x"`).join('\n');
@@ -83,12 +86,14 @@ component App:
     router:
         route "/":
             p class="home" text="Home"
-        route "/products/:id":
+        route "/products/<id>":
             Product id=id:
                 on lifecycle(message):
                     emit lifecycle(message)
         route "/products/new":
             p class="new" text="New product"
+        route "/pair/<first>/<second>":
+            p class="pair" text=first + ":" + second
         route "/broken":
             Broken
         route "*":
@@ -109,16 +114,19 @@ component App:
     assert.equal(await page.evaluate(()=>{const p=(globalThis as any).routingProbe;return p.host.querySelector('.count')===p.child&&p.child.textContent==='1';}),true);
     const final=await page.evaluate(()=>{
       const p=(globalThis as any).routingProbe;p.flags.failCleanup=true;
-      p.go('/products/new');const staticWins=!!p.host.querySelector('.new'),postCommit=location.pathname==='/products/new'&&p.errors.at(-1).includes('committed but cleanup failed');p.go('/unmatched');const missing=!!p.host.querySelector('.missing');
+      p.go('/products/new');const staticWins=!!p.host.querySelector('.new'),postCommit=location.pathname==='/products/new'&&p.errors.at(-1).includes('committed but cleanup failed');
+      p.go('/pair/one/two');const multiple=p.host.querySelector('.pair').textContent;
+      p.go('/unmatched');const missing=!!p.host.querySelector('.missing');
       p.go('/products/%3Cscript%3E');const safe=p.host.querySelector('h2').textContent==='<script>'&&!p.host.querySelector('script');
       p.go('/');const lifecycle=[...p.events];p.dispose();const clean=p.host.childNodes.length===0&&p.second.childNodes.length===0&&p.listeners.size===0;
-      p.urls.forEach(URL.revokeObjectURL);return {staticWins,postCommit,missing,safe,lifecycle,clean};
+      p.urls.forEach(URL.revokeObjectURL);return {staticWins,postCommit,multiple,missing,safe,lifecycle,clean};
     });
     assert.equal(final.staticWins,true);assert.equal(final.missing,true);assert.equal(final.safe,true);assert.equal(final.clean,true);
     assert.equal(final.postCommit,true);
+    assert.equal(final.multiple,'one:two');
     assert.deepEqual(final.lifecycle,['init:1','cleanup:3','init:<script>','cleanup:<script>']);
     const failures=await page.evaluate(async({runtime,helper})=>{const url=URL.createObjectURL(new Blob([helper],{type:'text/javascript'}));try{return await (await import(url)).validateRouteModels(runtime);}finally{URL.revokeObjectURL(url);}},{runtime,helper});
-    assert.equal(failures.length,13);assert.ok(failures.every((failure:string)=>failure!=='accepted'));assert.match(failures[9],/DOM nodes/);assert.match(failures[10],/effects/);assert.match(failures[11],/work/);assert.match(failures[12],/one router/);
+    assert.equal(failures.length,20);assert.ok(failures.every((failure:string)=>failure!=='accepted'));assert.match(failures[9],/DOM nodes/);assert.match(failures[10],/effects/);assert.match(failures[11],/work/);assert.match(failures[12],/one router/);assert.match(failures[13],/Legacy :name.*use <name>/);
     const recovery=await page.evaluate(async({runtime,helper})=>{const url=URL.createObjectURL(new Blob([helper],{type:'text/javascript'}));try{return await (await import(url)).verifyHistoryRecoveryFailure(runtime);}finally{URL.revokeObjectURL(url);}},{runtime,helper});
     assert.deepEqual(recovery,{message:'Route history recovery failed',errors:['mount blocked','recovery blocked'],disabled:true});
     // Initial malformed URLs use the explicit fallback; no exception or execution.

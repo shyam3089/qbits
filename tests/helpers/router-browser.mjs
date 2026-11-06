@@ -41,10 +41,11 @@ export async function validateRouteModels(runtime) {
         const api=await import(url),failures=[];
         const leaf={kind:'element',tag:'p',component:-1,attributes:{text:{kind:'literal',value:'route'}},static:1,children:[]};
         const route=path=>({path,children:[leaf]});
-        const tables=[[],[route('/')],[route('*'),route('/')],[route('/:__proto__'),route('*')],[route('/:id/:id'),route('*')],[route('/:a'),route('/:b'),route('*')],[route('/a?b'),route('*')],Array.from({length:257},()=>route('/'))];
+        const tables=[[],[route('/')],[route('*'),route('/')],[route('/<__proto__>'),route('*')],[route('/<id>/<id>'),route('*')],[route('/<a>'),route('/<b>'),route('*')],[route('/a?b'),route('*')],Array.from({length:257},()=>route('/'))];
         const cases=tables.map(routes=>({routes,limits:{}}));
         for(const limits of [{maxCollectionItems:1},{maxDomNodes:1},{maxReactiveEffects:1},{maxWorkPerOperation:1}])cases.push({routes:[route('/'),route('*')],limits});
         cases.push({routes:[{path:'/',children:[{kind:'router',routes:[route('*')]}]},route('*')],limits:{}});
+        for(const path of ['/products/:id','/a/<id','/a/id>','/a/<>','/a/<id>suffix','/a/<<id>>','/a/prefix<id>'])cases.push({routes:[route(path),route('*')],limits:{}});
         for(const {routes,limits} of cases){
             const host=document.createElement('main'),sibling=document.createElement('aside');host.append(sibling);
             try{const dispose=api.mountComponent(host,{props:{},classes:{},states:{},computed:{},init:[],cleanup:[],roots:[{kind:'router',routes}]},[],{},limits);dispose();failures.push('accepted');}

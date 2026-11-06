@@ -156,14 +156,16 @@ export function validate(ast:Component,source:string,filename='<input>',options:
         else {
           if(path.length>2048||!path.startsWith('/')||path.startsWith('//'))error(route.path.span,'Route path must be an absolute path of at most 2048 characters');
           for(const segment of segments){
-            if(segment.startsWith(':')){
-              const name=segment.slice(1);
+            if(segment.startsWith(':'))error(route.path.span,'Legacy :name route parameters are unsupported; use <name>, for example /products/<id>');
+            if(segment.startsWith('<')){
+              if(!segment.endsWith('>'))error(route.path.span,'Route parameters must use <name> as a complete segment');
+              const name=segment.slice(1,-1);
               if(!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)||['__proto__','prototype','constructor','component','import','from','text','class','computed','action','for','in','key','str','len','on','emit','init','cleanup','if','else','and','or','not','var','let','const','true','false','router','route','navigate'].includes(name))error(route.path.span,'Route parameter requires a safe, nonreserved identifier');
               if(params.includes(name)||scope.has(name))error(route.path.span,`Duplicate or shadowed route parameter ${name}`);params.push(name);
-            }else if(!/^[A-Za-z0-9_-]+$/.test(segment))error(route.path.span,'Route segments support letters, digits, underscores, hyphens, and :parameters');
+            }else if(!/^[A-Za-z0-9_-]+$/.test(segment))error(route.path.span,'Route segments support letters, digits, underscores, hyphens, and <parameters>');
           }
-          const specificity=segments.filter(segment=>!segment.startsWith(':')).length;
-          if(patterns.some(previous=>previous.specificity===specificity&&previous.segments.length===segments.length&&previous.segments.every((segment,i)=>segment===segments[i]||segment.startsWith(':')||segments[i].startsWith(':'))))error(route.path.span,'Duplicate or ambiguous route pattern');
+          const specificity=segments.filter(segment=>!segment.startsWith('<')).length;
+          if(patterns.some(previous=>previous.specificity===specificity&&previous.segments.length===segments.length&&previous.segments.every((segment,i)=>segment===segments[i]||segment.startsWith('<')||segments[i].startsWith('<'))))error(route.path.span,'Duplicate or ambiguous route pattern');
           patterns.push({segments,specificity});
         }
         const childScope=new Map(scope);for(const name of params){childScope.set(name,'string');routeParameters.add(name);}
