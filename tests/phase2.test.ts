@@ -218,7 +218,7 @@ test('conditionals support typed equality, and, not, and an optional else branch
     ['component C:\n    if true:\n        p text="bad"',/must reference local state/],
     ['component C:\n    name = ""\n    if not name:\n        p text="bad"',/not requires a boolean operand, received string/],
     ['component C:\n    name = ""\n    enabled = true\n    if name and enabled:\n        p text="bad"',/and requires boolean operands, received string/],
-    ['component C:\n    enabled = true\n    if enabled or enabled:\n        p text="bad"',/Expected :/],
+    ['component C:\n    enabled = true\n    if enabled or 1:\n        p text="bad"',/or requires boolean operands/],
     ['component C:\n    count = 1\n    if count < 2:\n        p text="bad"',/Unexpected character/],
   ];
   for(const [text,message] of invalid) assert.throws(()=>compile(text,'invalid.input'),(error:unknown)=>error instanceof CompileError&&message.test(error.message),text);
@@ -226,7 +226,7 @@ test('conditionals support typed equality, and, not, and an optional else branch
   assert.throws(()=>compile(unknown,'unknown.qb'),(error:unknown)=>{
     if(!(error instanceof CompileError))return false;
     assert.equal(error.diagnostic.line,2);assert.equal(error.diagnostic.column,8);assert.equal(unknown.slice(error.diagnostic.span.start,error.diagnostic.span.end),'missing');
-    return /Unknown name "missing" in condition/.test(error.message);
+    return /Unknown state or prop "missing"/.test(error.message);
   });
   const mismatch='component C:\n    name = ""\n    if name == 1:\n        p text="bad"';
   assert.throws(()=>compile(mismatch,'mismatch.qb'),(error:unknown)=>{

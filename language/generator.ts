@@ -1,4 +1,4 @@
-import type {Component,ConditionExpression,Expression,Statement,ViewNode} from './ast.js';
+import type {Component,Expression,Statement,ViewNode} from './ast.js';
 
 export function generate(ast:Component):string {
   function expression(value:Expression):unknown {
@@ -23,24 +23,22 @@ export function generate(ast:Component):string {
     }
     if(value.kind==='construct')return {kind:value.kind,name:value.name.value,arguments:value.arguments.map(expression)};
     if(value.kind==='list')return {kind:value.kind,items:value.items.map(expression),...(value.itemType?{itemType:value.itemType.value}:{})};
-    throw new Error(`Unsupported expression ${(value as {kind:string}).kind}`);
-  }
-  function condition(value:ConditionExpression):unknown {
-    if(value.kind==='literal')return {kind:value.kind,value:value.value};
-    if(value.kind==='reference')return {kind:value.kind,name:value.name};
-    if(value.kind==='member')return {kind:value.kind,object:expression(value.object),name:value.name.value};
-    if(value.kind==='contains'||value.kind==='count')return {kind:value.kind,left:expression(value.left),right:expression(value.right)};
     if(value.kind==='not'){
-      const argument=condition(value.argument) as {kind:string;value?:unknown};
+      const argument=expression(value.argument) as {kind:string;value?:unknown};
       return argument.kind==='literal'?{kind:'literal',value:!argument.value}:{kind:value.kind,argument};
     }
-    const left=condition(value.left) as {kind:string;value?:unknown};
-    if(value.kind==='and'&&left.kind==='literal'&&!left.value)return {kind:'literal',value:false};
-    const right=condition(value.right) as {kind:string;value?:unknown};
-    if(left.kind==='literal'&&right.kind==='literal')return {kind:'literal',value:value.kind==='and'?Boolean(left.value)&&Boolean(right.value):value.kind==='equal'?left.value===right.value:left.value!==right.value};
-    return {kind:value.kind,left,right};
+    if(value.kind==='and'||value.kind==='or'||value.kind==='equal'||value.kind==='notEqual'){
+      const left=expression(value.left) as {kind:string;value?:unknown};
+      if(value.kind==='and'&&left.kind==='literal'&&left.value===false)return {kind:'literal',value:false};
+      if(value.kind==='or'&&left.kind==='literal'&&left.value===true)return {kind:'literal',value:true};
+      const right=expression(value.right) as {kind:string;value?:unknown};
+      if(left.kind==='literal'&&right.kind==='literal')return {kind:'literal',value:value.kind==='and'?left.value===true&&right.value===true:value.kind==='or'?left.value===true||right.value===true:value.kind==='equal'?left.value===right.value:left.value!==right.value};
+      return {kind:value.kind,left,right};
+    }
+    throw new Error(`Unsupported expression ${(value as {kind:string}).kind}`);
   }
-  const statement=(value:Statement):unknown=>value.kind==='assign'?{kind:value.kind,target:expression(value.target),value:expression(value.value)}:value.kind==='eventAssign'?{kind:value.kind,target:expression(value.target),member:value.member.value}:value.kind==='emit'?{kind:value.kind,event:value.event.value,...(value.payload?{payload:expression(value.payload)}:{})}:{kind:value.kind,target:expression(value.target),method:value.method.value,arguments:value.arguments.map(expression)};
+  const condition=expression;
+  const statement=(value:Statement):unknown=>value.kind==='navigate'?{kind:value.kind,path:expression(value.path)}:value.kind==='assign'?{kind:value.kind,target:expression(value.target),value:expression(value.value)}:value.kind==='eventAssign'?{kind:value.kind,target:expression(value.target),member:value.member.value}:value.kind==='emit'?{kind:value.kind,event:value.event.value,...(value.payload?{payload:expression(value.payload)}:{})}:{kind:value.kind,target:expression(value.target),method:value.method.value,arguments:value.arguments.map(expression)};
   const componentImports=ast.imports.filter(item=>item.name&&item.kind!=='shared'),sharedImports=ast.imports.filter(item=>item.name&&item.kind==='shared');
   function nodes(values:ViewNode[]):unknown[]{
     const result:unknown[]=[];
@@ -52,6 +50,7 @@ export function generate(ast:Component):string {
     return result;
   }
   function node(value:Exclude<ViewNode,{kind:'conditional'}>):unknown {
+    if(value.kind==='router')return {kind:value.kind,routes:value.routes.map(route=>({path:route.path.value,children:nodes(route.children)}))};
     if(value.kind==='slot')return {kind:value.kind};
     if(value.kind==='iteration')return {kind:value.kind,item:value.item.value,collection:expression(value.collection),key:expression(value.key),children:nodes(value.children)};
     const attributes:Record<string,unknown>={};

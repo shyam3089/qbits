@@ -416,7 +416,7 @@ test('static bindings validate numbers and hostile host values with mount rollba
     assert.match(result.failures[27],/^RangeError:State exceeded safe integer range:1:true$/);
     assert.match(result.failures[28],/^RangeError:State exceeded safe integer range:1:true$/);
     assert.match(result.failures[29],/^TypeError:Class field value requires number:1:true$/);
-    assert.match(result.failures[30],/^TypeError:Class field value requires a literal default:1:true$/);
+    assert.match(result.failures[30],/^TypeError:Invalid class field schema Item:1:true$/);
     assert.match(result.failures[31],/^Error:proxy blocked:1:true$/);
     assert.match(result.failures[32],/^Error:getter blocked:1:true$/);
     assert.match(result.failures[33],/^Error:state proxy blocked:1:true$/);
@@ -494,6 +494,7 @@ component App:
   const runtime=await readFile('dist/lib/runtime/index.js','utf8'),browser=await firefox.launch({headless:true});
   try{
     const page=await browser.newPage(),mountErrors:string[]=[];page.on('pageerror',error=>mountErrors.push(error.message));
+    const mountFailure=page.waitForEvent('pageerror');
     const result=await page.evaluate(async({runtime,leaf,wrapper,app,fault})=>{
       const runtimeUrl=URL.createObjectURL(new Blob([runtime],{type:'text/javascript'})),leafUrl=URL.createObjectURL(new Blob([leaf],{type:'text/javascript'})),wrapperUrl=URL.createObjectURL(new Blob([wrapper],{type:'text/javascript'})),appUrl=URL.createObjectURL(new Blob([app.replace('__LEAF__',leafUrl).replace('__WRAPPER__',wrapperUrl)],{type:'text/javascript'})),faultUrl=URL.createObjectURL(new Blob([fault],{type:'text/javascript'})),urls=[runtimeUrl,leafUrl,wrapperUrl,appUrl,faultUrl];
       try{
@@ -505,7 +506,7 @@ component App:
       }finally{urls.forEach(URL.revokeObjectURL);}
     },{runtime,leaf:leaf.code,wrapper:wrapper.code,app,fault:fault.code});
     assert.deepEqual(result,{initial:['mount app','mount wrapper','mount one','mount two'],afterMove:['mount app','mount wrapper','mount one','mount two'],afterHide:['mount app','mount wrapper','mount one','mount two','cleanup one','cleanup two'],afterShow:['mount app','mount wrapper','mount one','mount two','cleanup one','cleanup two','mount two','mount one'],afterRemove:['mount app','mount wrapper','mount one','mount two','cleanup one','cleanup two','mount two','mount one','cleanup one'],afterFailure:['mount app','mount wrapper','mount one','mount two','cleanup one','cleanup two','mount two','mount one','cleanup one','mount bad','cleanup bad'],labels:['two'],final:['mount app','mount wrapper','mount one','mount two','cleanup one','cleanup two','mount two','mount one','cleanup one','mount bad','cleanup bad','cleanup two','cleanup wrapper','cleanup app'],empty:true,faultLog:['mount fault','cleanup fault'],cleanupError:'State exceeded safe integer range',faultEmpty:true});
-    await page.waitForTimeout(0);assert.deepEqual(mountErrors,['State exceeded safe integer range']);
+    await mountFailure;assert.deepEqual(mountErrors,['State exceeded safe integer range']);
   }finally{await browser.close();}
 });
 
@@ -542,6 +543,7 @@ component App:
   const runtime=await readFile('dist/lib/runtime/index.js','utf8'),browser=await firefox.launch({headless:true});
   try{
     const page=await browser.newPage(),errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
+    const overflowFailure=page.waitForEvent('pageerror');
     const result=await page.evaluate(async({runtime,cart,summary,add,frame,app})=>{
       const runtimeUrl=URL.createObjectURL(new Blob([runtime],{type:'text/javascript'})),cartUrl=URL.createObjectURL(new Blob([cart],{type:'text/javascript'})),summaryUrl=URL.createObjectURL(new Blob([summary.replace('./Cart.qb',cartUrl)],{type:'text/javascript'})),addUrl=URL.createObjectURL(new Blob([add.replace('./Cart.qb',cartUrl)],{type:'text/javascript'})),frameUrl=URL.createObjectURL(new Blob([frame],{type:'text/javascript'})),appUrl=URL.createObjectURL(new Blob([app.replace('__SUMMARY__',summaryUrl).replace('__ADD__',addUrl).replace('__FRAME__',frameUrl)],{type:'text/javascript'})),urls=[runtimeUrl,cartUrl,summaryUrl,addUrl,frameUrl,appUrl];
       try{
@@ -549,7 +551,7 @@ component App:
         firstButtons[0].click();const updated=first.querySelector('p')?.textContent,isolated=second.querySelector('p')?.textContent;firstButtons[3].click();const moved=first.querySelectorAll('button')[0]===retained;firstButtons[2].click();const rolledBack=first.querySelector('p')?.textContent;firstButtons[4].click();retained.click();const hidden=first.querySelector('p')?.textContent;first.querySelectorAll('button')[3].click();const remounted=[...first.querySelectorAll('button')].find(node=>node.textContent==='add 2')!;remounted.click();const afterRemount=first.querySelector('p')?.textContent;disposeFirst();disposeFirst();remounted.click();const empty=first.childNodes.length===0;const secondStill=second.querySelector('p')?.textContent;disposeSecond();first.remove();second.remove();return{updated,isolated,moved,rolledBack,hidden,afterRemount,empty,secondStill};
       }finally{urls.forEach(URL.revokeObjectURL);}
     },{runtime,cart:cart.code,summary:summary.code,add:add.code,frame:frame.code,app});
-    await page.waitForTimeout(0);assert.deepEqual(result,{updated:'1:1',isolated:'0:0',moved:true,rolledBack:'1:1',hidden:'1:1',afterRemount:'2:3',empty:true,secondStill:'0:0'});assert.deepEqual(errors,['State exceeded safe integer range']);
+    await overflowFailure;assert.deepEqual(result,{updated:'1:1',isolated:'0:0',moved:true,rolledBack:'1:1',hidden:'1:1',afterRemount:'2:3',empty:true,secondStill:'0:0'});assert.deepEqual(errors,['State exceeded safe integer range']);
   }finally{await browser.close();}
 });
 

@@ -132,7 +132,7 @@ component NotificationSetting:
 
 When state changes, the old branch is disposed and the new branch is mounted at
 the same DOM position. Conditions reference local state and may use the approved
-`==`, `!=`, `and`, and `not` operators with string, number, and boolean literals:
+`==`, `!=`, `and`, `or`, and `not` operators with string, number, and boolean literals:
 
 ```text
 component Greeting:
@@ -151,12 +151,90 @@ component Greeting:
         p text="Unavailable"
 ```
 
-Precedence is `not`, then `==` and `!=`, then `and`. Equality operands must have
-the same inferred type. `not` and both operands of `and` must be boolean, and the
-complete condition must evaluate to boolean. Condition names must be local state;
-unknown names, props, and invalid operand types are located errors. `or`, ordering
-comparisons, parentheses, chained comparisons, and other expression forms are not
-supported in conditions.
+Precedence is arithmetic, then `not`, then `==` and `!=`, then `and`, then `or`.
+Parentheses override precedence. The existing precedence of `not` over equality
+is preserved; write `not (name == "")` to negate a comparison.
+Equality operands must have the same inferred type. `not` and both operands of
+`and` and `or` must be boolean; numbers, strings, and lists are never truthy values.
+`and` skips its right operand when the left is false; `or` skips it when the left
+is true. Both operands are type checked even when one will be skipped. Results
+are always boolean.
+
+These expressions also work in computed values, state initializers, assignments,
+component props, and reactive bindings such as `checked` or `text=str(expression)`.
+Shared defaults and class field defaults retain their literal restrictions.
+Conditions must reference local state, computed state, or shared state and evaluate
+to boolean. Unknown names and invalid types produce located errors. Ordering and
+chained comparisons, JavaScript `&&`/`||`/`!`, and arbitrary calls are unsupported.
+
+```text
+component Availability:
+    enabled = true
+    loading = false
+    fallback = false
+    computed ready = enabled and not loading or fallback
+    input:
+        type="checkbox"
+        checked=enabled and (not loading or fallback)
+    p text=str(ready)
+    if enabled and (not loading or fallback):
+        p text="Ready"
+```
+
+### Client-side routing
+
+Routing is optional. Put one static `router:` in the app's mounted component tree.
+Each `route` takes a literal path and a view block; the final `route "*"` is the
+required 404 fallback. Route parameters are read-only strings scoped to that route.
+
+```text
+component Store:
+    button text="Product":
+        on click:
+            navigate "/products/42"
+    router:
+        route "/":
+            p text="Home"
+        route "/products/:id":
+            p text="Product " + id
+            button text="Home":
+                on click:
+                    navigate "/"
+        route "*":
+            p text="Page not found"
+```
+
+`navigate` accepts a string expression in built-in or child event handlers, uses
+`history.pushState`, and updates the initiating app without reloading. Repeating
+the current URL adds no history entry. Back/forward updates mounted routers through
+`popstate`. Separate mounts retain separate state; navigation in one mount does not
+write another mount's route state. Back/forward reflects the document URL in each.
+Host `pushState` calls alone do not notify routers.
+
+Routes match whole paths, case sensitively. Static segments use ASCII letters,
+digits, underscores and hyphens. `:name` captures one decoded segment. More static
+segments win; duplicates and equally specific overlapping patterns are rejected.
+Parameters can feed text, conditions and child props. A parameter change within
+the same route retains its components and local state; switching route branches
+stages new content before disposing old content, using existing lifecycle ordering.
+Keep persistent UI outside the outlet. A parameterized match does not validate
+whether a product or other application record exists.
+
+Navigation accepts only same-origin paths beginning with one `/`; query strings
+and fragments are preserved but do not affect matching or expose extra bindings.
+Malformed escapes, dot segments, encoded separators, backslashes and controls are
+rejected. Malformed browser paths and unmatched paths render the fallback.
+Decoded parameters remain text, with no source or HTML execution. Paths are limited
+to 2048 characters and tables to 256 routes, additionally respecting collection,
+work, DOM, component and effect limits. Trailing slashes are distinct paths.
+
+Failed synchronous navigation preserves committed state, DOM and URL; failed
+back/forward rendering restores the previous URL with `replaceState` at the current
+history position. Cleanup errors after commit are surfaced without undoing the new
+route. Disposal removes the router's history listener. Navigation during route
+preparation or lifecycle finalization is unsupported. There are no nested routers,
+guards, redirects, link interception or asynchronous route loaders. Production
+hosting must serve the app entry for deep links.
 
 Supported standard elements: main, section, div, h1–h6, p, span, label, button, input.
 Elements may nest using colon blocks or end at a newline when they have no children
@@ -375,8 +453,8 @@ lines/columns. NEWLINE covers the physical ending or is zero-width at EOF. INDEN
 covers leading spaces; DEDENT is zero-width at the next code token or EOF. Block
 spans end at their final statement, excluding trailing comments.
 
-`or`, ordering comparisons, broader expression/assignment forms, event members and
+Ordering comparisons, broader expression/assignment forms, event members and
 controls, class inheritance/custom constructors/action parameters,
-filter/sort/index expressions, routing, SSR, plugins and LSP remain deferred.
+filter/sort/index expressions, nested routing, SSR, plugins and LSP remain deferred.
 Development reloads on component/CSS edits and recovers from located errors.
 Reload resets state; state-preserving HMR and generated JavaScript source maps are deferred.

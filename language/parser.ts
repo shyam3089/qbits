@@ -16,7 +16,7 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
   function nestedExpression<T>(span:Token['span'],run:()=>T):T {if(++expressionDepth>limits.maxExpressionDepth)fail(source,filename,span,`Expression nesting exceeds the configured limit of ${limits.maxExpressionDepth} levels`);try{return run();}finally{expressionDepth--;}}
   function id():Node<string> {
     const token=take('identifier');
-    if(['component','import','from','text','class','computed','action','for','in','key','str','len','on','emit','init','cleanup','if','else','and','not','var','let','const','true','false'].includes(token.value)) fail(source,filename,token.span,`Reserved word ${JSON.stringify(token.value)} cannot be an identifier`);
+    if(['component','import','from','text','class','computed','action','for','in','key','str','len','on','emit','init','cleanup','if','else','and','or','not','var','let','const','true','false'].includes(token.value)) fail(source,filename,token.span,`Reserved word ${JSON.stringify(token.value)} cannot be an identifier`);
     return {value:token.value,span:token.span};
   }
   function literal():Node<Literal> {
@@ -32,7 +32,8 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
   }
   function atom():Expression {
     const token=peek();let value:Expression;
-    if(token.kind==='string'||token.kind==='number'||at('true')||at('false')) {const item=literal();value=expressionNode({kind:'literal',...item});}
+    if(at('(')){symbol('(');value=nestedExpression(token.span,expression);symbol(')');}
+    else if(token.kind==='string'||token.kind==='number'||at('true')||at('false')) {const item=literal();value=expressionNode({kind:'literal',...item});}
     else if(at('[')) {
       const start=symbol('[').span.start;const items:Expression[]=[];
       if(!at(']')) do {if(items.length>=limits.maxCollectionItems)fail(source,filename,peek().span,`Collection exceeds the configured limit of ${limits.maxCollectionItems} items`);items.push(nestedExpression(peek().span,expression));if(!at(','))break;cursor++;}while(true);
@@ -54,13 +55,11 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     let memberDepth=0;while(at('.')) {if(++memberDepth>limits.maxExpressionDepth)fail(source,filename,peek().span,`Expression nesting exceeds the configured limit of ${limits.maxExpressionDepth} levels`);symbol('.');const name=id();value=expressionNode({kind:'member',object:value,name,span:{start:value.span.start,end:name.span.end}});}
     return value;
   }
-  function expression():Expression {
+  function addition():Expression {
     let left=atom(),addDepth=0;while(at('+')||at('-')){if(++addDepth>limits.maxExpressionDepth)fail(source,filename,peek().span,`Expression nesting exceeds the configured limit of ${limits.maxExpressionDepth} levels`);const kind=peek().value==='+'?'add':'subtract';cursor++;const right=atom();left=expressionNode({kind,left,right,span:{start:left.span.start,end:right.span.end}});}return left;
   }
   function conditionAtom():ConditionExpression {
-    const value=atom();
-    if(!['literal','reference','member','contains','count'].includes(value.kind)) fail(source,filename,value.span,'Conditions support literals, state names, members, contains, and count');
-    return value as ConditionExpression;
+    return addition();
   }
   function conditionNot():ConditionExpression {
     if(at('not')){const token=word('not'),start=token.span.start;return nestedExpression(token.span,()=>{const argument=conditionNot();return expressionNode({kind:'not',argument,span:{start,end:argument.span.end}});});}return conditionAtom();
@@ -69,13 +68,20 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     const left=conditionNot();let kind:'equal'|'notEqual'|undefined;
     if(at('=')&&peek(1).value==='='){symbol('=');symbol('=');kind='equal';}
     else if(at('!')&&peek(1).value==='='){symbol('!');symbol('=');kind='notEqual';}
-    if(!kind)return left;const right=conditionNot();return expressionNode({kind,left,right,span:{start:left.span.start,end:right.span.end}});
+    if(!kind)return left;const right=conditionNot();
+    if((at('=')||at('!'))&&peek(1).value==='=')fail(source,filename,peek().span,'Chained comparisons are unsupported; combine comparisons with and');
+    return expressionNode({kind,left,right,span:{start:left.span.start,end:right.span.end}});
   }
-  function condition():ConditionExpression {
+  function conjunction():ConditionExpression {
     let left=conditionComparison(),andDepth=0;while(at('and')){if(++andDepth>limits.maxExpressionDepth)fail(source,filename,peek().span,`Expression nesting exceeds the configured limit of ${limits.maxExpressionDepth} levels`);word('and');const right=conditionComparison();left=expressionNode({kind:'and',left,right,span:{start:left.span.start,end:right.span.end}});}return left;
   }
+  function expression():Expression {
+    let left=conjunction(),depth=0;while(at('or')){if(++depth>limits.maxExpressionDepth)fail(source,filename,peek().span,`Expression nesting exceeds the configured limit of ${limits.maxExpressionDepth} levels`);word('or');const right=conjunction();left=expressionNode({kind:'or',left,right,span:{start:left.span.start,end:right.span.end}});}return left;
+  }
+  const condition=expression;
   const block=()=>{symbol(':');take('NEWLINE');take('INDENT');};
   function statement(eventKind?:string):Statement {
+    if(at('navigate')&&!['=','.'].includes(peek(1).value)){const start=word('navigate').span.start,path=expression();take('NEWLINE');return {kind:'navigate',path,span:{start,end:path.span.end}};}
     if(at('emit')) {
       const start=word('emit').span.start,event=id(),args=at('(')?argumentsList():{values:[],end:event.span.end};
       if(args.values.length>1)fail(source,filename,event.span,'Emitted events accept at most one payload');
@@ -130,10 +136,22 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     return {kind:'iteration',item,collection,key,children,span:{start,end:children.at(-1)!.span.end}};
   }
   function slot():SlotNode {const token=word('slot');take('NEWLINE');return {kind:'slot',span:token.span};}
+  function router():ViewNode {
+    const start=word('router').span.start;block();const routes:Extract<ViewNode,{kind:'router'}>['routes']=[];
+    while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){
+      if(routes.length>=Math.min(256,limits.maxCollectionItems))fail(source,filename,peek().span,'Route table exceeds 256 routes or the configured collection limit');
+      const routeStart=word('route').span.start,token=take('string');block();const children:ViewNode[]=[];
+      while(peek().kind!=='DEDENT'&&peek().kind!=='eof')children.push(view());take('DEDENT');
+      if(!children.length)fail(source,filename,token.span,'Route requires a view block');
+      routes.push({path:{value:token.value,span:token.span},children,span:{start:routeStart,end:children.at(-1)!.span.end}});
+    }
+    take('DEDENT');if(!routes.length)fail(source,filename,{start,end:start},'Router requires routes');return {kind:'router',routes,span:{start,end:routes.at(-1)!.span.end}};
+  }
   function view():ViewNode {
     if(++viewDepth>limits.maxNestingDepth)fail(source,filename,peek().span,`View nesting exceeds the configured limit of ${limits.maxNestingDepth} levels`);
     try{if(at('else'))fail(source,filename,peek().span,'else must immediately follow an if block at the same indentation');
-    if(at('if'))return conditional();if(at('for'))return iteration();if(at('slot'))return slot();return element();}finally{viewDepth--;}
+    if(at('route'))fail(source,filename,peek().span,'route must be directly inside router');
+    if(at('router'))return router();if(at('if'))return conditional();if(at('for'))return iteration();if(at('slot'))return slot();return element();}finally{viewDepth--;}
   }
   function computed():Computed {const start=word('computed').span.start;const name=id();symbol('=');const value=expression();take('NEWLINE');return {name,expression:value,span:{start,end:value.span.end}};}
   function action():Action {const start=word('action').span.start;const name=id();block();const body=statements();take('DEDENT');if(!body.length)fail(source,filename,name.span,'Action requires at least one statement');return {name,statements:body,span:{start,end:body.at(-1)!.span.end}};}

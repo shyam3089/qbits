@@ -58,11 +58,20 @@ export function validate(ast:Component,source:string,filename='<input>',options:
     if(expression.kind==='contains'){if(type(expression.left,env)!=='string'||type(expression.right,env)!=='string')error(expression.span,'contains requires two strings');return 'boolean';}
     if(expression.kind==='count'){const list=type(expression.left,env),item=type(expression.right,env);if(!list.startsWith('list:')||list.slice(5)!==item)error(expression.span,'count requires a list and a matching item');return 'number';}
     if(expression.kind==='add'||expression.kind==='subtract'){const left=type(expression.left,env),right=type(expression.right,env);if(left!==right||!['string','number'].includes(left)||expression.kind==='subtract'&&left!=='number')error(expression.span,expression.kind==='add'?'Addition requires two strings or two numbers; use str(value) for explicit conversion':'Subtraction requires two numbers');return left;}
+    if(expression.kind==='not'){const actual=type(expression.argument,env);if(actual!=='boolean')error(expression.argument.span,`not requires a boolean operand, received ${actual}`);return 'boolean';}
+    if(expression.kind==='and'||expression.kind==='or'||expression.kind==='equal'||expression.kind==='notEqual'){
+      const left=type(expression.left,env),right=type(expression.right,env);
+      if(expression.kind==='and'||expression.kind==='or'){
+        if(left!=='boolean')error(expression.left.span,`${expression.kind} requires boolean operands, received ${left}`);
+        if(right!=='boolean')error(expression.right.span,`${expression.kind} requires boolean operands, received ${right}`);
+      }else if(left!==right)error(expression.span,`Comparison requires operands of the same type, received ${left} and ${right}`);
+      return 'boolean';
+    }
     return error(expression.span,'Unsupported expression');
   }
   function validateComputed(items:Component['computed'],env:Map<string,Type>):void {
     const pending=new Map(items.map(item=>[item.name.value,item]));const resolving=new Set<string>();
-    const names=(expression:Expression,result=new Set<string>()):Set<string>=>{if(expression.kind==='reference')result.add(expression.name);else if(expression.kind==='member')names(expression.object,result);else if(expression.kind==='str'||expression.kind==='len')names(expression.argument,result);else if(expression.kind==='add'||expression.kind==='subtract'||expression.kind==='contains'||expression.kind==='count'){names(expression.left,result);names(expression.right,result);}else if(expression.kind==='construct')expression.arguments.forEach(item=>names(item,result));else if(expression.kind==='list')expression.items.forEach(item=>names(item,result));return result;};
+    const names=(expression:Expression,result=new Set<string>()):Set<string>=>{if(expression.kind==='reference')result.add(expression.name);else if(expression.kind==='member')names(expression.object,result);else if(expression.kind==='str'||expression.kind==='len'||expression.kind==='not')names(expression.argument,result);else if(expression.kind==='add'||expression.kind==='subtract'||expression.kind==='contains'||expression.kind==='count'||expression.kind==='and'||expression.kind==='or'||expression.kind==='equal'||expression.kind==='notEqual'){names(expression.left,result);names(expression.right,result);}else if(expression.kind==='construct')expression.arguments.forEach(item=>names(item,result));else if(expression.kind==='list')expression.items.forEach(item=>names(item,result));return result;};
     const resolve=(name:string):Type=>{const item=pending.get(name);if(!item)return env.get(name)!;if(resolving.has(name))error(item.name.span,`Computed dependency cycle involving ${JSON.stringify(name)}`);if(resolving.size>=limits.maxNestingDepth)error(item.name.span,`Computed dependency depth exceeds the configured limit of ${limits.maxNestingDepth}`);resolving.add(name);for(const dependency of names(item.expression))if(pending.has(dependency))resolve(dependency);const result=type(item.expression,env);if(result==='unknown')error(item.expression.span,'Computed type could not be inferred');env.set(name,result);pending.delete(name);resolving.delete(name);return result;};
     for(const name of [...pending.keys()])resolve(name);
   }
@@ -89,9 +98,20 @@ export function validate(ast:Component,source:string,filename='<input>',options:
     if(target.kind==='member'){const owner=type(target.object,scope);if(owner.startsWith('shared:'))return type(target,scope);if(!owner.startsWith('class:'))error(target.span,'Assignment target must be local state, shared state, or an instance field');const className=owner.slice(6);if(!recordFields.get(className)?.has(target.name.value))error(target.name.span,'Computed values and actions are read-only');return recordEnvs.get(className)!.get(target.name.value)!;}
     return error(target.span,'Assignment target must be state or an instance field');
   }
-  function validateStatements(statements:Statement[],scope:Map<string,Type>,write:Set<string>,event?:'click'|'input'|'change',insideClass=false,allowEmit=false):void {
+  function validateStatements(statements:Statement[],scope:Map<string,Type>,write:Set<string>,event?:'click'|'input'|'change',insideClass=false,allowEmit=false,allowNavigation=false):void {
     for(const statement of statements){
-      if(statement.kind==='emit'){if(!allowEmit)error(statement.span,'emit is supported only inside lifecycle hooks, event handlers, and actions');registerEmit(statement,scope);}
+      if(statement.kind==='navigate'){
+        if(!allowNavigation)error(statement.span,'navigate is supported only in event handlers');if(type(statement.path,scope)!=='string')error(statement.path.span,'navigate requires a string path');
+        if(statement.path.kind==='literal'){
+          const path=statement.path.value as string,pathname=path.split(/[?#]/,1)[0];
+          if(path.length>2048||!path.startsWith('/')||path.startsWith('//')||/[\\\u0000-\u0020\u007f]/.test(path))error(statement.path.span,'navigate requires a local absolute path of at most 2048 characters');
+          if(pathname!=='/')for(const segment of pathname.slice(1).split('/')){
+            let decoded='';try{decoded=decodeURIComponent(segment);}catch{error(statement.path.span,'Invalid navigation URL encoding');}
+            if(!decoded||decoded==='.'||decoded==='..'||/[\/\\\u0000-\u001f\u007f]/.test(decoded))error(statement.path.span,'Invalid navigation URL segment');
+          }
+        }
+      }
+      else if(statement.kind==='emit'){if(!allowEmit)error(statement.span,'emit is supported only inside lifecycle hooks, event handlers, and actions');registerEmit(statement,scope);}
       else if(statement.kind==='assign'){
         const expected=targetType(statement.target,scope,write);
         if(event==='click'&&statement.value.kind==='literal'&&typeof statement.value.value==='boolean'&&expected!=='boolean')error(statement.target.span,'Boolean click assignments require boolean state');
@@ -116,34 +136,55 @@ export function validate(ast:Component,source:string,filename='<input>',options:
     }
   }
   validateStatements(ast.init,env,writable,undefined,false,true);validateStatements(ast.cleanup,env,writable,undefined,false,true);
-  function conditionType(expression:ConditionExpression,scope:Map<string,Type>):Type {
-    if(expression.kind==='literal')return primitive(expression.value);if(expression.kind==='reference'){if(!scope.has(expression.name))error(expression.span,`Unknown name ${JSON.stringify(expression.name)} in condition`);return type(expression as Expression,scope);}if(expression.kind==='member')return type(expression as Expression,scope);
-    if(expression.kind==='contains'||expression.kind==='count')return type(expression as Expression,scope);
-    if(expression.kind==='not'){const actual=conditionType(expression.argument,scope);if(actual!=='boolean')error(expression.argument.span,`not requires a boolean operand, received ${actual}`);return 'boolean';}
-    const left=conditionType(expression.left,scope),right=conditionType(expression.right,scope);if(expression.kind==='and'){if(left!=='boolean')error(expression.left.span,`and requires boolean operands, received ${left}`);if(right!=='boolean')error(expression.right.span,`and requires boolean operands, received ${right}`);return 'boolean';}if(left!==right)error(expression.span,`Comparison requires operands of the same type, received ${left} and ${right}`);return 'boolean';
-  }
+  const conditionType=type;
   function reactiveConditionReference(expression:ConditionExpression,reactive:Set<string>):boolean {
-    if(expression.kind==='reference')return reactive.has(expression.name);
     if(expression.kind==='member')return true;
-    if(expression.kind==='literal')return false;
-    if(expression.kind==='contains'||expression.kind==='count')return [...reactive].some(name=>references(expression as Expression,name));
-    if(expression.kind==='not')return reactiveConditionReference(expression.argument,reactive);
-    return reactiveConditionReference(expression.left,reactive)||reactiveConditionReference(expression.right,reactive);
+    if(expression.kind==='not'||expression.kind==='str'||expression.kind==='len')return reactiveConditionReference(expression.argument,reactive);
+    if('left' in expression)return reactiveConditionReference(expression.left,reactive)||reactiveConditionReference(expression.right,reactive);
+    return [...reactive].some(name=>references(expression,name));
   }
-  let slotCount=0;
+  let slotCount=0,routerCount=0;
+  const routeParameters=new Set<string>();
   function visit(view:ViewNode,scope=env,scopeWritable=writable,dynamic=false):void {
+    if(view.kind==='router'){
+      if(dynamic||++routerCount>1)error(view.span,'One static router is supported per component; nested or dynamic routers are unsupported');
+      if(view.routes.length>Math.min(256,limits.maxCollectionItems))error(view.span,'Route table exceeds 256 routes or the configured collection limit');
+      const patterns:{segments:string[];specificity:number}[]=[];
+      view.routes.forEach((route,index)=>{
+        const path=route.path.value,params:string[]=[],segments=path==='/'?[]:path.slice(1).split('/');
+        if(path==='*'){if(index!==view.routes.length-1)error(route.path.span,'Fallback route "*" must be last');}
+        else {
+          if(path.length>2048||!path.startsWith('/')||path.startsWith('//'))error(route.path.span,'Route path must be an absolute path of at most 2048 characters');
+          for(const segment of segments){
+            if(segment.startsWith(':')){
+              const name=segment.slice(1);
+              if(!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)||['__proto__','prototype','constructor','component','import','from','text','class','computed','action','for','in','key','str','len','on','emit','init','cleanup','if','else','and','or','not','var','let','const','true','false','router','route','navigate'].includes(name))error(route.path.span,'Route parameter requires a safe, nonreserved identifier');
+              if(params.includes(name)||scope.has(name))error(route.path.span,`Duplicate or shadowed route parameter ${name}`);params.push(name);
+            }else if(!/^[A-Za-z0-9_-]+$/.test(segment))error(route.path.span,'Route segments support letters, digits, underscores, hyphens, and :parameters');
+          }
+          const specificity=segments.filter(segment=>!segment.startsWith(':')).length;
+          if(patterns.some(previous=>previous.specificity===specificity&&previous.segments.length===segments.length&&previous.segments.every((segment,i)=>segment===segments[i]||segment.startsWith(':')||segments[i].startsWith(':'))))error(route.path.span,'Duplicate or ambiguous route pattern');
+          patterns.push({segments,specificity});
+        }
+        const childScope=new Map(scope);for(const name of params){childScope.set(name,'string');routeParameters.add(name);}
+        route.children.forEach(child=>visit(child,childScope,scopeWritable,true));
+        for(const name of params)routeParameters.delete(name);
+      });
+      if(view.routes.at(-1)?.path.value!=='*')error(view.span,'Router requires a final route "*" fallback');
+      return;
+    }
     if(view.kind==='slot'){if(dynamic)error(view.span,'slot cannot be inside if or for');if(++slotCount>1)error(view.span,'Component accepts one default slot');return;}
-    if(view.kind==='conditional'){const actual=conditionType(view.condition,scope),reactive=new Set([...scopeWritable,...ast.computed.map(item=>item.name.value),...options.shared?.keys()??[]]);if(!reactiveConditionReference(view.condition,reactive))error(view.condition.span,'Conditional condition must reference local state, computed state, or shared state');if(actual!=='boolean')error(view.condition.span,`Conditional condition must evaluate to boolean, received ${actual}`);view.consequent.forEach(child=>visit(child,scope,scopeWritable,true));view.alternate.forEach(child=>visit(child,scope,scopeWritable,true));return;}
+    if(view.kind==='conditional'){const actual=conditionType(view.condition,scope),reactive=new Set([...scopeWritable,...routeParameters,...ast.computed.map(item=>item.name.value),...options.shared?.keys()??[]]);if(!reactiveConditionReference(view.condition,reactive))error(view.condition.span,'Conditional condition must reference local state, computed state, or shared state');if(actual!=='boolean')error(view.condition.span,`Conditional condition must evaluate to boolean, received ${actual}`);view.consequent.forEach(child=>visit(child,scope,scopeWritable,true));view.alternate.forEach(child=>visit(child,scope,scopeWritable,true));return;}
     if(view.kind==='iteration'){
       const collection=type(view.collection,scope);if(!collection.startsWith('list:'))error(view.collection.span,'Iteration source must be a list');const itemType=collection.slice(5) as Type;const childScope=new Map(scope);childScope.set(view.item.value,itemType);const keyType=type(view.key,childScope);if(!['string','number','boolean'].includes(keyType))error(view.key.span,'Iteration key must be a string, number, or boolean');if(!references(view.key,view.item.value))error(view.key.span,'Iteration key must reference the iteration item');const childWritable=new Set(scopeWritable);view.children.forEach(child=>visit(child,childScope,childWritable,true));return;
     }
     const node=view,native=elements.has(node.tag.value);if(!native&&!imported.has(node.tag.value))error(node.tag.span,`Unknown element or missing component import ${JSON.stringify(node.tag.value)}`);const child=options.components?.get(node.tag.value);if(!native&&node.children.length&&child&&!componentAcceptsContent.get(node.tag.value))error(node.span,`Component ${node.tag.value} does not accept content; add slot to its definition`);if(!native&&node.indentedAttributes.length)error(node.attributes[node.indentedAttributes[0]].span,'Indented properties are supported on standard elements only');const checkbox=node.attributes.type?.kind==='literal'&&node.attributes.type.value==='checkbox';
     for(const [key,value] of Object.entries(node.attributes)){const actual=type(value,scope);if(key==='class'){if(value.kind!=='literal'||actual!=='string')error(value.span,'class requires a static string literal');if(child&&componentRootCounts.get(node.tag.value)!==1)error(value.span,'Ambiguous class forwarding: component must have a single resolved root element');}else if(native){if(key==='text'){if(actual!=='string')error(value.span,'text requires a string expression; use str(value)');}else if(key==='value'){if(node.tag.value!=='input'||!node.indentedAttributes.includes(key))error(value.span,'value is supported only as an indented input property');if(checkbox)error(value.span,'value is supported on text inputs only');if(actual!=='string')error(value.span,'input value requires a string expression');}else if(key==='type'){if(node.tag.value!=='input'||!node.indentedAttributes.includes(key))error(value.span,'type is supported only as an indented input property');if(value.kind!=='literal'||value.value!=='checkbox')error(value.span,'input type requires the static string literal "checkbox"');}else if(key==='checked'){if(node.tag.value!=='input'||!node.indentedAttributes.includes(key))error(value.span,'checked is supported only as an indented input property');if(!checkbox)error(value.span,'checked requires input type="checkbox"');if(actual!=='boolean')error(value.span,'input checked requires a boolean expression');}else error(value.span,`Unsupported element attribute ${JSON.stringify(key)}`);}else if(child){const prop=componentProps.get(node.tag.value)?.get(key);if(!prop)error(value.span,`Unknown prop ${JSON.stringify(key)} on ${node.tag.value}`);const resolvedProp=prop!;if(actual!==primitive(resolvedProp.initial.value))error(value.span,`Prop ${key} requires ${primitive(resolvedProp.initial.value)}, received ${actual}`);}}
-    if(node.handler){const event=node.handler.event.value;if(native){if(node.handler.parameter)error(node.handler.parameter.span,'Built-in event handlers do not declare payload parameters');if(!['click','input','change'].includes(event))error(node.handler.event.span,`Unsupported event ${JSON.stringify(event)}`);if(event==='click'&&node.tag.value!=='button')error(node.handler.span,'Click handlers are supported on button elements only');if(event==='input'&&(node.tag.value!=='input'||checkbox))error(node.handler.span,'Input handlers are supported on text inputs only');if(event==='change'&&(node.tag.value!=='input'||!checkbox))error(node.handler.span,'Change handlers are supported on checkbox inputs only');validateStatements(node.handler.statements,scope,scopeWritable,event as 'click'|'input'|'change',false,true);}else if(child){const schema=componentEvents.get(node.tag.value)!,payload=schema.get(event);if(!schema.has(event))error(node.handler.event.span,`Unknown event ${JSON.stringify(event)} on ${node.tag.value}`);node.handler.payloadType=payload!;const handlerScope=new Map(scope);if(node.handler.parameter){if(payload===null)error(node.handler.parameter.span,`Event ${JSON.stringify(event)} does not provide a payload`);if(handlerScope.has(node.handler.parameter.value))error(node.handler.parameter.span,`Event payload ${JSON.stringify(node.handler.parameter.value)} conflicts with an existing name`);handlerScope.set(node.handler.parameter.value,payload!);}validateStatements(node.handler.statements,handlerScope,scopeWritable,undefined,false,true);}}
+    if(node.handler){const event=node.handler.event.value;if(native){if(node.handler.parameter)error(node.handler.parameter.span,'Built-in event handlers do not declare payload parameters');if(!['click','input','change'].includes(event))error(node.handler.event.span,`Unsupported event ${JSON.stringify(event)}`);if(event==='click'&&node.tag.value!=='button')error(node.handler.span,'Click handlers are supported on button elements only');if(event==='input'&&(node.tag.value!=='input'||checkbox))error(node.handler.span,'Input handlers are supported on text inputs only');if(event==='change'&&(node.tag.value!=='input'||!checkbox))error(node.handler.span,'Change handlers are supported on checkbox inputs only');validateStatements(node.handler.statements,scope,scopeWritable,event as 'click'|'input'|'change',false,true,true);}else if(child){const schema=componentEvents.get(node.tag.value)!,payload=schema.get(event);if(!schema.has(event))error(node.handler.event.span,`Unknown event ${JSON.stringify(event)} on ${node.tag.value}`);node.handler.payloadType=payload!;const handlerScope=new Map(scope);if(node.handler.parameter){if(payload===null)error(node.handler.parameter.span,`Event ${JSON.stringify(event)} does not provide a payload`);if(handlerScope.has(node.handler.parameter.value))error(node.handler.parameter.span,`Event payload ${JSON.stringify(node.handler.parameter.value)} conflicts with an existing name`);handlerScope.set(node.handler.parameter.value,payload!);}validateStatements(node.handler.statements,handlerScope,scopeWritable,undefined,false,true,true);}}
     node.children.forEach(childView=>visit(childView,scope,scopeWritable,dynamic));
   }
   ast.roots.forEach(root=>visit(root));
   ast.emits=[...emitted].map(([name,payload])=>({name,payload}));
-  function references(expression:Expression,name:string):boolean {if(expression.kind==='reference')return expression.name===name;if(expression.kind==='literal')return false;if(expression.kind==='member'||expression.kind==='str'||expression.kind==='len')return references(expression.kind==='member'?expression.object:expression.argument,name);if(expression.kind==='add'||expression.kind==='subtract'||expression.kind==='contains'||expression.kind==='count')return references(expression.left,name)||references(expression.right,name);if(expression.kind==='construct')return expression.arguments.some(item=>references(item,name));if(expression.kind==='list')return expression.items.some(item=>references(item,name));return false;}
-  function staticRootCount(nodes:ViewNode[]):number|null {let count=0;for(const node of nodes){if(node.kind==='iteration'||node.kind==='slot')return null;if(node.kind==='element'){count++;continue;}const consequent=staticRootCount(node.consequent),alternate=node.alternate.length?staticRootCount(node.alternate):0;if(consequent===null||alternate===null||consequent!==alternate)return null;count+=consequent;}return count;}
+  function references(expression:Expression,name:string):boolean {if(expression.kind==='reference')return expression.name===name;if(expression.kind==='literal')return false;if(expression.kind==='member'||expression.kind==='str'||expression.kind==='len'||expression.kind==='not')return references(expression.kind==='member'?expression.object:expression.argument,name);if(expression.kind==='add'||expression.kind==='subtract'||expression.kind==='contains'||expression.kind==='count'||expression.kind==='and'||expression.kind==='or'||expression.kind==='equal'||expression.kind==='notEqual')return references(expression.left,name)||references(expression.right,name);if(expression.kind==='construct')return expression.arguments.some(item=>references(item,name));if(expression.kind==='list')return expression.items.some(item=>references(item,name));return false;}
+  function staticRootCount(nodes:ViewNode[]):number|null {let count=0;for(const node of nodes){if(node.kind==='iteration'||node.kind==='slot'||node.kind==='router')return null;if(node.kind==='element'){count++;continue;}const consequent=staticRootCount(node.consequent),alternate=node.alternate.length?staticRootCount(node.alternate):0;if(consequent===null||alternate===null||consequent!==alternate)return null;count+=consequent;}return count;}
 }

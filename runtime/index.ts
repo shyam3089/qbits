@@ -6,15 +6,16 @@ type PrimitiveType='string'|'number'|'boolean';
 type ItemType=PrimitiveType|`class:${string}`;
 type Value=Primitive|Instance|SharedInstance|Value[];
 type InitialState=Readonly<Record<string,unknown>>;
-type Expr={kind:'literal';value:Primitive}|{kind:'reference';name:string}|{kind:'member';object:Expr;name:string}|{kind:'str'|'len';argument:Expr}|{kind:'contains';left:Expr;right:Expr}|{kind:'count';left:Expr;right:Expr}|{kind:'add';left:Expr;right:Expr}|{kind:'subtract';left:Expr;right:Expr}|{kind:'construct';name:string;arguments:Expr[]}|{kind:'list';items:Expr[];itemType?:string};
-type ConditionExpr={kind:'literal';value:Primitive}|{kind:'reference';name:string}|{kind:'member';object:Expr;name:string}|{kind:'contains';left:Expr;right:Expr}|{kind:'count';left:Expr;right:Expr}|{kind:'not';argument:ConditionExpr}|{kind:'equal'|'notEqual'|'and';left:ConditionExpr;right:ConditionExpr};
-type Statement={kind:'assign';target:Expr;value:Expr}|{kind:'eventAssign';target:Expr;member:'value'|'checked'}|{kind:'call';target:Expr;method:string;arguments:Expr[]}|{kind:'emit';event:string;payload?:Expr};
+type Expr={kind:'not';argument:Expr}|{kind:'equal'|'notEqual'|'and'|'or';left:Expr;right:Expr}|{kind:'literal';value:Primitive}|{kind:'reference';name:string}|{kind:'member';object:Expr;name:string}|{kind:'str'|'len';argument:Expr}|{kind:'contains';left:Expr;right:Expr}|{kind:'count';left:Expr;right:Expr}|{kind:'add';left:Expr;right:Expr}|{kind:'subtract';left:Expr;right:Expr}|{kind:'construct';name:string;arguments:Expr[]}|{kind:'list';items:Expr[];itemType?:string};
+type ConditionExpr=Expr;
+type Statement={kind:'navigate';path:Expr}|{kind:'assign';target:Expr;value:Expr}|{kind:'eventAssign';target:Expr;member:'value'|'checked'}|{kind:'call';target:Expr;method:string;arguments:Expr[]}|{kind:'emit';event:string;payload?:Expr};
 interface Handler {kind?:string;event:string;parameter?:string;payloadType?:'string'|'number'|'boolean'|null;statements:Statement[]}
 interface ElementView {kind:'element';tag:string;component:number;attributes:Record<string,Expr>;static?:number;children:View[];handler?:Handler}
 interface ConditionalView {kind:'conditional';condition:ConditionExpr;consequent:View[];alternate:View[]}
 interface IterationView {kind:'iteration';item:string;collection:Expr;key:Expr;children:View[]}
 interface SlotView {kind:'slot'}
-type View=ElementView|ConditionalView|IterationView|SlotView;
+interface RouterView {kind:'router';routes:{path:string;children:View[]}[]}
+type View=ElementView|ConditionalView|IterationView|SlotView|RouterView;
 interface ClassModel {fields:{name:string;initial:Expr}[];computed:Record<string,Expr>;actions:Record<string,Statement[]>}
 interface Model {props:Record<string,Primitive>;events?:Record<string,'string'|'number'|'boolean'|null>;shared?:{name:string;index:number}[];classes:Record<string,ClassModel>;states:Record<string,Expr>;computed:Record<string,Expr>;init:Statement[];cleanup:Statement[];roots:View[]}
 interface Signal<T=Value>{value:T;subscribers:Set<ReactiveEffect>;derive?:ReactiveEffect;dirty?:boolean;itemType?:ItemType;itemSchema?:string}
@@ -24,7 +25,8 @@ interface SharedInstance {__shared:string;fields:Record<string,Signal>}
 type SharedRegistry=Map<SharedDefinition,SharedInstance>;
 type Scope=Record<string,Signal|Instance|SharedInstance|(()=>Value)>;
 type ResourceName='components'|'records'|'domNodes'|'effects';
-interface ResourceBudget {limits:RuntimeLimits;components:number;records:number;domNodes:number;effects:number;work:number;workDepth:number}
+interface RoutingContext {window:Window;path:Signal<string>;url:string;ready:boolean;prepare:(path:string)=>(()=>void)}
+interface ResourceBudget {limits:RuntimeLimits;components:number;records:number;domNodes:number;effects:number;work:number;workDepth:number;router?:RoutingContext}
 interface Reservation {released:boolean}
 type ReactiveEffect=(()=>void)&{dependencies:Set<Signal>;disposed:boolean;computed?:Signal;maxUpdates:number;budget:ResourceBudget};
 type Dispose=(()=>void)&{refresh?:()=>void;updateState?:(state:InitialState)=>void};
@@ -38,10 +40,21 @@ const instances=new WeakSet<object>();
 let batchDepth=0,flushing=false;
 const pendingComputed=new Set<ReactiveEffect>(),pendingEffects=new Set<ReactiveEffect>();
 let transactionDepth=0;
+let committing=false;
+let pendingNavigation:{router:RoutingContext;path:string;pop:boolean}|undefined;
 const changedSignals:Signal[]=[],previousValues:Value[]=[];
 const commitHooks:CommitHook[]=[],rollbackHooks:(()=>void)[]=[],transactionParticipants:(()=>unknown)[]=[];
 
 function assertNumber(value:unknown):void {if(typeof value==='number'&&!Number.isSafeInteger(value))throw new RangeError('State exceeded safe integer range');}
+function routeSegments(path:string):string[] {
+  if(typeof path!=='string'||path.length>2048||!path.startsWith('/')||path.startsWith('//')||/[\\\u0000-\u0020\u007f]/.test(path))throw new TypeError('Invalid route URL: expected a local absolute path of at most 2048 characters');
+  const pathname=path.split(/[?#]/,1)[0];if(pathname==='/')return [];
+  return pathname.slice(1).split('/').map(segment=>{let value:string;try{value=decodeURIComponent(segment);}catch{throw new TypeError('Invalid route URL encoding');}if(!value||value==='.'||value==='..'||/[\/\\\u0000-\u001f\u007f]/.test(value))throw new TypeError('Invalid route URL segment');return value;});
+}
+function navigationPath(value:Value,window:Window):string {
+  if(typeof value!=='string')throw new TypeError('navigate requires a string path');routeSegments(value);
+  const url=new URL(value,window.location.href);if(url.origin!==window.location.origin||url.username||url.password)throw new TypeError('Navigation requires a same-origin URL');const path=url.pathname+url.search+url.hash;routeSegments(path);return path;
+}
 function resolveRuntimeLimits(overrides:Partial<RuntimeLimits>):RuntimeLimits {const result={...defaultRuntimeLimits,...overrides};for(const [name,value] of Object.entries(result))if(!Number.isSafeInteger(value)||value<1)throw new TypeError(`Runtime limit ${name} must be a positive safe integer`);return result;}
 function reserve(budget:ResourceBudget,name:ResourceName,amount:number,limit:number,label:string):void {if(budget[name]+amount>limit)throw new RangeError(`${label} exceeds the configured limit of ${limit}`);budget[name]+=amount;}
 function release(budget:ResourceBudget,name:ResourceName,amount=1):void {budget[name]-=amount;}
@@ -83,7 +96,7 @@ function createEffect(run:()=>void,budget:ResourceBudget,computed?:Signal,maxUpd
 }
 function stop(effect:ReactiveEffect):void {if(effect.disposed)return;effect.disposed=true;release(effect.budget,'effects');pendingComputed.delete(effect);pendingEffects.delete(effect);for(const source of effect.dependencies)source.subscribers.delete(effect);effect.dependencies.clear();}
 
-function clearTransaction():void {changedSignals.length=previousValues.length=commitHooks.length=rollbackHooks.length=transactionParticipants.length=0;}
+function clearTransaction():void {changedSignals.length=previousValues.length=commitHooks.length=rollbackHooks.length=transactionParticipants.length=0;pendingNavigation=undefined;}
 function participate(disable:()=>unknown):void {if(!transactionParticipants.includes(disable))transactionParticipants.push(disable);}
 function stageStructure(commit:CommitHook,rollback:()=>void):void {if(transactionDepth){commitHooks.push(commit);rollbackHooks.push(rollback);}else{const errors=commit();if(errors?.length)throw new AggregateError(errors,'Structural update committed but cleanup failed');}}
 function disableParticipants(participants:(()=>unknown)[],errors:unknown[]):void {for(const disable of participants)try{const failure=disable();if(failure)errors.push(failure);}catch(error){errors.push(error);}}
@@ -102,11 +115,16 @@ function rollbackTransaction(original:unknown,batched:boolean,budget:ResourceBud
 function transact<T>(run:()=>T,disable:()=>unknown,budget:ResourceBudget):T {return withWork(budget,()=>{
   if(transactionDepth){participate(disable);return run();}
   clearTransaction();transactionDepth=1;participate(disable);batchDepth++;let batched=true;let result:T;
-  try{result=run();batchDepth--;batched=false;flush();}
+  try{result=run();batchDepth--;batched=false;flush();
+    // History may fail. Attempt it after preparation, while rollback is available.
+    if(pendingNavigation){const {router,path,pop}=pendingNavigation,accept=router.prepare(path);if(!pop&&path!==router.url)router.window.history.pushState(null,'',path);accept();}
+  }
   catch(error){return rollbackTransaction(error,batched,budget);}
   if(!commitHooks.length){transactionDepth=0;clearTransaction();return result;}
   const commits=[...commitHooks],participants=[...transactionParticipants];transactionDepth=0;clearTransaction();
+  const previousCommit=committing;committing=true;try{
   if(commits.length){const cleanupErrors:unknown[]=[],fatalErrors:unknown[]=[];for(const commit of commits)try{const errors=commit();if(errors?.length)cleanupErrors.push(...errors);}catch(error){fatalErrors.push(error);}if(fatalErrors.length)disableParticipants(participants,fatalErrors);const errors=[...fatalErrors,...cleanupErrors];if(errors.length)throw new AggregateError(errors,fatalErrors.length?'Structural commit failed; affected components were disabled':'Transaction committed but cleanup failed');}
+  }finally{committing=previousCommit;}
   return result;
 });
 }
@@ -177,6 +195,10 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
     if(expression.kind==='literal'){assertNumber(expression.value);return expression.value;}
     if(expression.kind==='reference'){const value=local[expression.name];if(!value)throw new TypeError(`Unknown value ${expression.name}`);return typeof value==='function'?value():'__class'in value||'__shared'in value?value:read(value);}
     if(expression.kind==='member'){const owner=evaluate(expression.object,local);if(!owner||typeof owner!=='object'||Array.isArray(owner)||!('__class'in owner)&&!('__shared'in owner))throw new TypeError('Member access requires a class instance or shared state');const field=owner.fields[expression.name];if(field)return read(field);if('__class'in owner){const computed=owner.computed[expression.name];if(computed)return evaluate(computed,owner.scope);}throw new TypeError(`Unknown member ${expression.name}`);}
+    if(expression.kind==='not')return !boolean(evaluate(expression.argument,local),'not');
+    if(expression.kind==='and'){const left=boolean(evaluate(expression.left,local),'and');return left&&boolean(evaluate(expression.right,local),'and');}
+    if(expression.kind==='or'){const left=boolean(evaluate(expression.left,local),'or');return left||boolean(evaluate(expression.right,local),'or');}
+    if(expression.kind==='equal'||expression.kind==='notEqual'){const left=evaluate(expression.left,local),right=evaluate(expression.right,local);if(typeof left!==typeof right)throw new TypeError('Comparison requires operands of the same type');return expression.kind==='equal'?left===right:left!==right;}
     if(expression.kind==='str')return String(evaluate(expression.argument,local));
     if(expression.kind==='len'){const value=evaluate(expression.argument,local);if(!Array.isArray(value))throw new TypeError('len requires a list');return value.length;}
     if(expression.kind==='contains'){const left=evaluate(expression.left,local),right=evaluate(expression.right,local);if(typeof left!=='string'||typeof right!=='string')throw new TypeError('contains requires strings');return left.toLocaleLowerCase().includes(right.toLocaleLowerCase());}
@@ -228,7 +250,14 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
   const writeTarget=(target:Signal,value:Value,label:string):void=>{if(target.itemType){if(!Array.isArray(value))throw new TypeError(`${label} requires a list of ${target.itemType}`);write(target,validateTypedList(value,target.itemType,target.itemSchema,label));return;}write(target,value);};
   function execute(statements:Statement[],local=scope,event?:Event):void {
     transact(()=>{consumeWork(budget,statements.length);for(const statement of statements){
-      if(statement.kind==='assign'){const target=resolveTarget(statement.target,local),value=evaluate(statement.value,local);writeTarget(target,value,'List assignment');}
+      if(statement.kind==='navigate'){
+        const router=budget.router;if(!router?.ready)throw new TypeError('navigate requires a mounted router');
+        if(flushing||committing)throw new TypeError('Navigation during rendering or lifecycle finalization is unsupported');
+        const path=navigationPath(evaluate(statement.path,local),router.window);
+        if(pendingNavigation&&pendingNavigation.router!==router)throw new TypeError('A transaction cannot navigate multiple apps');
+        pendingNavigation={router,path,pop:false};write(router.path,path);
+      }
+      else if(statement.kind==='assign'){const target=resolveTarget(statement.target,local),value=evaluate(statement.value,local);writeTarget(target,value,'List assignment');}
       else if(statement.kind==='emit'){
         const expected=model.events?.[statement.event];if(!model.events||!Object.hasOwn(model.events,statement.event))throw new TypeError(`Undeclared event ${statement.event}`);const payload=statement.payload?evaluate(statement.payload,local):undefined;
         if((payload===undefined?null:typeof payload)!==expected)throw new TypeError(`Invalid payload for event ${statement.event}`);if(typeof payload==='number')assertNumber(payload);const listener=events[statement.event];if(listener)listener(payload as Primitive|undefined);
@@ -248,10 +277,8 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
       }
     }},forceDisable,budget);
   }
-  function evaluateCondition(expression:ConditionExpr,local:Scope):Primitive {
-    if(expression.kind==='literal'){assertNumber(expression.value);return expression.value;}if(expression.kind==='reference'||expression.kind==='member'||expression.kind==='contains'||expression.kind==='count')return evaluate(expression as Expr,local) as Primitive;
-    if(expression.kind==='not')return !evaluateCondition(expression.argument,local);const left=evaluateCondition(expression.left,local);if(expression.kind==='and')return Boolean(left)&&Boolean(evaluateCondition(expression.right,local));const right=evaluateCondition(expression.right,local);return expression.kind==='equal'?left===right:left!==right;
-  }
+  function boolean(value:Value,operator:string):boolean {if(typeof value!=='boolean')throw new TypeError(`${operator} requires boolean operands`);return value;}
+  function evaluateCondition(expression:ConditionExpr,local:Scope):boolean {return boolean(evaluate(expression,local),'Condition');}
   function disposeBag(effects:ReactiveEffect[],callbacks:CleanupBag):void {for(const effect of effects)stop(effect);effects.length=0;const failures:unknown[]=[];for(const callback of callbacks.reverse())try{untracked(callback);}catch(error){failures.push(error);}callbacks.length=0;if(failures.length===1)throw failures[0];if(failures.length)throw new AggregateError(failures,'Multiple cleanup operations failed');}
   function forceDisable():unknown {if(disposed)return;disposed=true;let failure:unknown;try{disposeBag(ownedEffects,cleanups);}catch(error){failure=error;}finally{for(const name of Object.keys(scope))delete scope[name];supplied={};components=[];content=undefined;events={};shared=[];if(ownsSharedRegistry)sharedRegistry.clear();releaseComponent(budget,componentReservation);}return failure;}
   const childRuntime:RuntimeApi={mountComponent:(childTarget,childModel,childComponents,childProps={},_childLimits={},_childDepth=0,childEvents={},childShared=[])=>mountComponentTree(childTarget,childModel,childComponents,childProps,{},limits,componentDepth+1,budget,undefined,childEvents,childShared,sharedRegistry),mountComponentWithState:(childTarget,childModel,childComponents,childProps,state,_childLimits={},_childDepth=0,childEvents={},childShared=[])=>mountComponentTree(childTarget,childModel,childComponents,childProps,state,limits,componentDepth+1,budget,undefined,childEvents,childShared,sharedRegistry),mountComponentWithContent:(childTarget,childModel,childComponents,childProps,state,childContent,_childLimits={},_childDepth=0,childEvents={},childShared=[])=>mountComponentTree(childTarget,childModel,childComponents,childProps,state,limits,componentDepth+1,budget,childContent,childEvents,childShared,sharedRegistry),mountCounter};
@@ -261,6 +288,47 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
   const trackNodes=(callbacks:CleanupBag,count=1)=>{if(callbacks.nodes===undefined){callbacks.nodes=0;callbacks.push(()=>{release(budget,'domNodes',callbacks.nodes!);callbacks.nodes=0;});}callbacks.nodes+=count;};
   function create(view:View,parent:Element|DocumentFragment,local=scope,forward='',effects=ownedEffects,callbacks:CleanupBag=cleanups,rootOwned=false,componentRuntime=childRuntime):void {
     consumeWork(budget);
+    if(view.kind==='router'){
+      if(budget.router)throw new TypeError('Only one router is supported per app');
+      const window=parent.ownerDocument.defaultView;if(!window)throw new TypeError('Router requires a browser window');
+      if(!Array.isArray(view.routes)||!view.routes.length||view.routes.length>Math.min(256,limits.maxCollectionItems))throw new TypeError('Invalid route table: at most 256 routes within the collection limit');consumeWork(budget,view.routes.length);
+      const patterns=view.routes.map((route,index)=>{
+        if(!route||typeof route.path!=='string'||!Array.isArray(route.children)||!route.children.length)throw new TypeError('Invalid route definition');
+        if(route.path==='*'){if(index!==view.routes.length-1)throw new TypeError('Fallback route must be last');return {segments:[],names:[],specificity:-1};}
+        if(route.path.length>2048||!route.path.startsWith('/')||route.path.startsWith('//'))throw new TypeError('Invalid route pattern');
+        const segments=route.path==='/'?[]:route.path.slice(1).split('/'),names:string[]=[];consumeWork(budget,segments.length);
+        for(const segment of segments){if(segment.startsWith(':')){const name=segment.slice(1);if(!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)||['__proto__','prototype','constructor'].includes(name)||names.includes(name)||name in local)throw new TypeError('Invalid or shadowed route parameter');names.push(name);}else if(!/^[A-Za-z0-9_-]+$/.test(segment))throw new TypeError('Invalid route pattern');}
+        return {segments,names,specificity:segments.filter(segment=>!segment.startsWith(':')).length};
+      });
+      if(view.routes.at(-1)!.path!=='*')throw new TypeError('Router requires a final fallback route');
+      for(let i=0;i<patterns.length-1;i++)for(let j=0;j<i;j++){const a=patterns[i],b=patterns[j];consumeWork(budget,Math.max(1,a.segments.length));if(a.specificity===b.specificity&&a.segments.length===b.segments.length&&a.segments.every((segment,k)=>segment===b.segments[k]||segment.startsWith(':')||b.segments[k].startsWith(':')))throw new TypeError('Duplicate or ambiguous route pattern');}
+      type Match={index:number;params:Record<string,string>};let cachedPath:string|undefined,cached:Match;
+      const match=(path:string):Match=>{
+        if(path===cachedPath)return cached;consumeWork(budget,patterns.length);let parts:string[]|undefined;try{parts=routeSegments(path);}catch{/* Malformed browser paths select the fallback. */}
+        let index=patterns.length-1,specificity=-1,params:Record<string,string>=Object.create(null);
+        if(parts)patterns.forEach((pattern,i)=>{if(pattern.specificity<=specificity||pattern.segments.length!==parts!.length)return;consumeWork(budget,pattern.segments.length);if(!pattern.segments.every((segment,k)=>segment.startsWith(':')||segment===parts![k]))return;const next:Record<string,string>=Object.create(null);pattern.segments.forEach((segment,k)=>{if(segment.startsWith(':'))next[segment.slice(1)]=parts![k];});index=i;specificity=pattern.specificity;params=next;});
+        cachedPath=path;return cached={index,params};
+      };
+      const currentUrl=()=>window.location.pathname+window.location.search+window.location.hash;
+      const initial=currentUrl(),committed=patterns.map(()=>Object.create(null) as Record<string,string>);
+      const router:RoutingContext={window,path:signal(initial),url:initial,ready:false,prepare(path){const selected=match(path);return ()=>{committed[selected.index]=selected.params;router.url=path;};}};
+      router.prepare(initial)();budget.router=router;
+      const onPop=()=>{
+        const previous=router.path.value,path=currentUrl();
+        try{transact(()=>{pendingNavigation={router,path,pop:true};write(router.path,path);},forceDisable,budget);}
+        catch(error){if(router.path.value===previous)try{window.history.replaceState(window.history.state,'',router.url);}catch(recovery){const disabled=forceDisable();throw new AggregateError([error,recovery,...(disabled?[disabled]:[])],'Route history recovery failed');}throw error;}
+      };
+      window.addEventListener('popstate',onPop);
+      callbacks.push(()=>{router.ready=false;window.removeEventListener('popstate',onPop);if(budget.router===router)budget.router=undefined;});
+      view.routes.forEach((route,index)=>{
+        const routeScope=Object.create(local) as Scope;
+        for(const name of patterns[index].names)routeScope[name]=()=>{const selected=match(read(router.path));return selected.index===index?selected.params[name]:committed[index][name]??'';};
+        // Reuse transactional branch staging. Parameter changes retain this branch.
+        const key='@route';routeScope[key]=()=>match(read(router.path)).index===index;
+        create({kind:'conditional',condition:{kind:'reference',name:key},consequent:route.children,alternate:[]},parent,routeScope,forward,effects,callbacks,rootOwned,componentRuntime);
+      });
+      router.ready=true;return;
+    }
     if(view.kind==='slot'){
       if(contentMounted)throw new TypeError('Component model contains multiple slots');contentMounted=true;if(!content)return;const project=content,dispose=untracked(()=>project(parent,componentRuntime));content=undefined;callbacks.push(dispose);return;
     }
