@@ -3,9 +3,9 @@ export interface RuntimeLimits {maxCollectionItems:number;maxComponentDepth:numb
 export const defaultRuntimeLimits:Readonly<RuntimeLimits>=Object.freeze({maxCollectionItems:100_000,maxComponentDepth:256,maxUpdatesPerFlush:100_000,maxComponentInstances:100_000,maxListRecords:250_000,maxDomNodes:500_000,maxReactiveEffects:250_000,maxWorkPerOperation:1_000_000});
 type Primitive=string|number|boolean;
 type Value=Primitive|Instance|SharedInstance|Value[];
-type InitialState=Readonly<Record<string,readonly unknown[]>>;
-type Expr={kind:'literal';value:Primitive}|{kind:'reference';name:string}|{kind:'member';object:Expr;name:string}|{kind:'str'|'len';argument:Expr}|{kind:'add';left:Expr;right:Expr}|{kind:'construct';name:string;arguments:Expr[]}|{kind:'list';items:Expr[]};
-type ConditionExpr={kind:'literal';value:Primitive}|{kind:'reference';name:string}|{kind:'member';object:Expr;name:string}|{kind:'not';argument:ConditionExpr}|{kind:'equal'|'notEqual'|'and';left:ConditionExpr;right:ConditionExpr};
+type InitialState=Readonly<Record<string,unknown>>;
+type Expr={kind:'literal';value:Primitive}|{kind:'reference';name:string}|{kind:'member';object:Expr;name:string}|{kind:'str'|'len';argument:Expr}|{kind:'contains';left:Expr;right:Expr}|{kind:'count';left:Expr;right:Expr}|{kind:'add';left:Expr;right:Expr}|{kind:'subtract';left:Expr;right:Expr}|{kind:'construct';name:string;arguments:Expr[]}|{kind:'list';items:Expr[]};
+type ConditionExpr={kind:'literal';value:Primitive}|{kind:'reference';name:string}|{kind:'member';object:Expr;name:string}|{kind:'contains';left:Expr;right:Expr}|{kind:'count';left:Expr;right:Expr}|{kind:'not';argument:ConditionExpr}|{kind:'equal'|'notEqual'|'and';left:ConditionExpr;right:ConditionExpr};
 type Statement={kind:'assign';target:Expr;value:Expr}|{kind:'eventAssign';target:Expr;member:'value'|'checked'}|{kind:'call';target:Expr;method:string;arguments:Expr[]}|{kind:'emit';event:string;payload?:Expr};
 interface Handler {kind?:string;event:string;parameter?:string;payloadType?:'string'|'number'|'boolean'|null;statements:Statement[]}
 interface ElementView {kind:'element';tag:string;component:number;attributes:Record<string,Expr>;static?:number;children:View[];handler?:Handler}
@@ -17,7 +17,7 @@ interface ClassModel {fields:{name:string;initial:Expr}[];computed:Record<string
 interface Model {props:Record<string,Primitive>;events?:Record<string,'string'|'number'|'boolean'|null>;shared?:{name:string;index:number}[];classes:Record<string,ClassModel>;states:Record<string,Expr>;computed:Record<string,Expr>;init:Statement[];cleanup:Statement[];roots:View[]}
 interface Signal<T=Value>{value:T;subscribers:Set<ReactiveEffect>;derive?:ReactiveEffect;dirty?:boolean}
 interface Instance {__class:string;fields:Record<string,Signal>;computed:Record<string,Expr>;actions:Record<string,Statement[]>;scope:Scope}
-interface SharedDefinition {states:Record<string,Primitive>}
+interface SharedDefinition {states:Record<string,Primitive|Primitive[]>}
 interface SharedInstance {__shared:string;fields:Record<string,Signal>}
 type SharedRegistry=Map<SharedDefinition,SharedInstance>;
 type Scope=Record<string,Signal|Instance|SharedInstance|(()=>Value)>;
@@ -25,7 +25,7 @@ type ResourceName='components'|'records'|'domNodes'|'effects';
 interface ResourceBudget {limits:RuntimeLimits;components:number;records:number;domNodes:number;effects:number;work:number;workDepth:number}
 interface Reservation {released:boolean}
 type ReactiveEffect=(()=>void)&{dependencies:Set<Signal>;disposed:boolean;computed?:Signal;maxUpdates:number;budget:ResourceBudget};
-type Dispose=(()=>void)&{refresh?:()=>void};
+type Dispose=(()=>void)&{refresh?:()=>void;updateState?:(state:InitialState)=>void};
 type ContentMount=(target:Element|DocumentFragment,runtime:RuntimeApi)=>Dispose;
 type CleanupBag=(()=>void)[]&{nodes?:number};
 interface RuntimeApi {mountComponent:(target:Element,model:Model,components:Mount[],props?:Record<string,Primitive>,limits?:Partial<RuntimeLimits>,depth?:number,events?:Record<string,(payload?:Primitive)=>void>,shared?:SharedDefinition[])=>Dispose;mountComponentWithState?:(target:Element,model:Model,components:Mount[],props:Record<string,Primitive>,state:InitialState,limits?:Partial<RuntimeLimits>,depth?:number,events?:Record<string,(payload?:Primitive)=>void>,shared?:SharedDefinition[])=>Dispose;mountComponentWithContent?:(target:Element,model:Model,components:Mount[],props:Record<string,Primitive>,state:InitialState,content:ContentMount,limits?:Partial<RuntimeLimits>,depth?:number,events?:Record<string,(payload?:Primitive)=>void>,shared?:SharedDefinition[])=>Dispose;mountCounter:(target:Element,model:CounterModel)=>()=>void}
@@ -140,7 +140,7 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
   for(const key of Object.keys(supplied))if(key!=='class'&&!Object.hasOwn(model.props,key))throw new TypeError(`Unknown prop ${key}`);
   let forwardClass='';if(Object.hasOwn(supplied,'class')){const value=supplied.class;if(typeof value!=='string')throw new TypeError('Invalid prop class');forwardClass=value;}
   for(const [name,initial] of Object.entries(model.props)){consumeWork(budget);const value=Object.hasOwn(supplied,name)?supplied[name]:initial;if(typeof value!==typeof initial)throw new TypeError(`Invalid prop ${name}`);scope[name]=signal(value);}
-  for(const entry of model.shared??[]){if(Object.hasOwn(scope,entry.name)||!Number.isSafeInteger(entry.index)||entry.index<0)throw new TypeError(`Invalid shared state ${entry.name}`);const definition=shared[entry.index];if(!definition||Object.getPrototypeOf(definition)!==Object.prototype||!definition.states||Object.getPrototypeOf(definition.states)!==Object.prototype)throw new TypeError(`Invalid shared state definition ${entry.name}`);let instance=sharedRegistry.get(definition);if(!instance){const fields:Record<string,Signal>=Object.create(null);for(const [name,value] of Object.entries(definition.states)){consumeWork(budget);if(!['string','number','boolean'].includes(typeof value))throw new TypeError(`Invalid shared value ${name}`);assertNumber(value);fields[name]=signal(value);}instance={__shared:entry.name,fields};sharedRegistry.set(definition,instance);}scope[entry.name]=instance;}
+  for(const entry of model.shared??[]){if(Object.hasOwn(scope,entry.name)||!Number.isSafeInteger(entry.index)||entry.index<0)throw new TypeError(`Invalid shared state ${entry.name}`);const definition=shared[entry.index];if(!definition||Object.getPrototypeOf(definition)!==Object.prototype||!definition.states||Object.getPrototypeOf(definition.states)!==Object.prototype)throw new TypeError(`Invalid shared state definition ${entry.name}`);let instance=sharedRegistry.get(definition);if(!instance){const fields:Record<string,Signal>=Object.create(null);for(const [name,value] of Object.entries(definition.states)){consumeWork(budget);if(Array.isArray(value)){if(!value.length||value.length>limits.maxCollectionItems)throw new TypeError(`Invalid shared list ${name}`);const itemType=typeof value[0];if(!['string','number','boolean'].includes(itemType)||value.some(item=>typeof item!==itemType))throw new TypeError(`Invalid shared list ${name}`);value.forEach(assertNumber);fields[name]=signal([...value]);}else{if(!['string','number','boolean'].includes(typeof value))throw new TypeError(`Invalid shared value ${name}`);assertNumber(value);fields[name]=signal(value);}}instance={__shared:entry.name,fields};sharedRegistry.set(definition,instance);}scope[entry.name]=instance;}
   const getSignal=(name:string,local:Scope):Signal=>{const value=local[name];if(!value||typeof value==='function'||'__class'in value||'__shared'in value)throw new TypeError(`Unknown writable value ${name}`);return value;};
   function evaluate(expression:Expr,local=scope):Value {
     if(expression.kind==='literal'){assertNumber(expression.value);return expression.value;}
@@ -148,7 +148,9 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
     if(expression.kind==='member'){const owner=evaluate(expression.object,local);if(!owner||typeof owner!=='object'||Array.isArray(owner)||!('__class'in owner)&&!('__shared'in owner))throw new TypeError('Member access requires a class instance or shared state');const field=owner.fields[expression.name];if(field)return read(field);if('__class'in owner){const computed=owner.computed[expression.name];if(computed)return evaluate(computed,owner.scope);}throw new TypeError(`Unknown member ${expression.name}`);}
     if(expression.kind==='str')return String(evaluate(expression.argument,local));
     if(expression.kind==='len'){const value=evaluate(expression.argument,local);if(!Array.isArray(value))throw new TypeError('len requires a list');return value.length;}
-    if(expression.kind==='add'){const left=evaluate(expression.left,local),right=evaluate(expression.right,local);if(typeof left==='number'&&typeof right==='number'){const result=left+right;assertNumber(result);return result;}return String(left)+String(right);}
+    if(expression.kind==='contains'){const left=evaluate(expression.left,local),right=evaluate(expression.right,local);if(typeof left!=='string'||typeof right!=='string')throw new TypeError('contains requires strings');return left.toLocaleLowerCase().includes(right.toLocaleLowerCase());}
+    if(expression.kind==='count'){const left=evaluate(expression.left,local),right=evaluate(expression.right,local);if(!Array.isArray(left))throw new TypeError('count requires a list');let total=0;for(const item of left)if(item===right)total++;return total;}
+    if(expression.kind==='add'||expression.kind==='subtract'){const left=evaluate(expression.left,local),right=evaluate(expression.right,local);if(typeof left==='number'&&typeof right==='number'){const result=expression.kind==='add'?left+right:left-right;assertNumber(result);return result;}if(expression.kind==='subtract')throw new TypeError('Subtraction requires numbers');return String(left)+String(right);}
     if(expression.kind==='list'){if(expression.items.length>limits.maxCollectionItems)throw new RangeError(`Collection exceeds the configured limit of ${limits.maxCollectionItems} items`);consumeWork(budget,expression.items.length);return expression.items.map(item=>evaluate(item,local));}
     if(expression.kind==='construct')return instantiate(expression.name,expression.arguments.map(item=>evaluate(item,local)));
     throw new TypeError('Unsupported expression');
@@ -181,7 +183,8 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
     });
   }
   for(const name of Object.keys(initialState))if(!Object.hasOwn(model.states,name))throw new TypeError(`Unknown initial state ${name}`);
-  for(const [name,initial] of Object.entries(model.states)){consumeWork(budget);scope[name]=signal(Object.hasOwn(initialState,name)?hydrateInitialList(initial,initialState[name],name):evaluate(initial));}
+  const hydrateState=(initial:Expr,input:unknown,name:string):Value=>{if(Array.isArray(input))return hydrateInitialList(initial,input,name);const expected=evaluate(initial);if(typeof expected!==typeof input||typeof input==='object')throw new TypeError(`Initial state ${name} requires ${typeof expected}`);assertNumber(input);return input as Primitive;};
+  for(const [name,initial] of Object.entries(model.states)){consumeWork(budget);scope[name]=signal(Object.hasOwn(initialState,name)?hydrateState(initial,initialState[name],name):evaluate(initial));}
   for(const name of Object.keys(model.computed))scope[name]=signal('');
   try{for(const [name,expression] of Object.entries(model.computed)){const source=getSignal(name,scope);ownedEffects.push(createEffect(()=>write(source,evaluate(expression)),budget,source,limits.maxUpdatesPerFlush));}}catch(error){disposeBag(ownedEffects,cleanups);throw error;}
   function resolveTarget(target:Expr,local:Scope):Signal {
@@ -204,6 +207,7 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
           if(statement.method==='append'){if(owner.length>=limits.maxCollectionItems)throw new RangeError(`Collection exceeds the configured limit of ${limits.maxCollectionItems} items`);next=[...owner,args[0]];}
           else if(statement.method==='remove'){const index=owner.indexOf(args[0]);if(index<0)continue;next=[...owner];next.splice(index,1);}
           else if(statement.method==='move'){const index=owner.indexOf(args[0]);if(index<0)continue;const requested=args[1];if(typeof requested!=='number'||!Number.isSafeInteger(requested))throw new TypeError('move index must be a safe integer');const destination=Math.max(0,Math.min(owner.length-1,requested));if(index===destination)continue;next=[...owner];const [item]=next.splice(index,1);next.splice(destination,0,item);}
+          else if(statement.method==='sort'){const field=args[0],ascending=args[1];if(typeof field!=='string'||typeof ascending!=='boolean')throw new TypeError('sort requires a field and boolean direction');next=owner.map((item,index)=>({item,index})).sort((a,b)=>{if(!a.item||typeof a.item!=='object'||Array.isArray(a.item)||!('__class'in a.item)||!b.item||typeof b.item!=='object'||Array.isArray(b.item)||!('__class'in b.item))throw new TypeError('sort requires class records');const left=a.item.fields[field],right=b.item.fields[field];if(!left||!right)throw new TypeError(`Unknown sort field ${field}`);const x=read(left),y=read(right),order=typeof x==='number'&&typeof y==='number'?x-y:String(x).localeCompare(String(y));return (ascending?order:-order)||(a.index-b.index);}).map(entry=>entry.item);}
           else throw new TypeError(`Unsupported list operation ${statement.method}`);write(source,next);
         } else if(owner&&typeof owner==='object'&&'__class'in owner){const body=owner.actions[statement.method];if(!body)throw new TypeError(`Unknown action ${statement.method}`);execute(body,owner.scope);}
         else throw new TypeError('Unsupported call target');
@@ -211,7 +215,7 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
     }},forceDisable,budget);
   }
   function evaluateCondition(expression:ConditionExpr,local:Scope):Primitive {
-    if(expression.kind==='literal'){assertNumber(expression.value);return expression.value;}if(expression.kind==='reference'||expression.kind==='member')return evaluate(expression as Expr,local) as Primitive;
+    if(expression.kind==='literal'){assertNumber(expression.value);return expression.value;}if(expression.kind==='reference'||expression.kind==='member'||expression.kind==='contains'||expression.kind==='count')return evaluate(expression as Expr,local) as Primitive;
     if(expression.kind==='not')return !evaluateCondition(expression.argument,local);const left=evaluateCondition(expression.left,local);if(expression.kind==='and')return Boolean(left)&&Boolean(evaluateCondition(expression.right,local));const right=evaluateCondition(expression.right,local);return expression.kind==='equal'?left===right:left!==right;
   }
   function disposeBag(effects:ReactiveEffect[],callbacks:CleanupBag):void {for(const effect of effects)stop(effect);effects.length=0;const failures:unknown[]=[];for(const callback of callbacks.reverse())try{untracked(callback);}catch(error){failures.push(error);}callbacks.length=0;if(failures.length===1)throw failures[0];if(failures.length)throw new AggregateError(failures,'Multiple cleanup operations failed');}
@@ -229,14 +233,14 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
     // Dynamic ranges can move out of their staging fragment. Resolve insertion
     // parents from live anchors so nested scopes keep updating in place.
     if(view.kind==='conditional'){
-      const anchor=makeComment(parent.ownerDocument,'if');let selected:boolean|undefined;let branchEffects:ReactiveEffect[]=[];let branchCleanups:CleanupBag=[];
-      callbacks.push(()=>{try{disposeBag(branchEffects,branchCleanups);}finally{anchor.remove();release(budget,'domNodes');}});parent.append(anchor);
+      const anchor=makeComment(parent.ownerDocument,'if');let selected:boolean|undefined,alive=true;let branchEffects:ReactiveEffect[]=[];let branchCleanups:CleanupBag=[];
+      callbacks.push(()=>{alive=false;try{disposeBag(branchEffects,branchCleanups);}finally{anchor.remove();release(budget,'domNodes');}});parent.append(anchor);
       const update=createEffect(()=>{const next=Boolean(evaluateCondition(view.condition,local));if(next===selected)return;untracked(()=>{
         const nextEffects:ReactiveEffect[]=[],nextCleanups:CleanupBag=[],fragment=parent.ownerDocument.createDocumentFragment();
         try{for(const child of next?view.consequent:view.alternate)create(child,fragment,local,forward,nextEffects,nextCleanups,false,componentRuntime);}
         catch(error){try{disposeBag(nextEffects,nextCleanups);}catch(cleanup){throw new AggregateError([error,cleanup],'Conditional preparation and cleanup failed',{cause:error});}throw error;}
         const previousEffects=branchEffects,previousCleanups=branchCleanups;
-        stageStructure(()=>{anchor.parentNode!.insertBefore(fragment,anchor);selected=next;branchEffects=nextEffects;branchCleanups=nextCleanups;try{disposeBag(previousEffects,previousCleanups);}catch(error){return [error];}},()=>disposeBag(nextEffects,nextCleanups));
+        stageStructure(()=>{if(!alive){try{disposeBag(nextEffects,nextCleanups);}catch(error){return [error];}return;}if(!anchor.parentNode)throw new TypeError('Conditional anchor is detached');anchor.parentNode.insertBefore(fragment,anchor);selected=next;branchEffects=nextEffects;branchCleanups=nextCleanups;try{disposeBag(previousEffects,previousCleanups);}catch(error){return [error];}},()=>disposeBag(nextEffects,nextCleanups));
       });},budget,undefined,limits.maxUpdatesPerFlush);effects.push(update);return;
     }
     if(view.kind==='iteration'){
@@ -303,8 +307,9 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
     parent.append(element);for(const child of view.children)create(child,element,local,'',effects,callbacks,false,componentRuntime);
   }
   const refresh=()=>{if(disposed)return;transact(()=>{for(const [name,initial] of Object.entries(model.props)){const value=Object.hasOwn(supplied,name)?supplied[name]:initial;if(typeof value!==typeof initial)throw new TypeError(`Invalid prop ${name}`);write(getSignal(name,scope),value);}},forceDisable,budget);};
+  const updateState=(patch:InitialState)=>{if(disposed)return;transact(()=>{for(const [name,value] of Object.entries(patch)){const initial=model.states[name];if(!initial)throw new TypeError(`Unknown state ${name}`);write(getSignal(name,scope),hydrateState(initial,value,name));}},forceDisable,budget);};
   const dispose:Dispose=()=>{if(disposed)return;return withWork(budget,()=>{disposed=true;const failures:unknown[]=[];try{disposeBag(ownedEffects,cleanups);}catch(error){failures.push(error);}try{untracked(()=>execute(model.cleanup));}catch(error){failures.push(error);}finally{for(const name of Object.keys(scope))delete scope[name];classDefaults.clear();supplied={};components=[];content=undefined;events={};shared=[];if(ownsSharedRegistry)sharedRegistry.clear();releaseComponent(budget,componentReservation);}if(failures.length===1)throw failures[0];if(failures.length)throw new AggregateError(failures,'Component disposal failed');});};
-  let contentMounted=false;try{execute(model.init);for(const root of model.roots)create(root,target!,scope,forwardClass,ownedEffects,cleanups,true);if(content&&!contentMounted)throw new TypeError('Component does not accept content');}catch(error){try{dispose();}catch(cleanup){throw new AggregateError([error,cleanup],'Component mounting and recovery failed',{cause:error});}throw error;}finally{target=undefined;}dispose.refresh=refresh;return dispose;
+  let contentMounted=false;try{execute(model.init);for(const root of model.roots)create(root,target!,scope,forwardClass,ownedEffects,cleanups,true);if(content&&!contentMounted)throw new TypeError('Component does not accept content');}catch(error){try{dispose();}catch(cleanup){throw new AggregateError([error,cleanup],'Component mounting and recovery failed',{cause:error});}throw error;}finally{target=undefined;}dispose.refresh=refresh;dispose.updateState=updateState;return dispose;
 }
 
 export function mountCounter(target:Element,model:CounterModel):()=>void {assertNumber(model.initial);assertNumber(model.step);let value=model.initial;const button=target.ownerDocument.createElement('button'),text=target.ownerDocument.createTextNode('');button.append(text);const render=()=>{text.data=model.prefix+String(value);};const click=()=>{const next=value+model.step;assertNumber(next);value=next;render();};render();button.addEventListener('click',click);target.append(button);return()=>{button.removeEventListener('click',click);button.remove();};}

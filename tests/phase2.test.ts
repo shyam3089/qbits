@@ -57,14 +57,37 @@ test('child events declare stable typed payloads and parent handlers are checked
 });
 
 test('shared state declarations and imports are typed and data-only',()=>{
-  const shared=compile('shared Cart:\n    count = 0\n    total = 0','Cart.qb');
+  const shared=compile('shared Cart:\n    count = 0\n    total = 0\n    items = [0]','Cart.qb');
   assert.equal(shared.ast.kind,'SharedState');assert.match(shared.code,/Object\.freeze/);
   const consumer=compile('import Cart from "./Cart.qb"\ncomponent Summary:\n    button text=str(Cart.count):\n        on click:\n            Cart.count = Cart.count + 1','Summary.qb',{shared:new Map([['Cart',shared.ast]])});
   assert.match(consumer.code,/"shared":\[\{"name":"Cart","index":0\}\]/);assert.match(consumer.code,/import s0/);
   assert.throws(()=>compile('shared Bad:\n    value = other'),/defaults must be/);
+  assert.throws(()=>compile('shared Bad:\n    values = []'),/non-empty lists/);
+  assert.throws(()=>compile('shared Bad:\n    values = [1, "two"]'),/one primitive type/);
   assert.throws(()=>compile('import Other from "./Other.qb"\nshared Bad:\n    value = 0'),/cannot import/);
   assert.throws(()=>compile('import Cart from "./Cart.qb"\ncomponent C:\n    p text=str(Cart.missing)','C.qb',{shared:new Map([['Cart',shared.ast]])}),/Unknown shared value/);
   assert.throws(()=>compile('import Cart from "./Cart.qb"\ncomponent C:\n    button:\n        on click:\n            Cart.count = "wrong"','C.qb',{shared:new Map([['Cart',shared.ast]])}),/matching state type/);
+});
+
+test('collection queries, subtraction and stable field sorting are typed',()=>{
+  const source=`class Item:
+    id = 0
+    name = ""
+    price = 0
+component Store:
+    one = Item(1, "Studio", 20)
+    items = [one, Item(2, "Home", 10)]
+    query = ""
+    total = 20
+    if contains(one.name, query):
+        p text=str(count(items, one))
+    button text="Sort":
+        on click:
+            items.sort("price", true)
+            total = total - one.price`;
+  const {code}=compile(source);assert.match(code,/"kind":"contains"/);assert.match(code,/"method":"sort"/);assert.match(code,/"kind":"subtract"/);
+  assert.throws(()=>compile(source.replace('"price", true','"missing", true')),/literal class field name/);
+  assert.throws(()=>compile(source.replace('contains(one.name, query)','contains(one.price, query)')),/contains requires two strings/);
 });
 
 test('module graph classifies shared imports with the configured extension',async()=>{

@@ -38,12 +38,15 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
       if(!at(']')) do {if(items.length>=limits.maxCollectionItems)fail(source,filename,peek().span,`Collection exceeds the configured limit of ${limits.maxCollectionItems} items`);items.push(nestedExpression(peek().span,expression));if(!at(','))break;cursor++;}while(true);
       value=expressionNode({kind:'list',items,span:{start,end:symbol(']').span.end}});
     } else {
-      const name=(at('str')||at('len'))?(()=>{const token=take('identifier');return {value:token.value,span:token.span};})():id();
+      const name=(at('str')||at('len')||at('contains')||at('count'))?(()=>{const token=take('identifier');return {value:token.value,span:token.span};})():id();
       if(at('(')) {
         const args=argumentsList();
         if(name.value==='str'||name.value==='len') {
           if(args.values.length!==1) fail(source,filename,name.span,`${name.value} requires one argument`);
           value=expressionNode({kind:name.value,argument:args.values[0],span:{start:name.span.start,end:args.end}});
+        } else if(name.value==='contains'||name.value==='count') {
+          if(args.values.length!==2) fail(source,filename,name.span,`${name.value} requires two arguments`);
+          value=expressionNode({kind:name.value,left:args.values[0],right:args.values[1],span:{start:name.span.start,end:args.end}});
         } else value=expressionNode({kind:'construct',name,arguments:args.values,span:{start:name.span.start,end:args.end}});
       } else value=expressionNode({kind:'reference',name:name.value,span:name.span});
     }
@@ -51,11 +54,11 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     return value;
   }
   function expression():Expression {
-    let left=atom(),addDepth=0;while(at('+')){if(++addDepth>limits.maxExpressionDepth)fail(source,filename,peek().span,`Expression nesting exceeds the configured limit of ${limits.maxExpressionDepth} levels`);cursor++;const right=atom();left=expressionNode({kind:'add',left,right,span:{start:left.span.start,end:right.span.end}});}return left;
+    let left=atom(),addDepth=0;while(at('+')||at('-')){if(++addDepth>limits.maxExpressionDepth)fail(source,filename,peek().span,`Expression nesting exceeds the configured limit of ${limits.maxExpressionDepth} levels`);const kind=peek().value==='+'?'add':'subtract';cursor++;const right=atom();left=expressionNode({kind,left,right,span:{start:left.span.start,end:right.span.end}});}return left;
   }
   function conditionAtom():ConditionExpression {
     const value=atom();
-    if(!['literal','reference','member'].includes(value.kind)) fail(source,filename,value.span,'Conditions support literals, state names, and instance fields');
+    if(!['literal','reference','member','contains','count'].includes(value.kind)) fail(source,filename,value.span,'Conditions support literals, state names, members, contains, and count');
     return value as ConditionExpression;
   }
   function conditionNot():ConditionExpression {

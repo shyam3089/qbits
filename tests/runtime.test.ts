@@ -552,3 +552,46 @@ component App:
     await page.waitForTimeout(0);assert.deepEqual(result,{updated:'1:1',isolated:'0:0',moved:true,rolledBack:'1:1',hidden:'1:1',afterRemount:'2:3',empty:true,secondStill:'0:0'});assert.deepEqual(errors,['State exceeded safe integer range']);
   }finally{await browser.close();}
 });
+
+test('disposed staged conditionals do not commit after nested keyed lifecycle updates',async()=>{
+  const store=compile('shared Store:\n    mounted = 0','Store.qb'),shared=new Map([['Store',store.ast]]);
+  const child=compile('import Store from "./Store.qb"\ncomponent Child(label = ""):\n    on init:\n        Store.mounted = Store.mounted + 1\n    on cleanup:\n        Store.mounted = Store.mounted - 1\n    p text=label','Child.qb',{shared});
+  const app=compile(`import Store from "./Store.qb"
+import Child from "./Child.qb"
+class Item:
+    id = 0
+    label = ""
+component App:
+    all = true
+    items = [Item(1, "One"), Item(2, "Two")]
+    span text="Mounted " + str(Store.mounted)
+    if all:
+        for item in items key=item.id:
+            if item.id != 0:
+                Child label=item.label
+    else:
+        for item in items key=item.id:
+            if item.id == 1:
+                Child label=item.label
+    button text="Only one":
+        on click:
+            all = false
+    button text="All":
+        on click:
+            all = true`,'App.qb',{shared,components:new Map([['Child',child.ast]])}).code.replace('./Store.qb','__STORE__').replace('./Child.qb','__CHILD__');
+  const runtime=await readFile('dist/lib/runtime/index.js','utf8'),browser=await firefox.launch({headless:true});
+  try{const page=await browser.newPage(),errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));const result=await page.evaluate(async({runtime,store,child,app})=>{const runtimeUrl=URL.createObjectURL(new Blob([runtime],{type:'text/javascript'})),storeUrl=URL.createObjectURL(new Blob([store],{type:'text/javascript'})),childUrl=URL.createObjectURL(new Blob([child.replace('./Store.qb',storeUrl)],{type:'text/javascript'})),appUrl=URL.createObjectURL(new Blob([app.replace('__STORE__',storeUrl).replace('__CHILD__',childUrl)],{type:'text/javascript'})),urls=[runtimeUrl,storeUrl,childUrl,appUrl];try{const api=await import(runtimeUrl),module=await import(appUrl),host=document.createElement('main');document.body.append(host);const dispose=module.default(host,api);host.querySelectorAll('button')[0].click();const one={count:host.querySelectorAll('p').length,mounted:host.querySelector('span').textContent};host.querySelectorAll('button')[1].click();const all={count:host.querySelectorAll('p').length,mounted:host.querySelector('span').textContent};dispose();host.remove();return{one,all};}finally{urls.forEach(URL.revokeObjectURL);}}, {runtime,store:store.code,child:child.code,app});assert.deepEqual(result,{one:{count:1,mounted:'Mounted 1'},all:{count:2,mounted:'Mounted 2'}});assert.deepEqual(errors,[]);}finally{await browser.close();}
+});
+
+test('host state updates are transactional and preserve keyed identity on rollback',async()=>{
+  const module=compile(`class Item:
+    id = 0
+    name = ""
+component App:
+    loading = true
+    items = [Item(0, "schema")]
+    p text=str(loading)
+    for item in items key=item.id:
+        span text=item.name`).code,runtime=await readFile('dist/lib/runtime/index.js','utf8'),browser=await firefox.launch({headless:true});
+  try{const page=await browser.newPage(),errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));const result=await page.evaluate(async({runtime,module})=>{const urls=[runtime,module].map(source=>URL.createObjectURL(new Blob([source],{type:'text/javascript'})));try{const api=await import(urls[0]),app=await import(urls[1]),host=document.createElement('main');document.body.append(host);const dispose=app.default(host,api,{}, {items:[{id:1,name:'One'},{id:2,name:'Two'}]}),first=host.querySelector('span');dispose.updateState({loading:false,items:[{id:1,name:'One updated'},{id:2,name:'Two'}]});const updated={loading:host.querySelector('p').textContent,text:host.querySelector('span').textContent,identity:host.querySelector('span')===first};let failure='';try{dispose.updateState({loading:true,items:[{id:1,name:'Duplicate A'},{id:1,name:'Duplicate B'}]});}catch(error){failure=error.message;}const rolledBack={loading:host.querySelector('p').textContent,text:host.querySelector('span').textContent,identity:host.querySelector('span')===first};dispose();host.remove();return{updated,failure,rolledBack};}finally{urls.forEach(URL.revokeObjectURL);}}, {runtime,module});assert.deepEqual(result,{updated:{loading:'false',text:'One updated',identity:true},failure:'Duplicate iteration key 1',rolledBack:{loading:'false',text:'One updated',identity:true}});assert.deepEqual(errors,[]);}finally{await browser.close();}
+});

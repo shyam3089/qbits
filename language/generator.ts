@@ -1,7 +1,7 @@
 import type {Component,ConditionExpression,Expression,Statement,ViewNode} from './ast.js';
 
 export function generate(ast:Component):string {
-  if(ast.kind==='SharedState'){const states=JSON.stringify(Object.fromEntries(ast.states.map(state=>[state.name.value,(state.initial as {value:unknown}).value]))).replaceAll('"__proto__":','["__proto__"]:');return `export const sharedName=${JSON.stringify(ast.name.value)};\nexport default Object.freeze({states:Object.freeze(${states})});\n`;}
+  if(ast.kind==='SharedState'){const initial=(value:Expression):unknown=>value.kind==='literal'?value.value:value.kind==='list'?value.items.map(initial):undefined;const states=JSON.stringify(Object.fromEntries(ast.states.map(state=>[state.name.value,initial(state.initial)]))).replaceAll('"__proto__":','["__proto__"]:');return `export const sharedName=${JSON.stringify(ast.name.value)};\nexport default Object.freeze({states:Object.freeze(${states})});\n`;}
   function expression(value:Expression):unknown {
     if(value.kind==='literal')return {kind:value.kind,value:value.value};
     if(value.kind==='reference')return {kind:value.kind,name:value.name};
@@ -11,13 +11,14 @@ export function generate(ast:Component):string {
       return argument.kind==='literal'?{kind:'literal',value:String(argument.value)}:{kind:value.kind,argument};
     }
     if(value.kind==='len')return {kind:value.kind,argument:expression(value.argument)};
-    if(value.kind==='add'){
+    if(value.kind==='contains'||value.kind==='count')return {kind:value.kind,left:expression(value.left),right:expression(value.right)};
+    if(value.kind==='add'||value.kind==='subtract'){
       const left=expression(value.left) as {kind:string;value?:unknown},right=expression(value.right) as {kind:string;value?:unknown};
       if(left.kind==='literal'&&right.kind==='literal'){
         if(typeof left.value==='number'&&typeof right.value==='number'){
-          const result=left.value+right.value;
+          const result=value.kind==='add'?(left.value as number)+(right.value as number):(left.value as number)-(right.value as number);
           if(Number.isSafeInteger(result))return {kind:'literal',value:result};
-        } else return {kind:'literal',value:String(left.value)+String(right.value)};
+        } else if(value.kind==='add')return {kind:'literal',value:String(left.value)+String(right.value)};
       }
       return {kind:value.kind,left,right};
     }
@@ -29,6 +30,7 @@ export function generate(ast:Component):string {
     if(value.kind==='literal')return {kind:value.kind,value:value.value};
     if(value.kind==='reference')return {kind:value.kind,name:value.name};
     if(value.kind==='member')return {kind:value.kind,object:expression(value.object),name:value.name.value};
+    if(value.kind==='contains'||value.kind==='count')return {kind:value.kind,left:expression(value.left),right:expression(value.right)};
     if(value.kind==='not'){
       const argument=condition(value.argument) as {kind:string;value?:unknown};
       return argument.kind==='literal'?{kind:'literal',value:!argument.value}:{kind:value.kind,argument};

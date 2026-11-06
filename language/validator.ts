@@ -10,7 +10,7 @@ export function validate(ast:Component,source:string,filename='<input>',options:
   const limits=resolveCompilerLimits(options.limits);
   const error=(span:Span,message:string):never=>fail(source,filename,span,message);
   if(ast.kind==='SharedState'){
-    const names=new Set<string>();for(const state of ast.states){if(names.has(state.name.value)||state.name.value==='class')error(state.name.span,'Duplicate or reserved shared state name');names.add(state.name.value);const initial=state.initial;if(initial.kind!=='literal')error(initial.span,'Shared state defaults must be string, number, or boolean literals');if(initial.kind==='literal'&&typeof initial.value==='number'&&!Number.isSafeInteger(initial.value))error(initial.span,'Numeric literals must be safe integers');}return;
+    const names=new Set<string>();for(const state of ast.states){if(names.has(state.name.value)||state.name.value==='class')error(state.name.span,'Duplicate or reserved shared state name');names.add(state.name.value);const initial=state.initial;if(initial.kind==='literal'){if(typeof initial.value==='number'&&!Number.isSafeInteger(initial.value))error(initial.span,'Numeric literals must be safe integers');continue;}if(initial.kind!=='list'||!initial.items.length||initial.items.some(item=>item.kind!=='literal'||typeof item.value!==typeof (initial.items[0] as Extract<Expression,{kind:'literal'}>).value))error(initial.span,'Shared state defaults must be literals or non-empty lists of one primitive type');}return;
   }
   const imported=new Set<string>();
   for(const entry of ast.imports) {
@@ -41,7 +41,7 @@ export function validate(ast:Component,source:string,filename='<input>',options:
     if(expression.kind==='literal')return primitive(expression.value);
     if(expression.kind==='reference')return env.get(expression.name)??error(expression.span,`Unknown state or prop ${JSON.stringify(expression.name)}`);
     if(expression.kind==='member'){
-      const owner=type(expression.object,env);if(owner.startsWith('shared:')){const store=options.shared?.get(owner.slice(7)),member=store?.states.find(state=>state.name.value===expression.name.value);return member&&member.initial.kind==='literal'?primitive(member.initial.value):error(expression.name.span,`Unknown shared value ${JSON.stringify(expression.name.value)} on ${owner.slice(7)}`);}
+      const owner=type(expression.object,env);if(owner.startsWith('shared:')){const store=options.shared?.get(owner.slice(7)),member=store?.states.find(state=>state.name.value===expression.name.value);if(!member)return error(expression.name.span,`Unknown shared value ${JSON.stringify(expression.name.value)} on ${owner.slice(7)}`);if(member.initial.kind==='literal')return primitive(member.initial.value);if(member.initial.kind==='list'&&member.initial.items[0]?.kind==='literal')return `list:${primitive(member.initial.items[0].value)}`;return error(expression.name.span,`Invalid shared value ${JSON.stringify(expression.name.value)}`);}
       if(!owner.startsWith('class:'))error(expression.object.span,'Member access requires a class instance or shared state');
       const member=classEnvs.get(owner.slice(6))?.get(expression.name.value);return member??error(expression.name.span,`Unknown member ${JSON.stringify(expression.name.value)} on ${owner.slice(6)}`);
     }
@@ -53,14 +53,16 @@ export function validate(ast:Component,source:string,filename='<input>',options:
     if(expression.kind==='list'){
       if(!expression.items.length)return 'list:unknown';const first=type(expression.items[0],env);for(let index=1;index<expression.items.length;index++){const item=expression.items[index],actual=type(item,env);if(actual!==first)error(item.span,`List items must share one type; expected ${first}, received ${actual}`);}return `list:${first}`;
     }
-    if(expression.kind==='str'){if(expression.argument.kind!=='reference'&&expression.argument.kind!=='member')error(expression.argument.span,'str requires a state, prop, computed value, or instance member');type(expression.argument,env);return 'string';}
+    if(expression.kind==='str'){type(expression.argument,env);return 'string';}
     if(expression.kind==='len'){const actual=type(expression.argument,env);if(!actual.startsWith('list:'))error(expression.argument.span,'len requires a list');return 'number';}
-    if(expression.kind==='add'){const left=type(expression.left,env),right=type(expression.right,env);if(left!==right||!['string','number'].includes(left))error(expression.span,'Addition requires two strings or two numbers; use str(value) for explicit conversion');return left;}
+    if(expression.kind==='contains'){if(type(expression.left,env)!=='string'||type(expression.right,env)!=='string')error(expression.span,'contains requires two strings');return 'boolean';}
+    if(expression.kind==='count'){const list=type(expression.left,env),item=type(expression.right,env);if(!list.startsWith('list:')||list.slice(5)!==item)error(expression.span,'count requires a list and a matching item');return 'number';}
+    if(expression.kind==='add'||expression.kind==='subtract'){const left=type(expression.left,env),right=type(expression.right,env);if(left!==right||!['string','number'].includes(left)||expression.kind==='subtract'&&left!=='number')error(expression.span,expression.kind==='add'?'Addition requires two strings or two numbers; use str(value) for explicit conversion':'Subtraction requires two numbers');return left;}
     return error(expression.span,'Unsupported expression');
   }
   function validateComputed(items:Component['computed'],env:Map<string,Type>):void {
     const pending=new Map(items.map(item=>[item.name.value,item]));const resolving=new Set<string>();
-    const names=(expression:Expression,result=new Set<string>()):Set<string>=>{if(expression.kind==='reference')result.add(expression.name);else if(expression.kind==='member')names(expression.object,result);else if(expression.kind==='str'||expression.kind==='len')names(expression.argument,result);else if(expression.kind==='add'){names(expression.left,result);names(expression.right,result);}else if(expression.kind==='construct')expression.arguments.forEach(item=>names(item,result));else if(expression.kind==='list')expression.items.forEach(item=>names(item,result));return result;};
+    const names=(expression:Expression,result=new Set<string>()):Set<string>=>{if(expression.kind==='reference')result.add(expression.name);else if(expression.kind==='member')names(expression.object,result);else if(expression.kind==='str'||expression.kind==='len')names(expression.argument,result);else if(expression.kind==='add'||expression.kind==='subtract'||expression.kind==='contains'||expression.kind==='count'){names(expression.left,result);names(expression.right,result);}else if(expression.kind==='construct')expression.arguments.forEach(item=>names(item,result));else if(expression.kind==='list')expression.items.forEach(item=>names(item,result));return result;};
     const resolve=(name:string):Type=>{const item=pending.get(name);if(!item)return env.get(name)!;if(resolving.has(name))error(item.name.span,`Computed dependency cycle involving ${JSON.stringify(name)}`);if(resolving.size>=limits.maxNestingDepth)error(item.name.span,`Computed dependency depth exceeds the configured limit of ${limits.maxNestingDepth}`);resolving.add(name);for(const dependency of names(item.expression))if(pending.has(dependency))resolve(dependency);const result=type(item.expression,env);if(result==='unknown')error(item.expression.span,'Computed type could not be inferred');env.set(name,result);pending.delete(name);resolving.delete(name);return result;};
     for(const name of [...pending.keys()])resolve(name);
   }
@@ -83,7 +85,7 @@ export function validate(ast:Component,source:string,filename='<input>',options:
       else if(statement.kind==='assign'){
         const expected=targetType(statement.target,scope,write);
         if(event==='click'&&statement.value.kind==='literal'&&typeof statement.value.value==='boolean'&&expected!=='boolean')error(statement.target.span,'Boolean click assignments require boolean state');
-        if(event==='click'&&statement.value.kind==='add'){const left=type(statement.value.left,scope),right=type(statement.value.right,scope);if(left!==right)error(statement.value.span,'Click increments require numeric state');}
+        if(event==='click'&&(statement.value.kind==='add'||statement.value.kind==='subtract')){const left=type(statement.value.left,scope),right=type(statement.value.right,scope);if(left!==right)error(statement.value.span,'Click arithmetic requires numeric state');}
         const actual=type(statement.value,scope);
         if(actual!==expected){if(event==='click')error(statement.value.span,'Click handlers require a boolean literal assignment or numeric state increment with a matching state type');error(statement.value.span,`Assignment requires ${expected}, received ${actual}`);}
       }
@@ -92,19 +94,21 @@ export function validate(ast:Component,source:string,filename='<input>',options:
       } else {
         const owner=type(statement.target,scope);
         if(owner.startsWith('list:')){
-          const item=owner.slice(5) as Type;if(!['append','remove','move'].includes(statement.method.value))error(statement.method.span,`Unsupported list operation ${statement.method.value}`);
-          const expected=statement.method.value==='move'?2:1;if(statement.arguments.length!==expected)error(statement.span,`${statement.method.value} requires ${expected} argument(s)`);
+          const item=owner.slice(5) as Type;if(!['append','remove','move','sort'].includes(statement.method.value))error(statement.method.span,`Unsupported list operation ${statement.method.value}`);
+          const expected=['move','sort'].includes(statement.method.value)?2:1;if(statement.arguments.length!==expected)error(statement.span,`${statement.method.value} requires ${expected} argument(s)`);
+          if(statement.method.value==='sort'){const field=statement.arguments[0],ascending=statement.arguments[1];if(!item.startsWith('class:')||field.kind!=='literal'||typeof field.value!=='string'||!classFields.get(item.slice(6))?.has(field.value))error(field?.span??statement.span,'sort requires a literal class field name');if(type(ascending,scope)!=='boolean')error(ascending.span,'sort direction must be boolean');continue;}
           if(statement.arguments[0]&&type(statement.arguments[0],scope)!==item)error(statement.arguments[0].span,`List operation requires ${item}`);
           if(statement.method.value==='move'&&type(statement.arguments[1],scope)!=='number')error(statement.arguments[1].span,'move index must be a number');
         } else if(owner.startsWith('class:')){
           if(statement.arguments.length)error(statement.span,'Class actions do not accept arguments');if(!classActions.get(owner.slice(6))!.has(statement.method.value))error(statement.method.span,`Unknown action ${statement.method.value}`);
-        } else error(statement.target.span,'Calls are limited to class actions and list append/remove/move operations');
+        } else error(statement.target.span,'Calls are limited to class actions and list append/remove/move/sort operations');
       }
     }
   }
   validateStatements(ast.init,env,writable,undefined,false,true);validateStatements(ast.cleanup,env,writable,undefined,false,true);
   function conditionType(expression:ConditionExpression,scope:Map<string,Type>):Type {
     if(expression.kind==='literal')return primitive(expression.value);if(expression.kind==='reference'){if(!scope.has(expression.name))error(expression.span,`Unknown name ${JSON.stringify(expression.name)} in condition`);return type(expression as Expression,scope);}if(expression.kind==='member')return type(expression as Expression,scope);
+    if(expression.kind==='contains'||expression.kind==='count')return type(expression as Expression,scope);
     if(expression.kind==='not'){const actual=conditionType(expression.argument,scope);if(actual!=='boolean')error(expression.argument.span,`not requires a boolean operand, received ${actual}`);return 'boolean';}
     const left=conditionType(expression.left,scope),right=conditionType(expression.right,scope);if(expression.kind==='and'){if(left!=='boolean')error(expression.left.span,`and requires boolean operands, received ${left}`);if(right!=='boolean')error(expression.right.span,`and requires boolean operands, received ${right}`);return 'boolean';}if(left!==right)error(expression.span,`Comparison requires operands of the same type, received ${left} and ${right}`);return 'boolean';
   }
@@ -112,6 +116,7 @@ export function validate(ast:Component,source:string,filename='<input>',options:
     if(expression.kind==='reference')return reactive.has(expression.name);
     if(expression.kind==='member')return true;
     if(expression.kind==='literal')return false;
+    if(expression.kind==='contains'||expression.kind==='count')return [...reactive].some(name=>references(expression as Expression,name));
     if(expression.kind==='not')return reactiveConditionReference(expression.argument,reactive);
     return reactiveConditionReference(expression.left,reactive)||reactiveConditionReference(expression.right,reactive);
   }
@@ -129,6 +134,6 @@ export function validate(ast:Component,source:string,filename='<input>',options:
   }
   ast.roots.forEach(root=>visit(root));
   ast.emits=[...emitted].map(([name,payload])=>({name,payload}));
-  function references(expression:Expression,name:string):boolean {if(expression.kind==='reference')return expression.name===name;if(expression.kind==='literal')return false;if(expression.kind==='member'||expression.kind==='str'||expression.kind==='len')return references(expression.kind==='member'?expression.object:expression.argument,name);if(expression.kind==='add')return references(expression.left,name)||references(expression.right,name);if(expression.kind==='construct')return expression.arguments.some(item=>references(item,name));if(expression.kind==='list')return expression.items.some(item=>references(item,name));return false;}
+  function references(expression:Expression,name:string):boolean {if(expression.kind==='reference')return expression.name===name;if(expression.kind==='literal')return false;if(expression.kind==='member'||expression.kind==='str'||expression.kind==='len')return references(expression.kind==='member'?expression.object:expression.argument,name);if(expression.kind==='add'||expression.kind==='subtract'||expression.kind==='contains'||expression.kind==='count')return references(expression.left,name)||references(expression.right,name);if(expression.kind==='construct')return expression.arguments.some(item=>references(item,name));if(expression.kind==='list')return expression.items.some(item=>references(item,name));return false;}
   function staticRootCount(nodes:ViewNode[]):number|null {let count=0;for(const node of nodes){if(node.kind==='iteration'||node.kind==='slot')return null;if(node.kind==='element'){count++;continue;}const consequent=staticRootCount(node.consequent),alternate=node.alternate.length?staticRootCount(node.alternate):0;if(consequent===null||alternate===null||consequent!==alternate)return null;count+=consequent;}return count;}
 }

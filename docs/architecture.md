@@ -15,7 +15,8 @@ compiler policy only; identity and configured suffixes remain tooling concerns.
 The lexer emits NEWLINE/INDENT/DEDENT from space-indented logical lines, ignoring
 blank/comment-only lines. The parser accepts only colon-headed blocks and an
 explicit expression AST nodes for literals, references, members, typed construction,
-lists, addition, `str(value)`, and `len(list)`. Class actions, event handlers, and
+lists, addition/subtraction, `str(value)`, `len(list)`, `count(list, item)`, and
+case-insensitive `contains(text, query)`. Class actions, event handlers, and
 lifecycle hooks compile to a closed statement model rather than JavaScript. Runtime
 rendering uses `String(value)`; old brace syntax is rejected. See docs/syntax.md.
 
@@ -27,7 +28,9 @@ become JS identifiers. Literal text uses JSON serialization and DOM text nodes.
 Shared modules compile to frozen data descriptors. A root mount owns a descriptor-keyed
 signal registry inherited by its child runtime; no registry is global or shared between
 root mounts. Registry signals use the same dependency tracking and transaction journal
-as local signals, and root disposal releases the registry after lifecycle cleanup.
+as local signals, including typed primitive lists, and root disposal releases the registry
+after lifecycle cleanup. Trusted host state patches use the same validation and transaction
+path through the returned mount handle.
 Generated element records include a compact bitmask for compiler-proven literal
 text/value/checked bindings. Older runtimes ignore the additive field; newer runtimes
 skip effects and subscriptions for those static bindings while accepting older models.

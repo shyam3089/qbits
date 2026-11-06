@@ -163,7 +163,8 @@ Elements may nest using colon blocks or end at a newline when they have no child
 or handler. Properties are `text=expression`, static `class="space separated classes"`,
 and the documented indented input `value`, `type` and `checked` forms.
 `text` requires a string and creates a text node, never HTML. Expressions are literals,
-state/prop references, `str(reference)`, and addition of two strings or two numbers.
+state/prop references, `str(value)`, `len(list)`, `count(list, item)`, case-insensitive
+`contains(text, query)`, string/number addition, and number subtraction.
 Mixed additions require explicit `str`. Arbitrary calls and JavaScript are unsupported.
 Buttons accept `on click` blocks containing either one numeric state increment,
 `target = operand + integer`, or one boolean literal assignment, `target = true`
@@ -217,7 +218,8 @@ List literals must be non-empty and homogeneous so their item type can be inferr
 An iteration key must be a string, number, or boolean derived from its item. Duplicate
 keys are rejected at runtime because they can arise after state changes. `append`
 inserts a typed item, `remove` removes the identical item instance when present, and
-`move(item, index)` reorders it. Reconciliation preserves the DOM range and component
+`move(item, index)` reorders it. `sort("field", ascending)` stably sorts class records by
+a validated literal field without recreating retained keyed components. Reconciliation preserves the DOM range and component
 instances for retained keys and creates or disposes only inserted and removed records.
 
 Computed values may depend on state, other computed values, list length, or class
@@ -253,8 +255,15 @@ import the same module descriptor share its signals; a second root mount receive
 defaults. Reads subscribe only the consuming binding, and writes use the normal
 synchronous transaction and rollback rules. Disposed components unsubscribe, and root
 disposal releases the registry. Shared modules cannot import modules, contain views, or
-execute code; defaults are string, number, or boolean literals. Existing module graph,
+execute code; defaults are primitive literals or non-empty lists of one primitive type.
+Existing module graph,
 source, work, update, and safe-integer limits still apply.
+
+The disposer returned by a generated root mount exposes `updateState(patch)` for trusted
+host adapters such as an API loader. It validates declared primitive/list schemas and
+applies the complete patch through the normal synchronous transaction, including DOM
+rollback and keyed identity preservation on failure. It does not make asynchronous host
+side effects transactional.
 
 See the [shared-cart example](../examples/shared-cart/App.qb), its [store](../examples/shared-cart/Cart.qb), and [consumer](../examples/shared-cart/AddToCart.qb).
 

@@ -6,13 +6,18 @@ export type Expression =
   | {kind:'reference';name:string;span:Span}
   | {kind:'member';object:Expression;name:Node<string>;span:Span}
   | {kind:'str'|'len';argument:Expression;span:Span}
+  | {kind:'contains';left:Expression;right:Expression;span:Span}
+  | {kind:'count';left:Expression;right:Expression;span:Span}
   | {kind:'add';left:Expression;right:Expression;span:Span}
+  | {kind:'subtract';left:Expression;right:Expression;span:Span}
   | {kind:'construct';name:Node<string>;arguments:Expression[];span:Span}
   | {kind:'list';items:Expression[];span:Span};
 export type ConditionExpression =
   | {kind:'literal';value:Literal;span:Span}
   | {kind:'reference';name:string;span:Span}
   | {kind:'member';object:Expression;name:Node<string>;span:Span}
+  | {kind:'contains';left:Expression;right:Expression;span:Span}
+  | {kind:'count';left:Expression;right:Expression;span:Span}
   | {kind:'not';argument:ConditionExpression;span:Span}
   | {kind:'equal'|'notEqual'|'and';left:ConditionExpression;right:ConditionExpression;span:Span};
 export interface Import {name?:Node<string>;path:Node<string>;span:Span;kind?:'component'|'shared'}
