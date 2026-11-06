@@ -1,7 +1,6 @@
 import type {Component,ConditionExpression,Expression,Statement,ViewNode} from './ast.js';
 
 export function generate(ast:Component):string {
-  if(ast.kind==='SharedState'){const initial=(value:Expression):unknown=>value.kind==='literal'?value.value:value.kind==='list'?value.items.map(initial):undefined;const states=JSON.stringify(Object.fromEntries(ast.states.map(state=>[state.name.value,initial(state.initial)]))).replaceAll('"__proto__":','["__proto__"]:');return `export const sharedName=${JSON.stringify(ast.name.value)};\nexport default Object.freeze({states:Object.freeze(${states})});\n`;}
   function expression(value:Expression):unknown {
     if(value.kind==='literal')return {kind:value.kind,value:value.value};
     if(value.kind==='reference')return {kind:value.kind,name:value.name};
@@ -23,7 +22,7 @@ export function generate(ast:Component):string {
       return {kind:value.kind,left,right};
     }
     if(value.kind==='construct')return {kind:value.kind,name:value.name.value,arguments:value.arguments.map(expression)};
-    if(value.kind==='list')return {kind:value.kind,items:value.items.map(expression)};
+    if(value.kind==='list')return {kind:value.kind,items:value.items.map(expression),...(value.itemType?{itemType:value.itemType.value}:{})};
     throw new Error(`Unsupported expression ${(value as {kind:string}).kind}`);
   }
   function condition(value:ConditionExpression):unknown {
@@ -62,6 +61,12 @@ export function generate(ast:Component):string {
     return {kind:'element',tag:value.tag.value,component:componentImports.findIndex(item=>item.name!.value===value.tag.value),attributes,...(staticBindings?{static:staticBindings}:{}),children:nodes(value.children),...(value.handler?{handler:{kind:value.handler.kind,event:value.handler.event.value,...(value.handler.parameter?{parameter:value.handler.parameter.value}:{}),...(value.handler.payloadType!==undefined?{payloadType:value.handler.payloadType}:{}),statements:value.handler.statements.map(statement)}}:{})};
   }
   const classes=Object.fromEntries(ast.classes.map(declaration=>[declaration.name.value,{fields:declaration.fields.map(field=>({name:field.name.value,initial:expression(field.initial)})),computed:Object.fromEntries(declaration.computed.map(item=>[item.name.value,expression(item.expression)])),actions:Object.fromEntries(declaration.actions.map(action=>[action.name.value,action.statements.map(statement)]))}]));
+  if(ast.kind==='SharedState'){
+    const initial=(value:Expression):unknown=>{if(value.kind==='literal')return value.value;if(value.kind==='list')return value.items.map(initial);if(value.kind==='construct'){const declaration=ast.classes.find(item=>item.name.value===value.name.value)!;return Object.fromEntries(declaration.fields.map((field,index)=>[field.name.value,initial(value.arguments[index])]));}return undefined;};
+    const typeEntries:[string,string][]=[];for(const state of ast.states)if(state.initial.kind==='list'){const first=state.initial.items[0],itemType=state.initial.itemType?.value??(first?.kind==='construct'?first.name.value:undefined);if(itemType)typeEntries.push([state.name.value,itemType]);}
+    const states=JSON.stringify(Object.fromEntries(ast.states.map(state=>[state.name.value,initial(state.initial)]))).replaceAll('"__proto__":','["__proto__"]:'),types=JSON.stringify(Object.fromEntries(typeEntries)).replaceAll('"__proto__":','["__proto__"]:'),serializedClasses=JSON.stringify(classes).replaceAll('"__proto__":','["__proto__"]:');
+    return `export const sharedName=${JSON.stringify(ast.name.value)};\nexport default Object.freeze({states:Object.freeze(${states})${types==='{}'?'':`,types:Object.freeze(${types})`}${serializedClasses==='{}'?'':`,classes:Object.freeze(${serializedClasses})`}});\n`;
+  }
   const imports=ast.imports.map(item=>item.name?(item.kind==='shared'?`import s${sharedImports.indexOf(item)} from ${JSON.stringify(item.path.value)};`:`import c${componentImports.indexOf(item)} from ${JSON.stringify(item.path.value)};`):`import ${JSON.stringify(item.path.value)};`).join('\n');
   const model={props:Object.fromEntries(ast.props.map(prop=>[prop.name.value,prop.initial.value])),events:Object.fromEntries(ast.emits.map(event=>[event.name,event.payload])),shared:sharedImports.map((item,index)=>({name:item.name!.value,index})),classes,states:Object.fromEntries(ast.states.map(state=>[state.name.value,expression(state.initial)])),computed:Object.fromEntries(ast.computed.map(item=>[item.name.value,expression(item.expression)])),init:ast.init.map(statement),cleanup:ast.cleanup.map(statement),roots:nodes(ast.roots)};
   const serialized=JSON.stringify(model).replaceAll('"__proto__":','["__proto__"]:');

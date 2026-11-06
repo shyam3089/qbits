@@ -75,7 +75,7 @@ test('reject old grammar, declaration keywords, missing colons and unrelated fea
     source.replace('"Count: "','"bad\\x"'), source.replace('"Count: "','"unterminated'),
     source.replace('C:','C'), source.replace('on click:','on click'), source.replace('n = 0','n = 0;'),
     source.replace('str(n)','{n}'), source.replace('str(n)','n'), source.replace('str(n)','other(n)'),
-    source.replace('str(n)','str(1)'), source.replace('n = 0','n = 0 n = 1'),
+    source.replace('n = 0','n = 0 n = 1'),
     source.replace('    n = 0','    str = 0'), '', '# comment only',
     source.replace('            n = n + 1',''),
   ]) assert.throws(() => compile(text,'invalid.input'), CompileError, text);

@@ -214,7 +214,9 @@ component Catalog:
                 products.append(Product(3, "Cocoa", 1))
 ```
 
-List literals must be non-empty and homogeneous so their item type can be inferred.
+Homogeneous populated lists infer their item type. An empty list declares it explicitly,
+for example `products = [] as Product` or `ids = [] as number`. A class name must resolve
+to a local class or a compatible schema from an imported shared module.
 An iteration key must be a string, number, or boolean derived from its item. Duplicate
 keys are rejected at runtime because they can arise after state changes. `append`
 inserts a typed item, `remove` removes the identical item instance when present, and
@@ -233,8 +235,21 @@ Declare a data-only shared module with `shared Name:` and literal typed defaults
 
 ```text
 shared Cart:
-    count = 0
+    items = [] as number
     total = 0
+```
+
+Shared class-record lists declare their schema before the shared block. Populated lists
+may continue to infer it from their constructors:
+
+```text
+class CartItem:
+    id = 0
+    name = ""
+
+shared Cart:
+    items = [] as CartItem
+    featured = [CartItem(1, "Featured")]
 ```
 
 Unrelated components import the same module with the ordinary named-import syntax and
@@ -246,7 +261,7 @@ import Cart from "./Cart.qb"
 component AddToCart(price = 10):
     button text="Add item":
         on click:
-            Cart.count = Cart.count + 1
+            Cart.items.append(price)
             Cart.total = Cart.total + price
 ```
 
@@ -254,8 +269,12 @@ Each root component mount creates a separate shared-state registry. Descendants 
 import the same module descriptor share its signals; a second root mount receives fresh
 defaults. Reads subscribe only the consuming binding, and writes use the normal
 synchronous transaction and rollback rules. Disposed components unsubscribe, and root
-disposal releases the registry. Shared modules cannot import modules, contain views, or
-execute code; defaults are primitive literals or non-empty lists of one primitive type.
+disposal releases the registry. Shared modules cannot import modules or contain views;
+their defaults are primitive literals or homogeneous primitive/class-record lists. The
+generated descriptor stores explicit schemas separately, so empty lists contain no
+sentinel. Host records must be plain data objects with known, correctly typed fields.
+Every root hydrates fresh reactive instances, and list mutation accepts only compatible
+instances owned by that root. Assignments and list operations enforce the same schema.
 Existing module graph,
 source, work, update, and safe-integer limits still apply.
 
@@ -357,7 +376,7 @@ covers leading spaces; DEDENT is zero-width at the next code token or EOF. Block
 spans end at their final statement, excluding trailing comments.
 
 `or`, ordering comparisons, broader expression/assignment forms, event members and
-controls, class inheritance/custom constructors/action parameters, empty typed lists,
+controls, class inheritance/custom constructors/action parameters,
 filter/sort/index expressions, routing, SSR, plugins and LSP remain deferred.
 Development reloads on component/CSS edits and recovers from located errors.
 Reload resets state; state-preserving HMR and generated JavaScript source maps are deferred.

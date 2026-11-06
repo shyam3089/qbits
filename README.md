@@ -82,7 +82,8 @@ for future review. Nothing here publishes packages or deploys a website.
 
 Conditions support `==`, `!=`, `and`, and `not`. Classes omit inheritance, custom
 constructors, access modifiers, static members, action parameters, and unrestricted
-methods. Lists require a non-empty homogeneous literal for type inference. `or`,
+methods. Populated homogeneous lists infer their type; empty primitive or class-record
+lists use `[] as Type`. `or`,
 ordering comparisons, filtering/sorting/index expressions, additional controls,
 routing, SSR, plugins, LSP/editor extensions, native targets, and a registry are
 deferred. Named/fallback slots and state-preserving HMR are also deferred.

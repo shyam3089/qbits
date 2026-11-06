@@ -9,9 +9,6 @@ type Type='string'|'number'|'boolean'|'unknown'|`class:${string}`|`shared:${stri
 export function validate(ast:Component,source:string,filename='<input>',options:ValidationOptions={}):void {
   const limits=resolveCompilerLimits(options.limits);
   const error=(span:Span,message:string):never=>fail(source,filename,span,message);
-  if(ast.kind==='SharedState'){
-    const names=new Set<string>();for(const state of ast.states){if(names.has(state.name.value)||state.name.value==='class')error(state.name.span,'Duplicate or reserved shared state name');names.add(state.name.value);const initial=state.initial;if(initial.kind==='literal'){if(typeof initial.value==='number'&&!Number.isSafeInteger(initial.value))error(initial.span,'Numeric literals must be safe integers');continue;}if(initial.kind!=='list'||!initial.items.length||initial.items.some(item=>item.kind!=='literal'||typeof item.value!==typeof (initial.items[0] as Extract<Expression,{kind:'literal'}>).value))error(initial.span,'Shared state defaults must be literals or non-empty lists of one primitive type');}return;
-  }
   const imported=new Set<string>();
   for(const entry of ast.imports) {
     if(!/^\.\.?\//.test(entry.path.value)||/[?#\\]/.test(entry.path.value))error(entry.path.span,'Imports must use plain relative module paths');
@@ -32,6 +29,9 @@ export function validate(ast:Component,source:string,filename='<input>',options:
   const classEnvs=new Map([...classes].map(([name,value])=>[name,classEnvironment(value)]));
   const classFields=new Map([...classes].map(([name,value])=>[name,new Set(value.fields.map(field=>field.name.value))]));
   const classActions=new Map([...classes].map(([name,value])=>[name,new Set(value.actions.map(action=>action.name.value))]));
+  const classSchema=(value:ClassDecl)=>JSON.stringify(value.fields.map(field=>[field.name.value,field.initial.kind==='literal'?typeof field.initial.value:'invalid']));
+  const recordEnvs=new Map(classEnvs),recordFields=new Map(classFields),recordActions=new Map(classActions),recordSchemas=new Map([...classes].map(([name,value])=>[name,classSchema(value)]));
+  for(const [storeName,store] of options.shared??[])for(const declaration of store.classes){const name=declaration.name.value,schema=classSchema(declaration),existing=recordSchemas.get(name);if(existing!==undefined&&existing!==schema)error(ast.imports.find(item=>item.name?.value===storeName)?.name?.span??declaration.name.span,`Class ${name} does not match the shared record schema from ${storeName}`);if(existing===undefined){recordSchemas.set(name,schema);recordEnvs.set(name,classEnvironment(declaration));recordFields.set(name,new Set(declaration.fields.map(field=>field.name.value)));recordActions.set(name,new Set(declaration.actions.map(action=>action.name.value)));}}
   const componentProps=new Map<string,Map<string,Prop>>([...options.components??[]].map(([name,value])=>[name,new Map(value.props.map(prop=>[prop.name.value,prop]))]));
   const componentEvents=new Map([...options.components??[]].map(([name,value])=>[name,new Map(value.emits.map(event=>[event.name,event.payload]))]));
   const componentRootCounts=new Map<string,number|null>([...options.components??[]].map(([name,value])=>[name,staticRootCount(value.roots)]));
@@ -41,9 +41,9 @@ export function validate(ast:Component,source:string,filename='<input>',options:
     if(expression.kind==='literal')return primitive(expression.value);
     if(expression.kind==='reference')return env.get(expression.name)??error(expression.span,`Unknown state or prop ${JSON.stringify(expression.name)}`);
     if(expression.kind==='member'){
-      const owner=type(expression.object,env);if(owner.startsWith('shared:')){const store=options.shared?.get(owner.slice(7)),member=store?.states.find(state=>state.name.value===expression.name.value);if(!member)return error(expression.name.span,`Unknown shared value ${JSON.stringify(expression.name.value)} on ${owner.slice(7)}`);if(member.initial.kind==='literal')return primitive(member.initial.value);if(member.initial.kind==='list'&&member.initial.items[0]?.kind==='literal')return `list:${primitive(member.initial.items[0].value)}`;return error(expression.name.span,`Invalid shared value ${JSON.stringify(expression.name.value)}`);}
+      const owner=type(expression.object,env);if(owner.startsWith('shared:')){const store=options.shared?.get(owner.slice(7)),member=store?.states.find(state=>state.name.value===expression.name.value);if(!member)return error(expression.name.span,`Unknown shared value ${JSON.stringify(expression.name.value)} on ${owner.slice(7)}`);if(member.initial.kind==='literal')return primitive(member.initial.value);if(member.initial.kind==='list'){if(member.initial.itemType)return `list:${['string','number','boolean'].includes(member.initial.itemType.value)?member.initial.itemType.value:`class:${member.initial.itemType.value}`}`;const first=member.initial.items[0];if(first?.kind==='literal')return `list:${primitive(first.value)}`;if(first?.kind==='construct')return `list:class:${first.name.value}`;}return error(expression.name.span,`Invalid shared value ${JSON.stringify(expression.name.value)}`);}
       if(!owner.startsWith('class:'))error(expression.object.span,'Member access requires a class instance or shared state');
-      const member=classEnvs.get(owner.slice(6))?.get(expression.name.value);return member??error(expression.name.span,`Unknown member ${JSON.stringify(expression.name.value)} on ${owner.slice(6)}`);
+      const member=recordEnvs.get(owner.slice(6))?.get(expression.name.value);return member??error(expression.name.span,`Unknown member ${JSON.stringify(expression.name.value)} on ${owner.slice(6)}`);
     }
     if(expression.kind==='construct'){
       const declaration=classes.get(expression.name.value);if(!declaration)return error(expression.name.span,`Unknown class ${JSON.stringify(expression.name.value)}`);
@@ -51,7 +51,7 @@ export function validate(ast:Component,source:string,filename='<input>',options:
       const fields=classEnvs.get(expression.name.value)!;expression.arguments.forEach((argument,index)=>{const actual=type(argument,env),expected=fields.get(declaration.fields[index].name.value)!;if(actual!==expected)error(argument.span,`Class field ${declaration.fields[index].name.value} requires ${expected}, received ${actual}`);});return `class:${expression.name.value}`;
     }
     if(expression.kind==='list'){
-      if(!expression.items.length)return 'list:unknown';const first=type(expression.items[0],env);for(let index=1;index<expression.items.length;index++){const item=expression.items[index],actual=type(item,env);if(actual!==first)error(item.span,`List items must share one type; expected ${first}, received ${actual}`);}return `list:${first}`;
+      let declared:Type|undefined;if(expression.itemType){const name=expression.itemType.value;declared=['string','number','boolean'].includes(name)?name as Type:classes.has(name)||recordSchemas.has(name)?`class:${name}`:error(expression.itemType.span,`Unknown list item type ${JSON.stringify(name)}`);}if(!expression.items.length)return `list:${declared??'unknown'}`;const first=type(expression.items[0],env);if(declared&&declared!==first)error(expression.items[0].span,`List declares ${declared}, received ${first}`);for(let index=1;index<expression.items.length;index++){const item=expression.items[index],actual=type(item,env);if(actual!==first)error(item.span,`List items must share one type; expected ${first}, received ${actual}`);}return `list:${first}`;
     }
     if(expression.kind==='str'){type(expression.argument,env);return 'string';}
     if(expression.kind==='len'){const actual=type(expression.argument,env);if(!actual.startsWith('list:'))error(expression.argument.span,'len requires a list');return 'number';}
@@ -68,7 +68,17 @@ export function validate(ast:Component,source:string,filename='<input>',options:
   }
   const emitted=new Map<string,EventPayloadType|null>();ast.emits=[];
   const registerEmit=(statement:Extract<Statement,{kind:'emit'}>,scope:Map<string,Type>):void=>{const payload=statement.payload?type(statement.payload,scope):null;if(payload!==null&&!['string','number','boolean'].includes(payload))error(statement.payload!.span,'Event payloads must be strings, numbers, or booleans');const resolved=payload as EventPayloadType|null;if(emitted.has(statement.event.value)&&emitted.get(statement.event.value)!==resolved)error(statement.span,`Event ${JSON.stringify(statement.event.value)} must always emit the same payload type`);emitted.set(statement.event.value,resolved);statement.payloadType=resolved??undefined;};
-  for(const declaration of classes.values()){const classEnv=classEnvs.get(declaration.name.value)!;validateComputed(declaration.computed,classEnv);for(const action of declaration.actions)validateStatements(action.statements,classEnv,new Set(declaration.fields.map(field=>field.name.value)),undefined,true,true);}
+  for(const declaration of classes.values()){const classEnv=classEnvs.get(declaration.name.value)!;validateComputed(declaration.computed,classEnv);for(const action of declaration.actions)validateStatements(action.statements,classEnv,new Set(declaration.fields.map(field=>field.name.value)),undefined,true,ast.kind!=='SharedState');}
+  if(ast.kind==='SharedState'){
+    const names=new Set<string>();
+    for(const state of ast.states){
+      if(names.has(state.name.value)||classes.has(state.name.value)||state.name.value==='class')error(state.name.span,'Duplicate or reserved shared state name');names.add(state.name.value);const initial=state.initial;
+      if(initial.kind==='literal'){if(typeof initial.value==='number'&&!Number.isSafeInteger(initial.value))error(initial.span,'Numeric literals must be safe integers');continue;}
+      if(initial.kind==='list'){const actual=type(initial,new Map());if(actual==='list:unknown')error(initial.span,'Empty shared lists require an item type, for example [] as Product');if(!actual.startsWith('list:string')&&!actual.startsWith('list:number')&&!actual.startsWith('list:boolean')&&!actual.startsWith('list:class:'))error(initial.span,'Shared state lists require one primitive or class-record type');if(actual.startsWith('list:class:')&&initial.items.some(item=>item.kind!=='construct'||item.arguments.some(argument=>argument.kind!=='literal')))error(initial.span,'Shared class-record defaults require literal constructor values');continue;}
+      error(initial.span,'Shared state defaults must be literals or typed lists');
+    }
+    return;
+  }
   const env=new Map<string,Type>();const writable=new Set<string>();for(const [name] of options.shared??[])env.set(name,`shared:${name}`);
   for(const prop of ast.props){if(env.has(prop.name.value)||prop.name.value==='class')error(prop.name.span,'Duplicate or reserved declaration');env.set(prop.name.value,primitive(prop.initial.value));}
   for(const state of ast.states){if(env.has(state.name.value)||classes.has(state.name.value)||imported.has(state.name.value)||state.name.value==='class')error(state.name.span,'Duplicate or reserved declaration');const actual=type(state.initial,env);if(actual==='list:unknown')error(state.initial.span,'Empty list state needs an item to infer its type');env.set(state.name.value,actual);writable.add(state.name.value);}
@@ -76,7 +86,7 @@ export function validate(ast:Component,source:string,filename='<input>',options:
   validateComputed(ast.computed,env);
   function targetType(target:Expression,scope:Map<string,Type>,write:Set<string>):Type {
     if(target.kind==='reference'){if(!scope.has(target.name))error(target.span,`Unknown state ${JSON.stringify(target.name)}`);if(!write.has(target.name))error(target.span,`Cannot assign read-only value ${JSON.stringify(target.name)}`);return scope.get(target.name)!;}
-    if(target.kind==='member'){const owner=type(target.object,scope);if(owner.startsWith('shared:'))return type(target,scope);if(!owner.startsWith('class:'))error(target.span,'Assignment target must be local state, shared state, or an instance field');const className=owner.slice(6);if(!classFields.get(className)!.has(target.name.value))error(target.name.span,'Computed values and actions are read-only');return classEnvs.get(className)!.get(target.name.value)!;}
+    if(target.kind==='member'){const owner=type(target.object,scope);if(owner.startsWith('shared:'))return type(target,scope);if(!owner.startsWith('class:'))error(target.span,'Assignment target must be local state, shared state, or an instance field');const className=owner.slice(6);if(!recordFields.get(className)?.has(target.name.value))error(target.name.span,'Computed values and actions are read-only');return recordEnvs.get(className)!.get(target.name.value)!;}
     return error(target.span,'Assignment target must be state or an instance field');
   }
   function validateStatements(statements:Statement[],scope:Map<string,Type>,write:Set<string>,event?:'click'|'input'|'change',insideClass=false,allowEmit=false):void {
@@ -96,11 +106,11 @@ export function validate(ast:Component,source:string,filename='<input>',options:
         if(owner.startsWith('list:')){
           const item=owner.slice(5) as Type;if(!['append','remove','move','sort'].includes(statement.method.value))error(statement.method.span,`Unsupported list operation ${statement.method.value}`);
           const expected=['move','sort'].includes(statement.method.value)?2:1;if(statement.arguments.length!==expected)error(statement.span,`${statement.method.value} requires ${expected} argument(s)`);
-          if(statement.method.value==='sort'){const field=statement.arguments[0],ascending=statement.arguments[1];if(!item.startsWith('class:')||field.kind!=='literal'||typeof field.value!=='string'||!classFields.get(item.slice(6))?.has(field.value))error(field?.span??statement.span,'sort requires a literal class field name');if(type(ascending,scope)!=='boolean')error(ascending.span,'sort direction must be boolean');continue;}
+          if(statement.method.value==='sort'){const field=statement.arguments[0],ascending=statement.arguments[1];if(!item.startsWith('class:')||field.kind!=='literal'||typeof field.value!=='string'||!recordFields.get(item.slice(6))?.has(field.value))error(field?.span??statement.span,'sort requires a literal class field name');if(type(ascending,scope)!=='boolean')error(ascending.span,'sort direction must be boolean');continue;}
           if(statement.arguments[0]&&type(statement.arguments[0],scope)!==item)error(statement.arguments[0].span,`List operation requires ${item}`);
           if(statement.method.value==='move'&&type(statement.arguments[1],scope)!=='number')error(statement.arguments[1].span,'move index must be a number');
         } else if(owner.startsWith('class:')){
-          if(statement.arguments.length)error(statement.span,'Class actions do not accept arguments');if(!classActions.get(owner.slice(6))!.has(statement.method.value))error(statement.method.span,`Unknown action ${statement.method.value}`);
+          if(statement.arguments.length)error(statement.span,'Class actions do not accept arguments');if(!recordActions.get(owner.slice(6))?.has(statement.method.value))error(statement.method.span,`Unknown action ${statement.method.value}`);
         } else error(statement.target.span,'Calls are limited to class actions and list append/remove/move/sort operations');
       }
     }

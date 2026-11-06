@@ -1,3 +1,3 @@
 shared Cart:
-    count = 0
+    items = [] as number
     total = 0

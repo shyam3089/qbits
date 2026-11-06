@@ -11,7 +11,7 @@ export type Expression =
   | {kind:'add';left:Expression;right:Expression;span:Span}
   | {kind:'subtract';left:Expression;right:Expression;span:Span}
   | {kind:'construct';name:Node<string>;arguments:Expression[];span:Span}
-  | {kind:'list';items:Expression[];span:Span};
+  | {kind:'list';items:Expression[];itemType?:Node<string>;span:Span};
 export type ConditionExpression =
   | {kind:'literal';value:Literal;span:Span}
   | {kind:'reference';name:string;span:Span}

@@ -62,9 +62,11 @@ installed as own data properties, including names such as `__proto__`, so source
 identifiers cannot alter a scope prototype. Runtime list size, component depth, and
 scheduler-flush limits propagate through child mounts. Numeric move indexes are validated
 as safe integers before list mutation. Generated mounts also accept typed API records as
-fourth-argument initial state. Only declared non-empty list states can be seeded; plain
-records are checked against class fields, primitive types, safe-number rules and collection
-limits before the first DOM node is committed.
+fourth-argument initial state. Empty lists carry an explicit primitive or class-record
+schema; populated lists may infer it. Plain records are checked against class fields,
+primitive types, safe-number rules and collection limits before the first DOM node is
+committed. Runtime class instances are branded with their structural schema and root
+owner, preventing foreign objects and cross-root records from entering typed lists.
 
 Phase 3A.3 gives every public mount one shared component-tree budget. Component, live
 record, framework DOM-node and reactive-effect reservations happen before allocation;

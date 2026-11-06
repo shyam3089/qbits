@@ -57,16 +57,47 @@ test('child events declare stable typed payloads and parent handlers are checked
 });
 
 test('shared state declarations and imports are typed and data-only',()=>{
-  const shared=compile('shared Cart:\n    count = 0\n    total = 0\n    items = [0]','Cart.qb');
+  const shared=compile('shared Cart:\n    count = 0\n    total = 0\n    items = [] as number','Cart.qb');
   assert.equal(shared.ast.kind,'SharedState');assert.match(shared.code,/Object\.freeze/);
+  assert.deepEqual(shared.ast.states[2].initial.kind==='list'&&shared.ast.states[2].initial.itemType?.value,'number');assert.match(shared.code,/types:Object\.freeze\(\{"items":"number"\}\)/);
   const consumer=compile('import Cart from "./Cart.qb"\ncomponent Summary:\n    button text=str(Cart.count):\n        on click:\n            Cart.count = Cart.count + 1','Summary.qb',{shared:new Map([['Cart',shared.ast]])});
   assert.match(consumer.code,/"shared":\[\{"name":"Cart","index":0\}\]/);assert.match(consumer.code,/import s0/);
   assert.throws(()=>compile('shared Bad:\n    value = other'),/defaults must be/);
-  assert.throws(()=>compile('shared Bad:\n    values = []'),/non-empty lists/);
-  assert.throws(()=>compile('shared Bad:\n    values = [1, "two"]'),/one primitive type/);
+  assert.throws(()=>compile('shared Bad:\n    values = []'),/require an item type/);
+  assert.throws(()=>compile('shared Bad:\n    values = [] as Item'),/Unknown list item type/);
+  assert.throws(()=>compile('shared Bad:\n    values = [1, "two"]'),/must share one type/);
   assert.throws(()=>compile('import Other from "./Other.qb"\nshared Bad:\n    value = 0'),/cannot import/);
   assert.throws(()=>compile('import Cart from "./Cart.qb"\ncomponent C:\n    p text=str(Cart.missing)','C.qb',{shared:new Map([['Cart',shared.ast]])}),/Unknown shared value/);
   assert.throws(()=>compile('import Cart from "./Cart.qb"\ncomponent C:\n    button:\n        on click:\n            Cart.count = "wrong"','C.qb',{shared:new Map([['Cart',shared.ast]])}),/matching state type/);
+  assert.throws(()=>compile('import Cart from "./Cart.qb"\ncomponent C:\n    button:\n        on click:\n            Cart.items.append("wrong")','C.qb',{shared:new Map([['Cart',shared.ast]])}),/requires number/);
+});
+
+test('empty and populated class-record lists use declared schemas',()=>{
+  const store=compile(`class Product:
+    id = 0
+    name = ""
+shared Store:
+    empty = [] as Product
+    featured = [Product(1, "One")]`,'Store.qb');
+  assert.equal(store.ast.classes[0].name.value,'Product');assert.match(store.code,/"empty":"Product","featured":"Product"/);assert.match(store.code,/"featured":\[\{"id":1,"name":"One"\}\]/);
+  const source=`import Store from "./Store.qb"
+class Product:
+    id = 0
+    name = ""
+component Catalog:
+    products = [] as Product
+    one = Product(1, "One")
+    for product in Store.empty key=product.id:
+        p text=product.name
+    button text="Add":
+        on click:
+            Store.empty.append(one)`;
+  const consumer=compile(source,'Catalog.qb',{shared:new Map([['Store',store.ast]])});assert.match(consumer.code,/"itemType":"Product"/);
+  assert.match(compile('import Store from "./Store.qb"\ncomponent HostCatalog:\n    products = [] as Product\n    for product in products key=product.id:\n        p text=product.name','HostCatalog.qb',{shared:new Map([['Store',store.ast]])}).code,/"itemType":"Product"/);
+  assert.throws(()=>compile(source.replace('name = ""','price = 0'),'Catalog.qb',{shared:new Map([['Store',store.ast]])}),/does not match the shared record schema/);
+  assert.throws(()=>compile('class Product:\n    id = 0\nshared Store:\n    products = [] as Missing','Store.qb'),/Unknown list item type/);
+  assert.throws(()=>compile('class Product:\n    id = 0\nshared Store:\n    products = [Product("bad")]','Store.qb'),/requires number/);
+  assert.throws(()=>compile('class Product:\n    id = 0\nshared Store:\n    products = [Product(1 + 1)]','Store.qb'),/require literal constructor values/);
 });
 
 test('collection queries, subtraction and stable field sorting are typed',()=>{

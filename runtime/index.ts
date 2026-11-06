@@ -2,9 +2,11 @@ export interface CounterModel {initial:number;prefix:string;step:number}
 export interface RuntimeLimits {maxCollectionItems:number;maxComponentDepth:number;maxUpdatesPerFlush:number;maxComponentInstances:number;maxListRecords:number;maxDomNodes:number;maxReactiveEffects:number;maxWorkPerOperation:number}
 export const defaultRuntimeLimits:Readonly<RuntimeLimits>=Object.freeze({maxCollectionItems:100_000,maxComponentDepth:256,maxUpdatesPerFlush:100_000,maxComponentInstances:100_000,maxListRecords:250_000,maxDomNodes:500_000,maxReactiveEffects:250_000,maxWorkPerOperation:1_000_000});
 type Primitive=string|number|boolean;
+type PrimitiveType='string'|'number'|'boolean';
+type ItemType=PrimitiveType|`class:${string}`;
 type Value=Primitive|Instance|SharedInstance|Value[];
 type InitialState=Readonly<Record<string,unknown>>;
-type Expr={kind:'literal';value:Primitive}|{kind:'reference';name:string}|{kind:'member';object:Expr;name:string}|{kind:'str'|'len';argument:Expr}|{kind:'contains';left:Expr;right:Expr}|{kind:'count';left:Expr;right:Expr}|{kind:'add';left:Expr;right:Expr}|{kind:'subtract';left:Expr;right:Expr}|{kind:'construct';name:string;arguments:Expr[]}|{kind:'list';items:Expr[]};
+type Expr={kind:'literal';value:Primitive}|{kind:'reference';name:string}|{kind:'member';object:Expr;name:string}|{kind:'str'|'len';argument:Expr}|{kind:'contains';left:Expr;right:Expr}|{kind:'count';left:Expr;right:Expr}|{kind:'add';left:Expr;right:Expr}|{kind:'subtract';left:Expr;right:Expr}|{kind:'construct';name:string;arguments:Expr[]}|{kind:'list';items:Expr[];itemType?:string};
 type ConditionExpr={kind:'literal';value:Primitive}|{kind:'reference';name:string}|{kind:'member';object:Expr;name:string}|{kind:'contains';left:Expr;right:Expr}|{kind:'count';left:Expr;right:Expr}|{kind:'not';argument:ConditionExpr}|{kind:'equal'|'notEqual'|'and';left:ConditionExpr;right:ConditionExpr};
 type Statement={kind:'assign';target:Expr;value:Expr}|{kind:'eventAssign';target:Expr;member:'value'|'checked'}|{kind:'call';target:Expr;method:string;arguments:Expr[]}|{kind:'emit';event:string;payload?:Expr};
 interface Handler {kind?:string;event:string;parameter?:string;payloadType?:'string'|'number'|'boolean'|null;statements:Statement[]}
@@ -15,9 +17,9 @@ interface SlotView {kind:'slot'}
 type View=ElementView|ConditionalView|IterationView|SlotView;
 interface ClassModel {fields:{name:string;initial:Expr}[];computed:Record<string,Expr>;actions:Record<string,Statement[]>}
 interface Model {props:Record<string,Primitive>;events?:Record<string,'string'|'number'|'boolean'|null>;shared?:{name:string;index:number}[];classes:Record<string,ClassModel>;states:Record<string,Expr>;computed:Record<string,Expr>;init:Statement[];cleanup:Statement[];roots:View[]}
-interface Signal<T=Value>{value:T;subscribers:Set<ReactiveEffect>;derive?:ReactiveEffect;dirty?:boolean}
-interface Instance {__class:string;fields:Record<string,Signal>;computed:Record<string,Expr>;actions:Record<string,Statement[]>;scope:Scope}
-interface SharedDefinition {states:Record<string,Primitive|Primitive[]>}
+interface Signal<T=Value>{value:T;subscribers:Set<ReactiveEffect>;derive?:ReactiveEffect;dirty?:boolean;itemType?:ItemType;itemSchema?:string}
+interface Instance {__class:string;__schema:string;__owner:SharedRegistry;fields:Record<string,Signal>;computed:Record<string,Expr>;actions:Record<string,Statement[]>;scope:Scope}
+interface SharedDefinition {states:Record<string,Primitive|readonly unknown[]>;types?:Record<string,string>;classes?:Record<string,ClassModel>}
 interface SharedInstance {__shared:string;fields:Record<string,Signal>}
 type SharedRegistry=Map<SharedDefinition,SharedInstance>;
 type Scope=Record<string,Signal|Instance|SharedInstance|(()=>Value)>;
@@ -32,6 +34,7 @@ interface RuntimeApi {mountComponent:(target:Element,model:Model,components:Moun
 type Mount=(target:Element,runtime:RuntimeApi,props?:Record<string,Primitive>,state?:InitialState,content?:ContentMount,events?:Record<string,(payload?:Primitive)=>void>)=>Dispose;
 type CommitHook=()=>unknown[]|void;
 let activeEffect:ReactiveEffect|undefined;
+const instances=new WeakSet<object>();
 let batchDepth=0,flushing=false;
 const pendingComputed=new Set<ReactiveEffect>(),pendingEffects=new Set<ReactiveEffect>();
 let transactionDepth=0;
@@ -45,7 +48,7 @@ function release(budget:ResourceBudget,name:ResourceName,amount=1):void {budget[
 function releaseComponent(budget:ResourceBudget,reservation:Reservation):void {if(!reservation.released){reservation.released=true;release(budget,'components');}}
 function consumeWork(budget:ResourceBudget,amount=1):void {if(budget.work+amount>budget.limits.maxWorkPerOperation)throw new RangeError(`Framework work exceeds the configured limit of ${budget.limits.maxWorkPerOperation}`);budget.work+=amount;}
 function withWork<T>(budget:ResourceBudget,run:()=>T):T {const outer=budget.workDepth++===0;if(outer)budget.work=0;try{return run();}finally{budget.workDepth--;if(outer)budget.work=0;}}
-function signal<T=Value>(value:T):Signal<T>{assertNumber(value);return {value,subscribers:new Set()};}
+function signal<T=Value>(value:T,itemType?:ItemType,itemSchema?:string):Signal<T>{assertNumber(value);return {value,subscribers:new Set(),...(itemType?{itemType}:{}),...(itemSchema?{itemSchema}:{})};}
 function read<T>(source:Signal<T>):T {if(source.dirty)source.derive!();if(activeEffect&&!activeEffect.disposed){source.subscribers.add(activeEffect);activeEffect.dependencies.add(source as Signal);}return source.value;}
 function rememberValue(source:Signal):void {
   if(!transactionDepth||source.derive)return;
@@ -135,12 +138,40 @@ function mountComponentTree(target:Element,model:Model,components:Mount[],suppli
 }
 
 function mountComponentInternal(target:Element|undefined,model:Model,components:Mount[],supplied:Record<string,Primitive>,initialState:InitialState,limits:RuntimeLimits,componentDepth:number,budget:ResourceBudget,componentReservation:Reservation,content:ContentMount|undefined,events:Record<string,(payload?:Primitive)=>void>,shared:SharedDefinition[],sharedRegistry:SharedRegistry,ownsSharedRegistry:boolean):Dispose {
-  const scope=Object.create(null) as Scope,classDefaults=new Map<string,Primitive[]>(),ownedEffects:ReactiveEffect[]=[];const cleanups:CleanupBag=[];let disposed=false;
+  const scope=Object.create(null) as Scope,classDefaults=new Map<ClassModel,Primitive[]>(),classSchemas=new Map<ClassModel,string>(),ownedEffects:ReactiveEffect[]=[];const cleanups:CleanupBag=[];let disposed=false;
   const track=(run:()=>void,bag=ownedEffects)=>{const effect=createEffect(run,budget,undefined,limits.maxUpdatesPerFlush);bag.push(effect);return effect;};
   for(const key of Object.keys(supplied))if(key!=='class'&&!Object.hasOwn(model.props,key))throw new TypeError(`Unknown prop ${key}`);
   let forwardClass='';if(Object.hasOwn(supplied,'class')){const value=supplied.class;if(typeof value!=='string')throw new TypeError('Invalid prop class');forwardClass=value;}
   for(const [name,initial] of Object.entries(model.props)){consumeWork(budget);const value=Object.hasOwn(supplied,name)?supplied[name]:initial;if(typeof value!==typeof initial)throw new TypeError(`Invalid prop ${name}`);scope[name]=signal(value);}
-  for(const entry of model.shared??[]){if(Object.hasOwn(scope,entry.name)||!Number.isSafeInteger(entry.index)||entry.index<0)throw new TypeError(`Invalid shared state ${entry.name}`);const definition=shared[entry.index];if(!definition||Object.getPrototypeOf(definition)!==Object.prototype||!definition.states||Object.getPrototypeOf(definition.states)!==Object.prototype)throw new TypeError(`Invalid shared state definition ${entry.name}`);let instance=sharedRegistry.get(definition);if(!instance){const fields:Record<string,Signal>=Object.create(null);for(const [name,value] of Object.entries(definition.states)){consumeWork(budget);if(Array.isArray(value)){if(!value.length||value.length>limits.maxCollectionItems)throw new TypeError(`Invalid shared list ${name}`);const itemType=typeof value[0];if(!['string','number','boolean'].includes(itemType)||value.some(item=>typeof item!==itemType))throw new TypeError(`Invalid shared list ${name}`);value.forEach(assertNumber);fields[name]=signal([...value]);}else{if(!['string','number','boolean'].includes(typeof value))throw new TypeError(`Invalid shared value ${name}`);assertNumber(value);fields[name]=signal(value);}}instance={__shared:entry.name,fields};sharedRegistry.set(definition,instance);}scope[entry.name]=instance;}
+  const primitiveTypes=new Set<PrimitiveType>(['string','number','boolean']);
+  const validatePrimitiveList=(value:readonly unknown[],itemType:PrimitiveType,name:string):Primitive[]=>{if(value.length>limits.maxCollectionItems)throw new RangeError(`Collection exceeds the configured limit of ${limits.maxCollectionItems} items`);consumeWork(budget,value.length);return value.map((item,index)=>{if(typeof item!==itemType)throw new TypeError(`${name}[${index}] requires ${itemType}`);if(itemType==='number')assertNumber(item);return item as Primitive;});};
+  const validateInstanceList=(value:readonly unknown[],itemType:`class:${string}`,schema:string,name:string):Instance[]=>{if(value.length>limits.maxCollectionItems)throw new RangeError(`Collection exceeds the configured limit of ${limits.maxCollectionItems} items`);consumeWork(budget,value.length);return value.map((item,index)=>{if(!item||typeof item!=='object'||Array.isArray(item))throw new TypeError(`${name}[${index}] requires ${itemType}`);const record=item as Instance;if(!instances.has(record)||record.__owner!==sharedRegistry||record.__class!==itemType.slice(6)||record.__schema!==schema)throw new TypeError(`${name}[${index}] requires ${itemType}`);return record;});};
+  const validateTypedList=(value:readonly unknown[],itemType:ItemType,schema:string|undefined,name:string):Value[]=>primitiveTypes.has(itemType as PrimitiveType)?validatePrimitiveList(value,itemType as PrimitiveType,name):validateInstanceList(value,itemType as `class:${string}`,schema!,name);
+  const recordClasses:Record<string,ClassModel>=Object.create(null);
+  for(const entry of model.shared??[]){
+    if(Object.hasOwn(scope,entry.name)||!Number.isSafeInteger(entry.index)||entry.index<0)throw new TypeError(`Invalid shared state ${entry.name}`);
+    const definition=shared[entry.index];
+    if(!definition||Object.getPrototypeOf(definition)!==Object.prototype||!definition.states||Object.getPrototypeOf(definition.states)!==Object.prototype||definition.types!==undefined&&Object.getPrototypeOf(definition.types)!==Object.prototype||definition.classes!==undefined&&Object.getPrototypeOf(definition.classes)!==Object.prototype)throw new TypeError(`Invalid shared state definition ${entry.name}`);
+    let instance=sharedRegistry.get(definition);
+    for(const [name,declaration] of Object.entries(definition.classes??{})){const schema=classSchema(declaration,name),local=model.classes[name],existing=recordClasses[name];if(local&&classSchema(local,name)!==schema||existing&&classSchema(existing,name)!==schema)throw new TypeError(`Class ${name} does not match shared record schema`);recordClasses[name]=declaration;}
+    if(!instance){
+      const fields:Record<string,Signal>=Object.create(null),declarations=definition.classes??{};
+      for(const name of Object.keys(definition.types??{})){const declared=definition.types![name];if(!Object.hasOwn(definition.states,name)||!Array.isArray(definition.states[name])||!primitiveTypes.has(declared as PrimitiveType)&&!Object.hasOwn(declarations,declared))throw new TypeError(`Invalid shared list type ${name}`);}
+      for(const [name,value] of Object.entries(definition.states)){
+        consumeWork(budget);
+        if(Array.isArray(value)){
+          if(value.length>limits.maxCollectionItems)throw new RangeError(`Collection exceeds the configured limit of ${limits.maxCollectionItems} items`);
+          const declared=definition.types?.[name],inferred=value.length&&primitiveTypes.has(typeof value[0] as PrimitiveType)?typeof value[0]:undefined;
+          if(!declared&&!inferred)throw new TypeError(`Invalid shared list ${name}`);
+          if(declared&&Object.hasOwn(declarations,declared)){consumeWork(budget,value.length);const itemType=`class:${declared}` as const,schema=classSchema(declarations[declared],declared),records=value.map((record,index)=>hydrateRecord(declarations,declared,record,`Shared list ${name}[${index}]`,false));fields[name]=signal(records,itemType,schema);}
+          else{const itemType=(declared??inferred) as PrimitiveType;if(!primitiveTypes.has(itemType)||inferred!==undefined&&itemType!==inferred)throw new TypeError(`Invalid shared list ${name}`);fields[name]=signal(validatePrimitiveList(value,itemType,`Shared list ${name}`),itemType);}
+        }else{const scalar=value as Primitive;if(!primitiveTypes.has(typeof scalar as PrimitiveType))throw new TypeError(`Invalid shared value ${name}`);assertNumber(scalar);fields[name]=signal(scalar);}
+      }
+      instance={__shared:entry.name,fields};sharedRegistry.set(definition,instance);
+    }
+    scope[entry.name]=instance;
+  }
+  const stateClasses:Record<string,ClassModel>=Object.assign(Object.create(null),recordClasses,model.classes);
   const getSignal=(name:string,local:Scope):Signal=>{const value=local[name];if(!value||typeof value==='function'||'__class'in value||'__shared'in value)throw new TypeError(`Unknown writable value ${name}`);return value;};
   function evaluate(expression:Expr,local=scope):Value {
     if(expression.kind==='literal'){assertNumber(expression.value);return expression.value;}
@@ -152,39 +183,41 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
     if(expression.kind==='count'){const left=evaluate(expression.left,local),right=evaluate(expression.right,local);if(!Array.isArray(left))throw new TypeError('count requires a list');let total=0;for(const item of left)if(item===right)total++;return total;}
     if(expression.kind==='add'||expression.kind==='subtract'){const left=evaluate(expression.left,local),right=evaluate(expression.right,local);if(typeof left==='number'&&typeof right==='number'){const result=expression.kind==='add'?left+right:left-right;assertNumber(result);return result;}if(expression.kind==='subtract')throw new TypeError('Subtraction requires numbers');return String(left)+String(right);}
     if(expression.kind==='list'){if(expression.items.length>limits.maxCollectionItems)throw new RangeError(`Collection exceeds the configured limit of ${limits.maxCollectionItems} items`);consumeWork(budget,expression.items.length);return expression.items.map(item=>evaluate(item,local));}
-    if(expression.kind==='construct')return instantiate(expression.name,expression.arguments.map(item=>evaluate(item,local)));
+    if(expression.kind==='construct')return instantiate(expression.name,expression.arguments.map(item=>evaluate(item,local)),model.classes);
     throw new TypeError('Unsupported expression');
   }
-  function instantiate(name:string,args:Value[]):Instance {
-    consumeWork(budget);const declaration=model.classes[name];if(!declaration)throw new TypeError(`Unknown class ${name}`);const instanceScope=Object.create(null) as Scope;
+  function classSchema(declaration:ClassModel,name:string):string {
+    if(!declaration||Object.getPrototypeOf(declaration)!==Object.prototype||!Array.isArray(declaration.fields)||!declaration.computed||Object.getPrototypeOf(declaration.computed)!==Object.prototype||!declaration.actions||Object.getPrototypeOf(declaration.actions)!==Object.prototype)throw new TypeError(`Invalid class schema ${name}`);
+    const cached=classSchemas.get(declaration);if(cached)return cached;const names=new Set<string>();consumeWork(budget,declaration.fields.length);const schema=JSON.stringify(declaration.fields.map(field=>{if(!field||typeof field.name!=='string'||names.has(field.name)||field.initial?.kind!=='literal'||!primitiveTypes.has(typeof field.initial.value as PrimitiveType))throw new TypeError(`Invalid class field schema ${name}`);names.add(field.name);assertNumber(field.initial.value);return [field.name,typeof field.initial.value];}));classSchemas.set(declaration,schema);return schema;
+  }
+  function instantiate(name:string,args:Value[],declarations:Record<string,ClassModel>):Instance {
+    consumeWork(budget);const declaration=declarations[name];if(!declaration)throw new TypeError(`Unknown class ${name}`);const schema=classSchema(declaration,name),instanceScope=Object.create(null) as Scope;
     if(args.length!==declaration.fields.length)throw new TypeError(`${name} requires ${declaration.fields.length} constructor values`);
-    let defaults=classDefaults.get(name);if(!defaults){defaults=declaration.fields.map(field=>{if(field.initial.kind!=='literal')throw new TypeError(`Class field ${field.name} requires a literal default`);return evaluate(field.initial) as Primitive;});classDefaults.set(name,defaults);}
-    const instance:Instance={__class:name,fields:Object.create(null),computed:declaration.computed,actions:declaration.actions,scope:instanceScope};
+    let defaults=classDefaults.get(declaration);if(!defaults){defaults=declaration.fields.map(field=>{if(field.initial.kind!=='literal')throw new TypeError(`Class field ${field.name} requires a literal default`);assertNumber(field.initial.value);return field.initial.value;});classDefaults.set(declaration,defaults);}
+    const instance:Instance={__class:name,__schema:schema,__owner:sharedRegistry,fields:Object.create(null),computed:declaration.computed,actions:declaration.actions,scope:instanceScope};instances.add(instance);
     declaration.fields.forEach((field,index)=>{consumeWork(budget);const value=args[index],initial=defaults![index];if(typeof value!==typeof initial)throw new TypeError(`Class field ${field.name} requires ${typeof initial}`);const source=signal(value);instance.fields[field.name]=source;instanceScope[field.name]=source;});
     // Class derivations stay lazy: consumers subscribe directly to fields,
     // without a class-level effect that would outlive a removed list record.
     for(const [member,expression] of Object.entries(declaration.computed))instanceScope[member]=()=>evaluate(expression,instanceScope);
     return instance;
   }
-  function hydrateInitialList(expression:Expr,input:readonly unknown[],name:string):Value[] {
-    if(expression.kind!=='list'||!expression.items.length)throw new TypeError(`Initial state ${name} is not a typed non-empty list`);
-    if(input.length>limits.maxCollectionItems)throw new RangeError(`Collection exceeds the configured limit of ${limits.maxCollectionItems} items`);consumeWork(budget,input.length);
-    const schema=expression.items[0];
-    const primitive=(value:unknown,expected:Primitive,label:string):Primitive=>{if(typeof value!==typeof expected)throw new TypeError(`${label} requires ${typeof expected}`);if(typeof value==='number')assertNumber(value);return value as Primitive;};
-    if(schema.kind==='literal')return input.map((value,index)=>primitive(value,schema.value,`Initial state ${name}[${index}]`));
-    if(schema.kind!=='construct')throw new TypeError(`Initial state ${name} requires primitive or class records`);
-    const declaration=model.classes[schema.name];if(!declaration)throw new TypeError(`Unknown class ${schema.name}`);const fields=new Set(declaration.fields.map(field=>field.name)),defaults=declaration.fields.map(field=>evaluate(field.initial) as Primitive);
-    return input.map((value,index)=>{
-      if(!value||typeof value!=='object'||Array.isArray(value))throw new TypeError(`Initial state ${name}[${index}] requires an object record`);
-      const prototype=Object.getPrototypeOf(value);if(prototype!==Object.prototype&&prototype!==null)throw new TypeError(`Initial state ${name}[${index}] requires a plain object record`);
-      for(const key of Object.keys(value))if(!fields.has(key))throw new TypeError(`Unknown field ${key} in initial state ${name}[${index}]`);
-      const args=declaration.fields.map((field,fieldIndex)=>{const descriptor=Object.getOwnPropertyDescriptor(value,field.name);if(!descriptor)return defaults[fieldIndex];if(!('value'in descriptor))throw new TypeError(`Initial state field ${field.name} must be data`);return primitive(descriptor.value,defaults[fieldIndex],`Initial state field ${field.name}`);});
-      return instantiate(schema.name,args);
-    });
+  function hydrateRecord(declarations:Record<string,ClassModel>,className:string,input:unknown,label:string,allowMissing=true):Instance {
+    const declaration=declarations[className];if(!declaration)throw new TypeError(`Unknown class ${className}`);classSchema(declaration,className);if(!input||typeof input!=='object'||Array.isArray(input))throw new TypeError(`${label} requires a plain object record`);const prototype=Object.getPrototypeOf(input);if(prototype!==Object.prototype&&prototype!==null)throw new TypeError(`${label} requires a plain object record`);const fields=new Set(declaration.fields.map(field=>field.name));for(const key of Object.keys(input))if(!fields.has(key))throw new TypeError(`Unknown field ${key} in ${label}`);const args=declaration.fields.map(field=>{const descriptor=Object.getOwnPropertyDescriptor(input,field.name);if(!descriptor){if(!allowMissing)throw new TypeError(`Missing field ${field.name} in ${label}`);return (field.initial as Extract<Expr,{kind:'literal'}>).value;}if(!('value'in descriptor))throw new TypeError(`${label}.${field.name} must be data`);const initial=(field.initial as Extract<Expr,{kind:'literal'}>).value;if(typeof descriptor.value!==typeof initial)throw new TypeError(`${label}.${field.name} requires ${typeof initial}`);if(typeof descriptor.value==='number')assertNumber(descriptor.value);return descriptor.value as Primitive;});return instantiate(className,args,declarations);
   }
+  function hydrateInitialList(expression:Expr,input:readonly unknown[],name:string):Value[] {
+    if(expression.kind!=='list')throw new TypeError(`Initial state ${name} is not a typed list`);
+    if(input.length>limits.maxCollectionItems)throw new RangeError(`Collection exceeds the configured limit of ${limits.maxCollectionItems} items`);consumeWork(budget,input.length);
+    const schema=expression.items[0],declared=expression.itemType;
+    const primitive=(value:unknown,expected:Primitive,label:string):Primitive=>{if(typeof value!==typeof expected)throw new TypeError(`${label} requires ${typeof expected}`);if(typeof value==='number')assertNumber(value);return value as Primitive;};
+    if(declared&&primitiveTypes.has(declared as PrimitiveType))return input.map((value,index)=>{if(typeof value!==declared)throw new TypeError(`Initial state ${name}[${index}] requires ${declared}`);if(declared==='number')assertNumber(value);return value as Primitive;});
+    if(schema?.kind==='literal')return input.map((value,index)=>primitive(value,schema.value,`Initial state ${name}[${index}]`));
+    const className=declared??(schema?.kind==='construct'?schema.name:undefined);if(!className||!Object.hasOwn(stateClasses,className))throw new TypeError(`Initial state ${name} requires primitive or class records`);
+    return input.map((value,index)=>hydrateRecord(stateClasses,className,value,`Initial state ${name}[${index}]`));
+  }
+  const listMetadata=(expression:Expr):{itemType:ItemType;schema?:string}|undefined=>{if(expression.kind!=='list')return;const declared=expression.itemType;if(declared){if(primitiveTypes.has(declared as PrimitiveType))return {itemType:declared as PrimitiveType};const declaration=stateClasses[declared];if(!declaration)throw new TypeError(`Unknown class ${declared}`);return {itemType:`class:${declared}`,schema:classSchema(declaration,declared)};}const first=expression.items[0];if(first?.kind==='literal')return {itemType:typeof first.value as PrimitiveType};if(first?.kind==='construct'){const declaration=model.classes[first.name];return {itemType:`class:${first.name}`,schema:classSchema(declaration,first.name)};}};
   for(const name of Object.keys(initialState))if(!Object.hasOwn(model.states,name))throw new TypeError(`Unknown initial state ${name}`);
   const hydrateState=(initial:Expr,input:unknown,name:string):Value=>{if(Array.isArray(input))return hydrateInitialList(initial,input,name);const expected=evaluate(initial);if(typeof expected!==typeof input||typeof input==='object')throw new TypeError(`Initial state ${name} requires ${typeof expected}`);assertNumber(input);return input as Primitive;};
-  for(const [name,initial] of Object.entries(model.states)){consumeWork(budget);scope[name]=signal(Object.hasOwn(initialState,name)?hydrateState(initial,initialState[name],name):evaluate(initial));}
+  for(const [name,initial] of Object.entries(model.states)){consumeWork(budget);const metadata=listMetadata(initial);scope[name]=signal(Object.hasOwn(initialState,name)?hydrateState(initial,initialState[name],name):evaluate(initial),metadata?.itemType,metadata?.schema);}
   for(const name of Object.keys(model.computed))scope[name]=signal('');
   try{for(const [name,expression] of Object.entries(model.computed)){const source=getSignal(name,scope);ownedEffects.push(createEffect(()=>write(source,evaluate(expression)),budget,source,limits.maxUpdatesPerFlush));}}catch(error){disposeBag(ownedEffects,cleanups);throw error;}
   function resolveTarget(target:Expr,local:Scope):Signal {
@@ -192,22 +225,23 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
     if(target.kind==='member'){const owner=evaluate(target.object,local);if(!owner||typeof owner!=='object'||Array.isArray(owner)||!('__class'in owner)&&!('__shared'in owner))throw new TypeError('Member assignment requires an instance or shared state');const result=owner.fields[target.name];if(!result)throw new TypeError(`Member ${target.name} is read-only or unknown`);return result;}
     throw new TypeError('Invalid assignment target');
   }
+  const writeTarget=(target:Signal,value:Value,label:string):void=>{if(target.itemType){if(!Array.isArray(value))throw new TypeError(`${label} requires a list of ${target.itemType}`);write(target,validateTypedList(value,target.itemType,target.itemSchema,label));return;}write(target,value);};
   function execute(statements:Statement[],local=scope,event?:Event):void {
     transact(()=>{consumeWork(budget,statements.length);for(const statement of statements){
-      if(statement.kind==='assign')write(resolveTarget(statement.target,local),evaluate(statement.value,local));
+      if(statement.kind==='assign'){const target=resolveTarget(statement.target,local),value=evaluate(statement.value,local);writeTarget(target,value,'List assignment');}
       else if(statement.kind==='emit'){
         const expected=model.events?.[statement.event];if(!model.events||!Object.hasOwn(model.events,statement.event))throw new TypeError(`Undeclared event ${statement.event}`);const payload=statement.payload?evaluate(statement.payload,local):undefined;
         if((payload===undefined?null:typeof payload)!==expected)throw new TypeError(`Invalid payload for event ${statement.event}`);if(typeof payload==='number')assertNumber(payload);const listener=events[statement.event];if(listener)listener(payload as Primitive|undefined);
       } else if(statement.kind==='eventAssign'){
-        const element=event?.currentTarget;if(!(element instanceof HTMLInputElement))throw new TypeError('Event value requires an input element');write(resolveTarget(statement.target,local),statement.member==='value'?element.value:element.checked);
+        const element=event?.currentTarget;if(!(element instanceof HTMLInputElement))throw new TypeError('Event value requires an input element');writeTarget(resolveTarget(statement.target,local),statement.member==='value'?element.value:element.checked,'Event assignment');
       } else {
         const owner=evaluate(statement.target,local);const args=statement.arguments.map(argument=>evaluate(argument,local));
         if(Array.isArray(owner)){
-          const source=resolveTarget(statement.target,local);let next:Value[];
+          const source=resolveTarget(statement.target,local);if(source.itemType&&statement.method!=='sort')validateTypedList([args[0]],source.itemType,source.itemSchema,'List operation');let next:Value[];
           if(statement.method==='append'){if(owner.length>=limits.maxCollectionItems)throw new RangeError(`Collection exceeds the configured limit of ${limits.maxCollectionItems} items`);next=[...owner,args[0]];}
           else if(statement.method==='remove'){const index=owner.indexOf(args[0]);if(index<0)continue;next=[...owner];next.splice(index,1);}
           else if(statement.method==='move'){const index=owner.indexOf(args[0]);if(index<0)continue;const requested=args[1];if(typeof requested!=='number'||!Number.isSafeInteger(requested))throw new TypeError('move index must be a safe integer');const destination=Math.max(0,Math.min(owner.length-1,requested));if(index===destination)continue;next=[...owner];const [item]=next.splice(index,1);next.splice(destination,0,item);}
-          else if(statement.method==='sort'){const field=args[0],ascending=args[1];if(typeof field!=='string'||typeof ascending!=='boolean')throw new TypeError('sort requires a field and boolean direction');next=owner.map((item,index)=>({item,index})).sort((a,b)=>{if(!a.item||typeof a.item!=='object'||Array.isArray(a.item)||!('__class'in a.item)||!b.item||typeof b.item!=='object'||Array.isArray(b.item)||!('__class'in b.item))throw new TypeError('sort requires class records');const left=a.item.fields[field],right=b.item.fields[field];if(!left||!right)throw new TypeError(`Unknown sort field ${field}`);const x=read(left),y=read(right),order=typeof x==='number'&&typeof y==='number'?x-y:String(x).localeCompare(String(y));return (ascending?order:-order)||(a.index-b.index);}).map(entry=>entry.item);}
+          else if(statement.method==='sort'){if(source.itemType&&primitiveTypes.has(source.itemType as PrimitiveType))throw new TypeError('sort requires class records');const field=args[0],ascending=args[1];if(typeof field!=='string'||typeof ascending!=='boolean')throw new TypeError('sort requires a field and boolean direction');next=owner.map((item,index)=>({item,index})).sort((a,b)=>{if(!a.item||typeof a.item!=='object'||Array.isArray(a.item)||!instances.has(a.item)||!('__class'in a.item)||!b.item||typeof b.item!=='object'||Array.isArray(b.item)||!instances.has(b.item)||!('__class'in b.item))throw new TypeError('sort requires class records');const left=a.item.fields[field],right=b.item.fields[field];if(!left||!right)throw new TypeError(`Unknown sort field ${field}`);const x=read(left),y=read(right),order=typeof x==='number'&&typeof y==='number'?x-y:String(x).localeCompare(String(y));return (ascending?order:-order)||(a.index-b.index);}).map(entry=>entry.item);}
           else throw new TypeError(`Unsupported list operation ${statement.method}`);write(source,next);
         } else if(owner&&typeof owner==='object'&&'__class'in owner){const body=owner.actions[statement.method];if(!body)throw new TypeError(`Unknown action ${statement.method}`);execute(body,owner.scope);}
         else throw new TypeError('Unsupported call target');

@@ -553,6 +553,75 @@ component App:
   }finally{await browser.close();}
 });
 
+test('empty typed shared lists support keyed operations, isolation and runtime type checks',async()=>{
+  const store=compile('shared Store:\n    ids = [] as number','Store.qb'),shared=new Map([['Store',store.ast]]);
+  const app=compile(`import Store from "./Store.qb"
+component App:
+    p text=str(len(Store.ids))
+    for id in Store.ids key=id:
+        span text=str(id)
+    button text="one":
+        on click:
+            Store.ids.append(1)
+    button text="two":
+        on click:
+            Store.ids.append(2)
+    button text="move":
+        on click:
+            Store.ids.move(2, 0)
+    button text="remove":
+        on click:
+            Store.ids.remove(1)`,'App.qb',{shared}).code.replace('./Store.qb','__STORE__');
+  const runtime=await readFile('dist/lib/runtime/index.js','utf8'),browser=await firefox.launch({headless:true});
+  try{const page=await browser.newPage(),errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));const result=await page.evaluate(async({runtime,store,app})=>{const runtimeUrl=URL.createObjectURL(new Blob([runtime],{type:'text/javascript'})),storeUrl=URL.createObjectURL(new Blob([store],{type:'text/javascript'})),appUrl=URL.createObjectURL(new Blob([app.replace('__STORE__',storeUrl)],{type:'text/javascript'})),urls=[runtimeUrl,storeUrl,appUrl];try{const api=await import(runtimeUrl),module=await import(appUrl),first=document.createElement('main'),second=document.createElement('main');document.body.append(first,second);const disposeFirst=module.default(first,api),disposeSecond=module.default(second,api),buttons=[...first.querySelectorAll('button')];buttons[0].click();const retained=first.querySelector('span');buttons[1].click();buttons[2].click();const moved=[...first.querySelectorAll('span')].map(node=>node.textContent).join(','),identity=first.querySelectorAll('span')[1]===retained;buttons[3].click();const removed=[...first.querySelectorAll('span')].map(node=>node.textContent).join(','),isolated=second.querySelector('p').textContent;const model={props:{},shared:[{name:'Store',index:0}],classes:{},states:{},computed:{},init:[],cleanup:[],roots:[]};let missing='',wrong='';try{api.mountComponent(document.createElement('main'),model,[],{}, {},0,{},[{states:{ids:[]}}]);}catch(error){missing=error.message;}try{api.mountComponent(document.createElement('main'),model,[],{}, {},0,{},[{states:{ids:['bad']},types:{ids:'number'}}]);}catch(error){wrong=error.message;}disposeFirst();disposeSecond();first.remove();second.remove();return{moved,identity,removed,isolated,missing,wrong};}finally{urls.forEach(URL.revokeObjectURL);}}, {runtime,store:store.code,app});assert.deepEqual(result,{moved:'2,1',identity:true,removed:'2',isolated:'0',missing:'Invalid shared list ids',wrong:'Invalid shared list ids'});assert.deepEqual(errors,[]);}finally{await browser.close();}
+});
+
+test('typed class-record lists hydrate, mutate and roll back without identity or app leaks',async()=>{
+  const store=compile(`class Item:
+    id = 0
+    name = ""
+shared Store:
+    items = [] as Item
+    seeded = [Item(9, "Seed")]`,'Store.qb'),shared=new Map([['Store',store.ast]]);
+  const app=compile(`import Store from "./Store.qb"
+class Item:
+    id = 0
+    name = ""
+component App:
+    host = [] as Item
+    one = Item(1, "One")
+    two = Item(2, "Two")
+    for item in Store.seeded key=item.id:
+        button class="seed" text=item.name:
+            on click:
+                item.name = item.name + "!"
+    for item in Store.items key=item.id:
+        span class="record" text=item.name
+    for item in host key=item.id:
+        button class="host-record" text=item.name:
+            on click:
+                item.name = item.name + "!"
+    button class="add-one" text="one":
+        on click:
+            Store.items.append(one)
+    button class="add-two" text="two":
+        on click:
+            Store.items.append(two)
+    button class="move" text="move":
+        on click:
+            Store.items.move(two, 0)
+    button class="replace" text="replace":
+        on click:
+            Store.items = [two]`,'App.qb',{shared}).code.replace('./Store.qb','__STORE__');
+  const runtime=await readFile('dist/lib/runtime/index.js','utf8'),browser=await firefox.launch({headless:true});
+  try{const page=await browser.newPage(),errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));const result=await page.evaluate(async({runtime,store,app})=>{const runtimeUrl=URL.createObjectURL(new Blob([runtime],{type:'text/javascript'})),storeUrl=URL.createObjectURL(new Blob([store],{type:'text/javascript'})),appUrl=URL.createObjectURL(new Blob([app.replace('__STORE__',storeUrl)],{type:'text/javascript'})),urls=[runtimeUrl,storeUrl,appUrl];try{const api=await import(runtimeUrl),storeModule=await import(storeUrl),module=await import(appUrl),first=document.createElement('main'),second=document.createElement('main'),hostInput={id:7,name:'Host'};document.body.append(first,second);const disposeFirst=module.default(first,api,{}, {host:[hostInput]}),disposeSecond=module.default(second,api,{}, {host:[hostInput]});first.querySelector('button.seed').click();first.querySelector('button.host-record').click();const isolation={first:first.querySelector('button.seed').textContent,second:second.querySelector('button.seed').textContent,hostFirst:first.querySelector('button.host-record').textContent,hostSecond:second.querySelector('button.host-record').textContent};first.querySelector('button.add-one').click();const retained=first.querySelector('span.record');first.querySelector('button.add-two').click();first.querySelector('button.move').click();const moved=[...first.querySelectorAll('span.record')].map(node=>node.textContent).join(','),identity=first.querySelectorAll('span.record')[1]===retained;first.querySelector('button.replace').click();const replaced=[...first.querySelectorAll('span.record')].map(node=>node.textContent).join(','),hostNode=first.querySelector('button.host-record');disposeFirst.updateState({host:[{id:7,name:'Updated'}]});const hostUpdated={text:hostNode.textContent,identity:first.querySelector('button.host-record')===hostNode};let accessor='',wrong='',prototype='',pollution='',limited='';const bad=Object.create(null);Object.defineProperty(bad,'id',{get(){return 7},enumerable:true});Object.defineProperty(bad,'name',{value:'Bad',enumerable:true});try{disposeFirst.updateState({host:[bad]});}catch(error){accessor=error.message;}try{disposeFirst.updateState({host:[{id:'bad',name:'Bad'}]});}catch(error){wrong=error.message;}const inherited=Object.create({unsafe:true});inherited.id=7;inherited.name='Bad';try{disposeFirst.updateState({host:[inherited]});}catch(error){prototype=error.message;}try{disposeFirst.updateState({host:[JSON.parse('{"id":7,"name":"Bad","__proto__":{"polluted":true}}')]});}catch(error){pollution=error.message;}try{api.mountComponentWithState(document.createElement('main'),module.model,[],{}, {host:[{id:1,name:'One'},{id:2,name:'Two'}]}, {maxCollectionItems:1},0,{},[storeModule.default]);}catch(error){limited=error.message;}const rolledBack={text:hostNode.textContent,identity:first.querySelector('button.host-record')===hostNode,polluted:({}).polluted??null};disposeFirst();disposeSecond();first.remove();second.remove();return{isolation,moved,identity,replaced,hostUpdated,accessor,wrong,prototype,pollution,limited,rolledBack};}finally{urls.forEach(URL.revokeObjectURL);}}, {runtime,store:store.code,app});assert.deepEqual(result,{isolation:{first:'Seed!',second:'Seed',hostFirst:'Host!',hostSecond:'Host'},moved:'Two,One',identity:true,replaced:'Two',hostUpdated:{text:'Updated',identity:true},accessor:'Initial state host[0].id must be data',wrong:'Initial state host[0].id requires number',prototype:'Initial state host[0] requires a plain object record',pollution:'Unknown field __proto__ in Initial state host[0]',limited:'Collection exceeds the configured limit of 1 items',rolledBack:{text:'Updated',identity:true,polluted:null}});assert.deepEqual(errors,[]);}finally{await browser.close();}
+});
+
+test('shared class-record defaults enforce collection limits before hydration',async()=>{
+  const store=compile('class Item:\n    id = 0\nshared Store:\n    items = [Item(1), Item(2)]','Store.qb').code,runtime=await readFile('dist/lib/runtime/index.js','utf8'),browser=await firefox.launch({headless:true});
+  try{const page=await browser.newPage();const failure=await page.evaluate(async({runtime,store})=>{const urls=[runtime,store].map(source=>URL.createObjectURL(new Blob([source],{type:'text/javascript'})));try{const api=await import(urls[0]),definition=(await import(urls[1])).default,model={props:{},shared:[{name:'Store',index:0}],classes:{},states:{},computed:{},init:[],cleanup:[],roots:[]};try{api.mountComponent(document.createElement('main'),model,[],{}, {maxCollectionItems:1},0,{},[definition]);return '';}catch(error){return error.message;}}finally{urls.forEach(URL.revokeObjectURL);}}, {runtime,store});assert.equal(failure,'Collection exceeds the configured limit of 1 items');}finally{await browser.close();}
+});
+
 test('disposed staged conditionals do not commit after nested keyed lifecycle updates',async()=>{
   const store=compile('shared Store:\n    mounted = 0','Store.qb'),shared=new Map([['Store',store.ast]]);
   const child=compile('import Store from "./Store.qb"\ncomponent Child(label = ""):\n    on init:\n        Store.mounted = Store.mounted + 1\n    on cleanup:\n        Store.mounted = Store.mounted - 1\n    p text=label','Child.qb',{shared});

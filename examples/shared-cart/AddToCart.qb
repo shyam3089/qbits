@@ -3,5 +3,5 @@ import Cart from "./Cart.qb"
 component AddToCart(price = 10):
     button text="Add item":
         on click:
-            Cart.count = Cart.count + 1
+            Cart.items.append(price)
             Cart.total = Cart.total + price
