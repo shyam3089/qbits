@@ -78,6 +78,21 @@ test('Unicode text is inert while confusable identifiers remain rejected',()=>{
   assert.throws(()=>compile('component С:\n    p text="x"'),/Unexpected character/);
 });
 
+test('generated models preserve prototype-named fields as inert own data',async()=>{
+  const component=compile('component C:\n    __proto__ = 1\n    constructor = 2\n    prototype = 3\n    p text=str(__proto__)','prototype-fields.qb').code;
+  const shared=compile('shared Store:\n    __proto__ = 1\n    constructor = 2\n    prototype = 3','prototype-shared.qb').code;
+  const componentModule=await import(`data:text/javascript,${encodeURIComponent(component)}#component`);
+  const sharedModule=await import(`data:text/javascript,${encodeURIComponent(shared)}#shared`);
+  for(const values of [componentModule.model.states,sharedModule.default.states]){
+    assert.equal(Object.getPrototypeOf(values),Object.prototype);
+    assert.deepEqual(Object.keys(values),['__proto__','constructor','prototype']);
+    assert.ok(Object.hasOwn(values,'__proto__'));
+  }
+  assert.deepEqual(componentModule.model.states.__proto__,{kind:'literal',value:1});
+  assert.equal(sharedModule.default.states.__proto__,1);
+  assert.equal(({} as {polluted?:unknown}).polluted,undefined);
+});
+
 test('seeded runtime operations preserve DOM identity and rollback failed list changes',async()=>{
   const runtime=await readFile('dist/lib/runtime/index.js','utf8'),module=compile(valid).code;
   const browser=await firefox.launch({headless:true});

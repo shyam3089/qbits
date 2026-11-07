@@ -22,7 +22,7 @@ beta prereleases. Nested routes and guards are not supported.
 There is intentionally no `qbits` root export.
 
 - `qbits/vite` exports `languagePlugin(options?)`. Supported options are the compiler
-  graph-limit overrides documented in [security.md](security.md). Vite `^6.3.5` is an
+  graph-limit overrides documented in [security.md](security.md). Vite `^6.4.5` is an
   optional peer dependency because compiler-only and runtime-only consumers do not need it.
 - `qbits/compiler` supports `compile(source, filename?, options?)`, `CompileError`,
   `formatCompileError`, diagnostics, and compiler/module limit types and defaults.
@@ -65,7 +65,7 @@ The scaffolder never overwrites an existing target or installs dependencies.
 
 ## Compatibility and changes
 
-Qbits supports Node.js 22 and later, ES modules, and Vite `^6.3.5` for the Vite plugin.
+Qbits supports Node.js 22 and later, ES modules, and Vite `^6.4.5` for the Vite plugin.
 Runtime verification is performed in Firefox; other browsers are not yet a release-gated
 compatibility claim. npm and pnpm application flows are supported as documented.
 

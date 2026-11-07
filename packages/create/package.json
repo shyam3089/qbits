@@ -36,5 +36,5 @@
     "access": "public",
     "provenance": true
   },
-  "frameworkViteRange": "^6.3.5"
+  "frameworkViteRange": "^6.4.5"
 }
