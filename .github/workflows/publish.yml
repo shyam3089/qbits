@@ -1,0 +1,64 @@
+name: Stage npm packages (disabled)
+
+# Phase 3F.5 may replace the empty event list with an explicitly approved release
+# trigger. Keep this workflow inert until npm ownership, trusted publishers, the
+# protected environment, the exact release tag and human publication approval exist.
+on: []
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+
+jobs:
+  stage:
+    # Defense in depth: Phase 3F.5 must remove both this guard and the empty trigger.
+    if: ${{ false }}
+    name: Verify and stage npm packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up Node.js for npm trusted publishing
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22.22.2'
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - name: Install npm with trusted and staged publishing support
+        run: npm install --global npm@11.21.2
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+      - name: Verify exact release versions and tag
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          creator_version="$(node -p "require('./packages/create/package.json').version")"
+          test "$version" = "$creator_version"
+          test "$GITHUB_REF_NAME" = "v$version"
+      - name: Audit dependencies
+        run: npm audit --audit-level=low
+      - name: Check generated files
+        run: npm run sync:check
+      - name: Build
+        run: npm run build
+      - name: Check documentation
+        run: npm run test:docs
+      - name: Inspect package contents
+        run: |
+          npm pack --dry-run --json
+          npm pack ./packages/create --dry-run --json
+      - name: Stage qbits for owner review and 2FA approval
+        run: npm stage publish
+      - name: Stage create-qb for owner review and 2FA approval
+        working-directory: packages/create
+        run: npm stage publish
