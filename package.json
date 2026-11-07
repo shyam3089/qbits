@@ -99,7 +99,7 @@
   },
   "publishConfig": {
     "access": "public",
-    "provenance": true
+    "provenance": false
   },
   "bin": {
     "qb": "dist/lib/tooling/cli.js"
