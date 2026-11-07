@@ -34,7 +34,7 @@
   },
   "publishConfig": {
     "access": "public",
-    "provenance": true
+    "provenance": false
   },
   "frameworkViteRange": "^6.4.5"
 }
