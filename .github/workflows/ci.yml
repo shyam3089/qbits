@@ -1,4 +1,4 @@
-name: Checks (disabled)
+name: Checks
 
 on:
   pull_request:
@@ -15,7 +15,6 @@ concurrency:
 
 jobs:
   portability:
-    # Phase 3F.4 must explicitly remove this guard to activate CI.
     name: Node 22 / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
@@ -49,7 +48,6 @@ jobs:
           npm pack ./packages/create --dry-run --json
 
   supported-node:
-    # Phase 3F.4 must explicitly remove this guard to activate CI.
     name: Node ${{ matrix.node }} / Linux
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -75,7 +73,6 @@ jobs:
         run: npm run test:unit
 
   integration:
-    # Phase 3F.4 must explicitly remove this guard to activate CI.
     name: Firefox and package integration / Linux / Node 22
     runs-on: ubuntu-latest
     timeout-minutes: 30

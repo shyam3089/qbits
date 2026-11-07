@@ -10,3 +10,5 @@
 - Froze the supported beta API, documented experimental surfaces and compatibility,
   and narrowed published files to public documentation and built library artifacts.
 - Added deterministic compiler, runtime, Firefox, packaging, rename, and external-package coverage.
+- Raised the minimum supported Vite version to `^6.4.5`, resolving
+  `GHSA-8g5g-mxqh-grgj`; the updated lockfile audits with zero known vulnerabilities.
