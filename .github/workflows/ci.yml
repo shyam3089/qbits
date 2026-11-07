@@ -1,12 +1,10 @@
-name: Checks
+name: Checks (disabled)
 
 on:
   pull_request:
     branches: [main]
   push:
     branches: [main]
-  release:
-    types: [published]
 
 permissions:
   contents: read
@@ -16,12 +14,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  fast:
-    # Disabled while private; preserve the event condition for future review.
-    if: ${{ false && github.event_name == 'pull_request' }}
-    name: Fast checks
-    runs-on: ubuntu-latest
+  portability:
+    # Phase 3F.4 must explicitly remove this guard to activate CI.
+    name: Node 22 / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - name: Check out repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -32,18 +33,52 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - run: npm ci
-      - run: npm run sync:check
-      - run: npm run build
-      - run: npm run test:docs
-      - run: npm run test:unit
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+      - name: Check generated files
+        run: npm run sync:check
+      - name: Build
+        run: npm run build
+      - name: Check documentation
+        run: npm run test:docs
+      - name: Run platform-neutral tests
+        run: npm run test:unit
+      - name: Inspect package contents
+        run: |
+          npm pack --dry-run --json
+          npm pack ./packages/create --dry-run --json
+
+  supported-node:
+    # Phase 3F.4 must explicitly remove this guard to activate CI.
+    name: Node ${{ matrix.node }} / Linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [24, 26]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+      - name: Build
+        run: npm run build
+      - name: Run platform-neutral tests
+        run: npm run test:unit
 
   integration:
-    # Disabled while private; preserve the event condition for future review.
-    if: ${{ false && github.event_name != 'pull_request' }}
-    name: Full integration
+    # Phase 3F.4 must explicitly remove this guard to activate CI.
+    name: Firefox and package integration / Linux / Node 22
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Check out repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -54,13 +89,29 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps firefox
-      - run: npm run sync:check
-      - run: npm run build
-      - run: npm run test:docs
-      - run: npm test
-      - run: npm run test:rename
-      - run: npm run test:external
-      - run: npm pack --dry-run --json
-      - run: npm pack ./packages/create --dry-run --json
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+      - name: Install isolated pnpm verification CLI
+        run: npm install --prefix .tools/pnpm-tool --ignore-scripts --no-audit --no-fund pnpm@10.34.9
+      - name: Audit dependencies
+        run: npm audit --audit-level=low
+      - name: Install Firefox
+        run: npm exec -- playwright install --with-deps firefox
+      - name: Check generated files
+        run: npm run sync:check
+      - name: Build
+        run: npm run build
+      - name: Check documentation
+        run: npm run test:docs
+      - name: Run full test suite
+        run: npm test
+      - name: Check configurable identity
+        run: npm run test:rename
+      - name: Verify external npm package application
+        run: npm run test:external -- --manager npm
+      - name: Verify external pnpm package application
+        run: npm run test:external -- --manager pnpm
+      - name: Inspect package contents
+        run: |
+          npm pack --dry-run --json
+          npm pack ./packages/create --dry-run --json
