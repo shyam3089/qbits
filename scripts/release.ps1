@@ -5,6 +5,7 @@ and Git user.signingKey plus gpg.ssh.allowedSignersFile configured for SSH signi
 Confirms once, updates metadata, syncs/builds, commits/signs/pushes, then publishes.
 DryRun prints the complete plan only: no auth/network, edits, builds or release actions.
 Failures retain completed work for inspection; publication is never retried.
+Remote Git calls omit manager-core per process, retaining other helpers and SSH config.
 #>
 [CmdletBinding()]
 param(
@@ -73,10 +74,36 @@ function Invoke-ReleaseCommand {
     if ($Capture) { return $result }
 }
 
+function Get-ReleaseRemoteGitArguments {
+    param([string[]]$Arguments)
+    $config = Invoke-ReleaseCommand -Tool $gitExe -Arguments @('config', '--get-all', 'credential.helper') -Capture -AllowFailure
+    if ($config.ExitCode -ne 0 -and $config.ExitCode -ne 1) {
+        if ($config.ErrorOutput) { Write-Host "Git diagnostic: $($config.ErrorOutput.Trim())" }
+        throw 'Could not read Git credential helpers; refusing remote access.'
+    }
+    $helpers = @()
+    if ($config.ExitCode -eq 0) {
+        $records = @($config.Output -split '\r?\n')
+        # Remove the output terminator, preserving explicit empty helper resets.
+        if ($records[-1] -ceq '') { $records = @($records | Select-Object -SkipLast 1) }
+        foreach ($helper in $records) {
+            if ([string]::IsNullOrWhiteSpace($helper)) { $helpers = @() }
+            elseif ($helper.Trim() -notmatch '^manager-core(?:\s|$)') { $helpers += $helper }
+        }
+    }
+    # Per-process reset only. Keep other configured helpers and SSH authentication.
+    $options = @('-c', 'credential.helper=')
+    foreach ($helper in $helpers) { $options += @('-c', "credential.helper=$helper") }
+    return $options + $Arguments
+}
+
 function Get-ReleaseGit {
     param([string[]]$Arguments)
-    $result = Invoke-ReleaseCommand -Tool $gitExe -Arguments $Arguments -Capture
+    $command = $Arguments[0]
+    if ($command -ceq 'ls-remote') { $Arguments = @(Get-ReleaseRemoteGitArguments -Arguments $Arguments) }
+    $result = Invoke-ReleaseCommand -Tool $gitExe -Arguments $Arguments -Capture -AllowFailure
     if ($result.PSObject.Properties['ErrorOutput'] -and $result.ErrorOutput.Trim()) { Write-Host "Git diagnostic: $($result.ErrorOutput.Trim())" }
+    if ($result.ExitCode -ne 0) { throw "git $command failed (exit $($result.ExitCode)). Stopping without retry." }
     return $result.Output.Trim()
 }
 
@@ -280,8 +307,9 @@ function Invoke-QbitsRelease {
         foreach ($arguments in @(@('remote', 'get-url', '--all', 'origin'), @('remote', 'get-url', '--push', '--all', 'origin'))) {
             if ((Get-ReleaseGit -Arguments $arguments) -notmatch '^(https://github\.com/|git@github\.com:|ssh://git@github\.com/)shyam3089/qubits(\.git)?/?$') { throw 'origin changed before the release push.' }
         }
+        $pushArguments = @(Get-ReleaseRemoteGitArguments -Arguments @('-c', 'push.followTags=false', 'push', '--atomic', 'origin', 'HEAD:refs/heads/main', "${tagRef}:${tagRef}"))
         $state.Push = 'ATTEMPTED (remote outcome unknown on failure)'
-        Invoke-ReleaseCommand -Tool $gitExe -Arguments @('-c', 'push.followTags=false', 'push', '--atomic', 'origin', 'HEAD:refs/heads/main', "${tagRef}:${tagRef}")
+        Invoke-ReleaseCommand -Tool $gitExe -Arguments $pushArguments
         $state.Push = 'PUSHED (commit and tag)'
         foreach ($package in $packages) {
             $state.Phase = "publish $($package.Name)"
