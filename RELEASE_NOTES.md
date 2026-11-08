@@ -1,4 +1,4 @@
-# Qbits 1.0.1 release preparation
+# Qbits 1.0.1 release
 
 This patch adds Hello World initialization when a lifecycle-enabled npm directly
 installs Qbits into a new empty application. It reuses existing templates, supplies
@@ -38,7 +38,7 @@ Firefox is release-gated; other browser compatibility is not claimed by this pre
 Transactions remain synchronous, development uses full reload, and SSR, routing guards,
 nested routes and the other features in [limitations.md](docs/limitations.md) remain unsupported.
 
-After both 1.0.0 packages are published, the default npm flow is:
+After both 1.0.1 packages are published, the default npm flow is:
 
 ```sh
 npm create qb myapp
