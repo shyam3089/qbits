@@ -1,6 +1,6 @@
 {
   "name": "qbits",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "description": "A small, typed, indentation-based UI language and reactive browser runtime.",
   "keywords": [
     "ui",

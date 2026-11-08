@@ -1,6 +1,6 @@
 # Qbits v0.1.0 beta API
 
-This document freezes the supported surface for `v0.1.0-beta.1`. A feature is not
+This document freezes the supported surface for `v0.1.0-beta.2`. A feature is not
 stable merely because it is exported or present in generated code. The exact `.qb`
 grammar in [syntax.md](syntax.md) and the interfaces listed below are the beta contract.
 

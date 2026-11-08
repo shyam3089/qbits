@@ -1,4 +1,4 @@
-<!-- Generated for Qbits 0.1.0-beta.1 by npm run sync. -->
+<!-- Generated for Qbits 0.1.0-beta.2 by npm run sync. -->
 # Limitations
 
 The beta uses aggregate compiler-graph and shared component-tree budgets without changing the documented .qb syntax. Reactive bindings remain dependency-based; child props refresh without remounting, and failed structural preparation retains committed identity, focus, selection and local state.

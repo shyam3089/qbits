@@ -1,7 +1,7 @@
-<!-- Generated for Qbits 0.1.0-beta.1 by npm run sync. -->
+<!-- Generated for Qbits 0.1.0-beta.2 by npm run sync. -->
 # Agent entry point
 
-Use only this installed version (0.1.0-beta.1) of Qbits. Load guidance by topic:
+Use only this installed version (0.1.0-beta.2) of Qbits. Load guidance by topic:
 - [api](api.md): frozen beta surface and experimental features.
 - [syntax](syntax.md): approved indentation grammar through Phase 3D.4.
 - [examples](examples.md): compilable counters, forms, conditions, classes and keyed lists.
