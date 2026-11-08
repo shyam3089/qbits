@@ -1,6 +1,6 @@
-# Qbits v1.0.0 public API
+# Qbits v1.0.1 public API
 
-This document freezes the supported public surface for `v1.0.0`. A feature is not
+This document freezes the supported public surface for `v1.0.1`. A feature is not
 stable merely because it is exported or present in generated code. The exact `.qb`
 grammar in [syntax.md](syntax.md) and the supported interfaces listed below are the stable contract.
 
@@ -23,7 +23,8 @@ There is intentionally no `qbits` root export.
 
 - `qbits/vite` exports `languagePlugin(options?)`. Supported options are the compiler
   graph-limit overrides documented in [security.md](security.md). Vite `^6.4.5` is an
-  optional peer dependency because compiler-only and runtime-only consumers do not need it.
+  optional peer dependency. It is also an optional package dependency for automatic
+  app setup; compiler-only/runtime-only installs may omit optional dependencies.
 - `qbits/compiler` supports `compile(source, filename?, options?)`, `CompileError`,
   `formatCompileError`, diagnostics, and compiler/module limit types and defaults.
   `compile` returns generated `code`; its returned `ast` is experimental.
@@ -50,6 +51,14 @@ Use the runtime and generated component output from the same Qbits version. Cros
 generated-code/runtime compatibility is not promised for this internal ABI.
 
 ## CLI and scaffolder
+
+With dependency install scripts enabled, a direct `npm install qbits` in a new empty
+directory creates Hello World and an existing `dev` script. Existing projects,
+transitive installs and linked/global installations are left alone. npm supplies
+Vite through the optional dependency; omitted optional dependencies disable setup.
+Install-script approval policies that block the package and `ignore-scripts`
+prevent this lifecycle from running. The four-command flow is unavailable under those
+policies; Qbits does not change approvals or bypass them.
 
 The `qb` executable supports:
 

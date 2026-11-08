@@ -29,6 +29,23 @@ export function appSource(identity) {
   return `import Counter from "./Counter${identity.sourceExtension}"\nimport Greeting from "./Greeting${identity.sourceExtension}"\nimport NotificationSetting from "./NotificationSetting${identity.sourceExtension}"\nimport Catalog from "./Catalog${identity.sourceExtension}"\n\ncomponent App:\n    main class="page":\n        h1 text="Two independent counters"\n        Counter label="First: " class="compact"\n        Counter label="Second: "\n        Greeting\n        NotificationSetting\n        Catalog\n`;
 }
 export const counterCSS = '.counter { padding: 16px; }\n.counter-button { color: rgb(20, 80, 160); }\n.counter.compact { padding: 4px; }\n';
+export function helloWorldFiles(identity, version) {
+  const base = applicationFiles(identity, version, version, undefined);
+  const manifest = JSON.parse(base['package.json']);
+  manifest.name = 'hello-world';
+  // npm saves its original dependency tree after dependency postinstall hooks.
+  // Vite is supplied by Qbits, not installed recursively from this hook.
+  delete manifest.devDependencies;
+  return {
+    'vite.config.ts': base['vite.config.ts'],
+    'index.html': base['index.html'].replace('<h1>Reactive counter</h1>', '').replace('<title>Counter</title>', '<title>Hello World</title>'),
+    'src/main.ts': base['src/main.ts'],
+    [`src/App${identity.sourceExtension}`]: 'component App:\n    h1 text="Hello World"\n',
+    '.gitignore': base['.gitignore'],
+    'README.md': `# Hello World\n\nRun npm run dev to start the app, or npm run build for production output.\nEdit src/App${identity.sourceExtension} to change the page.\n`,
+    'package.json': JSON.stringify(manifest, null, 2) + '\n'
+  };
+}
 export function applicationFiles(identity, version, frameworkSpec, viteSpec, manager = 'npm') {
   const commands = managerCommands(manager);
   return {

@@ -1,4 +1,4 @@
-<!-- Generated for Qbits 1.0.0 by npm run sync. -->
+<!-- Generated for Qbits 1.0.1 by npm run sync. -->
 # Security
 
 Parsing never executes application source, generation serializes literals, and rendering uses DOM element/text/property APIs rather than HTML insertion. Numeric values and arithmetic results are finite safe integers, including literals supplied through direct runtime models. Synchronous structural transactions prepare before commit; a failed reservation or staged mount preserves committed DOM identity, focus, state and subscriptions. Recovery failure is reported and disables participating components rather than continuing with uncertain state.

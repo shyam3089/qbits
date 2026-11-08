@@ -1,4 +1,4 @@
-<!-- Generated for Qbits 1.0.0 by npm run sync. -->
+<!-- Generated for Qbits 1.0.1 by npm run sync. -->
 # Reactivity and transactions
 
 State, props and instance fields use fine-grained signals. Effects clear and rebuild their

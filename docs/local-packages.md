@@ -1,4 +1,4 @@
-<!-- Generated for Qbits 1.0.0 by npm run sync. -->
+<!-- Generated for Qbits 1.0.1 by npm run sync. -->
 # Local packages and onboarding
 
 The target command is npm create qb myapp, which requires the
@@ -18,8 +18,8 @@ npm pack ./packages/create --ignore-scripts --pack-destination ..
 mkdir ../local-scaffold-runner
 cd ../local-scaffold-runner
 npm init -y
-npm install --ignore-scripts ../create-qb-1.0.0.tgz
-npm create qb --offline -- ../myapp --framework ../qbits-1.0.0.tgz
+npm install --ignore-scripts ../create-qb-1.0.1.tgz
+npm create qb --offline -- ../myapp --framework ../qbits-1.0.1.tgz
 cd ../myapp
 npm install
 npm run check
@@ -39,7 +39,7 @@ No global install is used. npm install creates package-lock.json. To select pnpm
 For an existing app, run from its root (replace the tarball path if necessary):
 
 ```sh
-npm install --ignore-scripts /absolute/qbits-1.0.0.tgz
+npm install --ignore-scripts /absolute/qbits-1.0.1.tgz
 npm exec --offline -- qb init
 npm run qb -- docs --agent
 npm run qb -- check src --json

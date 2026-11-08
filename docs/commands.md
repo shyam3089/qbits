@@ -1,4 +1,4 @@
-<!-- Generated for Qbits 1.0.0 by npm run sync. -->
+<!-- Generated for Qbits 1.0.1 by npm run sync. -->
 # Commands
 
 Installed app commands come from the root README/AGENTS.md. npm: npm install, npm run dev, npm run check, npm run build. pnpm: pnpm install, pnpm run dev, pnpm run check, pnpm run build. See [package managers](package-managers.md); never change an existing app manager silently.

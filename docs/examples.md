@@ -1,4 +1,4 @@
-<!-- Generated for Qbits 1.0.0 by npm run sync. -->
+<!-- Generated for Qbits 1.0.1 by npm run sync. -->
 # Compilable examples
 
 Save as src/Counter.qb. Add Counter.css using ordinary CSS.

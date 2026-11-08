@@ -1,6 +1,6 @@
 {
   "name": "qbits",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A small, typed, indentation-based UI language and reactive browser runtime.",
   "keywords": [
     "ui",
@@ -32,6 +32,10 @@
     }
   },
   "files": [
+    "tooling/install.mjs",
+    "tooling/project.mjs",
+    "tooling/identity.mjs",
+    "tooling/package-manager.mjs",
     "dist/lib",
     "identity.json",
     "docs/agent.md",
@@ -61,6 +65,7 @@
     "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
+    "postinstall": "node tooling/install.mjs",
     "sync": "node scripts/sync.mjs",
     "sync:check": "node scripts/sync.mjs --check",
     "dev": "vite --host 127.0.0.1",
@@ -90,6 +95,9 @@
     "node": ">=22"
   },
   "peerDependencies": {
+    "vite": "^6.4.5"
+  },
+  "optionalDependencies": {
     "vite": "^6.4.5"
   },
   "peerDependenciesMeta": {

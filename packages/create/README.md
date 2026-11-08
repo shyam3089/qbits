@@ -1,7 +1,7 @@
-<!-- Generated for Qbits 1.0.0 by npm run sync. -->
+<!-- Generated for Qbits 1.0.1 by npm run sync. -->
 # create-qb
 
-Scaffolder for Qbits 1.0.0.
+Scaffolder for Qbits 1.0.1.
 Target: npm create qb myapp. Registry installation requires published packages.
 From a local installation: npm exec -- create-qb myapp --framework /absolute/main.tgz.
 Optional --package-manager npm|pnpm selects application commands (default npm). --vite /absolute/vite.tgz supports local verification. The manager writes its selected lockfile on install. No global install,

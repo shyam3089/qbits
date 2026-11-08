@@ -1,8 +1,22 @@
-# Qbits 1.0.0 release
+# Qbits 1.0.1 release preparation
+
+This patch adds Hello World initialization when a lifecycle-enabled npm directly
+installs Qbits into a new empty application. It reuses existing templates, supplies
+Vite as an optional dependency, and does not change language or runtime APIs.
+Files are created exclusively; existing applications and transitive installs skip setup.
+
+The exact four-command workflow depends on install scripts being permitted. Disabled
+scripts, policies that block the hook, and omitted optional dependencies prevent setup.
+The installer does not bypass those policies. Publication must remain
+blocked if the required client cannot complete the packed-artifact workflow unchanged.
 
 <!-- qbits-release:start -->
-Version: `1.0.0`; tag: `v1.0.0`; date: 2026-11-08.
+Version: `1.0.1`; tag: `v1.0.1`; date: 2026-11-08.
 <!-- qbits-release:end -->
+
+## Previous stable release
+
+Version: `1.0.0`; tag: `v1.0.0`; date: 2026-11-08.
 
 The framework was renamed from Qubits to Qbits. The npm package and language identity
 change from `qubits` to `qbits`; imports must use `qbits/compiler`, `qbits/runtime`, and

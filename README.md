@@ -5,27 +5,32 @@ JavaScript. It provides fine-grained reactivity, keyed lists, components, one de
 slot, shared reactive state, typed child events, lifecycle hooks, and safe text/property
 rendering without executing source expressions.
 
-The supported 1.0.0 public surface is frozen in the [API reference](docs/api.md). See the
+The supported 1.0.1 public surface is frozen in the [API reference](docs/api.md). See the
 [complete grammar](docs/syntax.md), [compilable examples](docs/examples.md), and
 [current limitations](docs/limitations.md). The client-side router and low-level
 compiler/runtime internals are experimental as described in the API reference.
 
-Requires Node.js 22+ and npm or pnpm. Once `qbits@1.0.0` and `create-qb@1.0.0` are
-published, the default npm setup is:
+Requires Node.js 22+. For npm versions/policies that permit dependency install scripts,
+installing directly into a new empty directory prepares Hello World:
 
 ```sh
-npm create qb myapp
+mkdir myapp
 cd myapp
-npm install
-npm run check
+npm install qbits
 npm run dev
 ```
 
-Run `npm run build` for production output. The scaffolder creates files without
-installing dependencies or overwriting an existing directory. Release preparation
-does not publish packages; use the [local package quick start](docs/local-packages.md)
-until the registry packages are available. Firefox is the verified browser; other
-browser compatibility and experimental interfaces are qualified in the API reference.
+No existing project files are overwritten. Transitive/global/linked installs skip
+automatic setup. Vite is an optional Qbits dependency, installed during the original
+npm operation; the hook never runs a nested installation or changes script approvals.
+
+**Lifecycle limitation:** with disabled lifecycle scripts, a policy that blocks
+the package's install script, or omitted optional dependencies, the
+four-command flow is unavailable: no app files or dev script can be generated. These
+policies are respected. Creating an empty folder inside an existing npm project may
+also cause npm to select the ancestor project; it is left untouched by Qbits setup.
+Patch publication and live registry availability are separate from local preparation.
+Firefox is the verified browser; other compatibility claims are qualified in the API reference.
 
 To work on the framework itself, run from the repository root:
 

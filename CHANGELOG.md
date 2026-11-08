@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.1 - 2026-11-08
+
+- Add guarded Hello World setup for direct npm installs in new empty applications,
+  reusing project templates and exclusively creating files without overwrites.
+- Skip existing applications, transitive/linked/global contexts and ambiguous dependency
+  trees. No nested package-manager commands or approval changes run from the hook.
+- Supply Vite as an optional dependency so permitted hooks can create a usable dev script
+  in one install, while retaining the existing compiler/runtime APIs and Vite peer range.
+- Document that npm install-script approval policies, disabled hooks and omitted optional
+  dependencies prevent the four-command flow; existing applications remain library installs.
+
 ## 1.0.0 - 2026-11-08
 
 - Promote the verified `0.1.0-beta.2` baseline without new features, runtime changes
