@@ -1,10 +1,14 @@
 # Release readiness: Phases 3F.2-3F.5
 
+<!-- qbits-release:start -->
+Version: `1.0.0`; tag: `v1.0.0`; date: 2026-11-08.
+<!-- qbits-release:end -->
+
 Release decisions use validation evidence produced locally on the exact candidate commit.
 GitHub CI is supplementary and is not a release requirement. This checklist does not
 authorize publishing, tagging, publishing-workflow activation, or deployment.
 
-## Current candidate - 1.0.0 preparation, 2026-11-08
+## Previous preparation - 1.0.0 preparation, 2026-11-08
 
 - Promote the verified `0.1.0-beta.2` baseline at `85afa955` to `qbits` and
   `create-qb` version `1.0.0`, with no new features or dependency changes.

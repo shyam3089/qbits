@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0 - Unreleased
+## 1.0.0 - 2026-11-08
 
 - Promote the verified `0.1.0-beta.2` baseline without new features, runtime changes
   or dependency updates; retain its three security/correctness fixes and stricter
