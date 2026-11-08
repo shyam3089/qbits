@@ -16,19 +16,55 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $script:ReleaseExitCode = 1
 
+function Resolve-ReleaseApplication {
+    param([string]$Name)
+    return (Get-Command $Name -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
+}
+
+function ConvertTo-ReleaseArgument {
+    param([string]$Value)
+    # Windows native argv quoting: escape quotes and trailing backslashes.
+    return '"' + [regex]::Replace([regex]::Replace($Value, '(\\*)"', '$1$1\"'), '(\\+)$', '$1$1') + '"'
+}
+
 function Invoke-ReleaseCommand {
     param([string]$Tool, [string[]]$Arguments, [switch]$Capture,
           [switch]$AllowFailure, [string]$InputText)
     $global:LASTEXITCODE = -1
     if ($Capture) {
-        # PS 5.1 redirects native stderr as ErrorRecord objects; inspect the exit code.
-        $savedPreference = $ErrorActionPreference
+        # Keep machine-readable stdout separate from successful-command diagnostics.
+        # Read both streams concurrently so a full stderr buffer cannot deadlock Git/npm.
+        $start = New-Object System.Diagnostics.ProcessStartInfo
+        $start.UseShellExecute = $false
+        $start.CreateNoWindow = $true
+        $start.WorkingDirectory = (Get-Location).ProviderPath
+        $start.RedirectStandardOutput = $true
+        $start.RedirectStandardError = $true
+        $start.StandardOutputEncoding = New-Object System.Text.UTF8Encoding($false)
+        $start.StandardErrorEncoding = New-Object System.Text.UTF8Encoding($false)
+        if ([IO.Path]::GetExtension($Tool) -ieq '.cmd') {
+            # Only read-only npm queries use this branch; disallow cmd expansion.
+            foreach ($value in (@($Tool) + $Arguments)) {
+                if ($value -match '["%\^\r\n]') { throw 'Unsafe character in captured batch-command argument.' }
+            }
+            $start.FileName = $env:ComSpec
+            $command = ((@($Tool) + $Arguments) | ForEach-Object { '"' + $_ + '"' }) -join ' '
+            $start.Arguments = '/d /v:off /c call ' + $command
+        } else {
+            $start.FileName = $Tool
+            $start.Arguments = ($Arguments | ForEach-Object { ConvertTo-ReleaseArgument $_ }) -join ' '
+        }
+        $process = New-Object System.Diagnostics.Process
         try {
-            $ErrorActionPreference = 'Continue'
-            $lines = @(& $Tool @Arguments 2>&1)
-            $code = $global:LASTEXITCODE
-        } finally { $ErrorActionPreference = $savedPreference }
-        $result = [pscustomobject]@{ ExitCode = $code; Output = (($lines | ForEach-Object { $_.ToString() }) -join "`n") }
+            $process.StartInfo = $start
+            if (-not $process.Start()) { throw 'Could not start captured command.' }
+            $stdout = $process.StandardOutput.ReadToEndAsync()
+            $stderr = $process.StandardError.ReadToEndAsync()
+            $process.WaitForExit()
+            $code = $process.ExitCode
+            $global:LASTEXITCODE = $code
+            $result = [pscustomobject]@{ ExitCode = $code; Output = $stdout.GetAwaiter().GetResult(); ErrorOutput = $stderr.GetAwaiter().GetResult() }
+        } finally { $process.Dispose() }
     } else {
         if ($InputText) { $InputText | & $Tool @Arguments } else { & $Tool @Arguments }
         $code = $global:LASTEXITCODE
@@ -39,7 +75,9 @@ function Invoke-ReleaseCommand {
 
 function Get-ReleaseGit {
     param([string[]]$Arguments)
-    return (Invoke-ReleaseCommand -Tool $gitExe -Arguments $Arguments -Capture).Output.Trim()
+    $result = Invoke-ReleaseCommand -Tool $gitExe -Arguments $Arguments -Capture
+    if ($result.PSObject.Properties['ErrorOutput'] -and $result.ErrorOutput.Trim()) { Write-Host "Git diagnostic: $($result.ErrorOutput.Trim())" }
+    return $result.Output.Trim()
 }
 
 function Assert-ReleaseGitContext {
@@ -56,7 +94,9 @@ function Assert-ReleaseVersionMissing {
         $Package.Status = 'ALREADY EXISTS (not published by this run)'
         throw "$($Package.Name)@$ReleaseVersion already exists or could not be ruled out. Refusing a duplicate release."
     }
-    if ($result.Output -notmatch '"code"\s*:\s*"E404"') { throw "Could not establish that $($Package.Name)@$ReleaseVersion is absent (exit $($result.ExitCode))." }
+    $diagnostic = $result.Output
+    if ($result.PSObject.Properties['ErrorOutput']) { $diagnostic += $result.ErrorOutput }
+    if ($diagnostic -notmatch '"code"\s*:\s*"E404"') { throw "Could not establish that $($Package.Name)@$ReleaseVersion is absent (exit $($result.ExitCode))." }
 }
 
 function Update-ReleaseMetadata {
@@ -153,9 +193,9 @@ function Invoke-QbitsRelease {
             $state.Commit = 'unchanged (dry run)'; $state.Result = 'DRY RUN'; $script:ReleaseExitCode = 0
             return
         }
-        $gitExe = (Get-Command git.exe -CommandType Application -ErrorAction Stop).Source
-        $npmExe = (Get-Command npm.cmd -CommandType Application -ErrorAction Stop).Source
-        $nodeExe = (Get-Command node.exe -CommandType Application -ErrorAction Stop).Source
+        $gitExe = Resolve-ReleaseApplication 'git.exe'
+        $npmExe = Resolve-ReleaseApplication 'npm.cmd'
+        $nodeExe = Resolve-ReleaseApplication 'node.exe'
         Push-Location -LiteralPath $Root
         $pushedLocation = $true
         if ([IO.Path]::GetFullPath((Get-ReleaseGit -Arguments @('rev-parse', '--show-toplevel'))) -ine $Root) { throw 'Wrong repository root.' }
@@ -167,7 +207,9 @@ function Invoke-QbitsRelease {
             if ((Get-ReleaseGit -Arguments $arguments) -notmatch '^(https://github\.com/|git@github\.com:|ssh://git@github\.com/)shyam3089/qubits(\.git)?/?$') { throw 'origin must have one fetch/push URL for github.com/shyam3089/qubits.' }
         }
         $remoteHead = Get-ReleaseGit -Arguments @('ls-remote', '--exit-code', '--heads', 'origin', 'refs/heads/main')
-        Invoke-ReleaseCommand -Tool $gitExe -Arguments @('merge-base', '--is-ancestor', ($remoteHead -split '\s+')[0], 'HEAD')
+        $remoteMatch = [regex]::Match($remoteHead, '\A([0-9a-f]{40}|[0-9a-f]{64})[ \t]+refs/heads/main\z')
+        if (-not $remoteMatch.Success) { throw 'origin/main returned an unexpected response; refusing to infer a release commit.' }
+        Invoke-ReleaseCommand -Tool $gitExe -Arguments @('merge-base', '--is-ancestor', $remoteMatch.Groups[1].Value, 'HEAD')
         $localTag = Invoke-ReleaseCommand -Tool $gitExe -Arguments @('show-ref', '--verify', '--quiet', $tagRef) -Capture -AllowFailure
         if ($localTag.ExitCode -eq 0 -or (Get-ReleaseGit -Arguments @('ls-remote', '--tags', 'origin', $tagRef))) { $state.TagStatus = 'ALREADY EXISTS'; throw "$tag already exists. Tags are never replaced." }
         if ($localTag.ExitCode -ne 1) { throw 'Could not check local tag absence.' }
