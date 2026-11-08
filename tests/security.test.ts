@@ -113,12 +113,12 @@ test('seeded runtime operations preserve DOM identity and rollback failed list c
           else {if(!visible){buttons[2].click();visible=true;}buttons[3].click();if(!hasFour)hasFour=true;}
         }
         buttons[2].click();
-        const beforeDispose={count:buttons[0].textContent,firstSame:host.querySelector('button')===firstButton,rows:[...host.querySelectorAll('p')].map(node=>node.textContent),sections:host.querySelectorAll('section').length,text:host.textContent,expectedCount:`Count ${count}`,errors};
+        const beforeDispose={count:buttons[0].textContent,firstSame:host.querySelector('button')===firstButton,rows:[...host.querySelectorAll('p')].map(node=>node.textContent),sections:host.querySelectorAll('section').length,text:host.textContent,expectedCount:`Count ${count}`,expectedRows:(hasFour?[1,2,3,4]:[1,2,3]).map(String),errors};
         dispose();return {...beforeDispose,empty:host.childNodes.length===0};
       }finally{host.remove();urls.forEach(value=>URL.revokeObjectURL(value));}
     },{runtime,module});
     assert.equal(result.count,result.expectedCount);assert.equal(result.firstSame,true);assert.equal(result.empty,true);
-    assert.ok(result.rows.length===3||result.rows.length===4,JSON.stringify(result));assert.ok(result.errors.length>0);assert.ok(result.errors.every(message=>/Duplicate iteration key 4/.test(message)));
+    assert.deepEqual(result.rows,result.expectedRows);assert.equal(result.sections,1);assert.ok(result.errors.length>0);assert.ok(result.errors.every(message=>/Duplicate iteration key 4/.test(message)));
   }finally{await browser.close();}
 });
 

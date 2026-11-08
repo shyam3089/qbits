@@ -192,6 +192,7 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
   const stateClasses:Record<string,ClassModel>=Object.assign(Object.create(null),recordClasses,model.classes);
   const getSignal=(name:string,local:Scope):Signal=>{const value=local[name];if(!value||typeof value==='function'||'__class'in value||'__shared'in value)throw new TypeError(`Unknown writable value ${name}`);return value;};
   function evaluate(expression:Expr,local=scope):Value {
+    consumeWork(budget);
     if(expression.kind==='literal'){assertNumber(expression.value);return expression.value;}
     if(expression.kind==='reference'){const value=local[expression.name];if(!value)throw new TypeError(`Unknown value ${expression.name}`);return typeof value==='function'?value():'__class'in value||'__shared'in value?value:read(value);}
     if(expression.kind==='member'){const owner=evaluate(expression.object,local);if(!owner||typeof owner!=='object'||Array.isArray(owner)||!('__class'in owner)&&!('__shared'in owner))throw new TypeError('Member access requires a class instance or shared state');const field=owner.fields[expression.name];if(field)return read(field);if('__class'in owner){const computed=owner.computed[expression.name];if(computed)return evaluate(computed,owner.scope);}throw new TypeError(`Unknown member ${expression.name}`);}
@@ -202,7 +203,7 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
     if(expression.kind==='str')return String(evaluate(expression.argument,local));
     if(expression.kind==='len'){const value=evaluate(expression.argument,local);if(!Array.isArray(value))throw new TypeError('len requires a list');return value.length;}
     if(expression.kind==='contains'){const left=evaluate(expression.left,local),right=evaluate(expression.right,local);if(typeof left!=='string'||typeof right!=='string')throw new TypeError('contains requires strings');return left.toLocaleLowerCase().includes(right.toLocaleLowerCase());}
-    if(expression.kind==='count'){const left=evaluate(expression.left,local),right=evaluate(expression.right,local);if(!Array.isArray(left))throw new TypeError('count requires a list');let total=0;for(const item of left)if(item===right)total++;return total;}
+    if(expression.kind==='count'){const left=evaluate(expression.left,local),right=evaluate(expression.right,local);if(!Array.isArray(left))throw new TypeError('count requires a list');consumeWork(budget,left.length);let total=0;for(const item of left)if(item===right)total++;return total;}
     if(expression.kind==='add'||expression.kind==='subtract'){const left=evaluate(expression.left,local),right=evaluate(expression.right,local);if(typeof left==='number'&&typeof right==='number'){const result=expression.kind==='add'?left+right:left-right;assertNumber(result);return result;}if(expression.kind==='subtract')throw new TypeError('Subtraction requires numbers');return String(left)+String(right);}
     if(expression.kind==='list'){if(expression.items.length>limits.maxCollectionItems)throw new RangeError(`Collection exceeds the configured limit of ${limits.maxCollectionItems} items`);consumeWork(budget,expression.items.length);return expression.items.map(item=>evaluate(item,local));}
     if(expression.kind==='construct')return instantiate(expression.name,expression.arguments.map(item=>evaluate(item,local)),model.classes);
@@ -243,7 +244,7 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
   for(const name of Object.keys(model.computed))scope[name]=signal('');
   try{for(const [name,expression] of Object.entries(model.computed)){const source=getSignal(name,scope);ownedEffects.push(createEffect(()=>write(source,evaluate(expression)),budget,source,limits.maxUpdatesPerFlush));}}catch(error){disposeBag(ownedEffects,cleanups);throw error;}
   function resolveTarget(target:Expr,local:Scope):Signal {
-    if(target.kind==='reference')return getSignal(target.name,local);
+    if(target.kind==='reference'){const source=getSignal(target.name,local);if(source.derive)throw new TypeError(`Cannot assign read-only value ${target.name}`);return source;}
     if(target.kind==='member'){const owner=evaluate(target.object,local);if(!owner||typeof owner!=='object'||Array.isArray(owner)||!('__class'in owner)&&!('__shared'in owner))throw new TypeError('Member assignment requires an instance or shared state');const result=owner.fields[target.name];if(!result)throw new TypeError(`Member ${target.name} is read-only or unknown`);return result;}
     throw new TypeError('Invalid assignment target');
   }
@@ -349,8 +350,8 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
       const document=parent.ownerDocument,anchor=makeComment(document,'for');
       type Record={start:Comment;end:Comment;item:Signal;index:number;effects:ReactiveEffect[];cleanups:CleanupBag};
       const records=new Map<Primitive,Record>(),keyScope=Object.create(local) as Scope,keyItem=signal<Value>('');keyScope[view.item]=keyItem;
-      let update:ReactiveEffect|undefined;
-      callbacks.push(()=>{if(update)stop(update);const failures:unknown[]=[],ordered=[...records.values()];try{for(let index=ordered.length-1;index>=0;index--)try{disposeBag(ordered[index].effects,ordered[index].cleanups);}catch(error){failures.push(error);}}finally{records.clear();anchor.remove();release(budget,'domNodes');}if(failures.length===1)throw failures[0];if(failures.length)throw new AggregateError(failures,'Iteration disposal failed');});parent.append(anchor);
+      let update:ReactiveEffect|undefined,alive=true;
+      callbacks.push(()=>{alive=false;if(update)stop(update);const failures:unknown[]=[],ordered=[...records.values()];try{for(let index=ordered.length-1;index>=0;index--)try{disposeBag(ordered[index].effects,ordered[index].cleanups);}catch(error){failures.push(error);}}finally{records.clear();anchor.remove();release(budget,'domNodes');}if(failures.length===1)throw failures[0];if(failures.length)throw new AggregateError(failures,'Iteration disposal failed');});parent.append(anchor);
       const move=(record:Record,before:Node)=>{
         const fragment=document.createDocumentFragment(),focused=document.activeElement;
         let restore=false,start:number|null=null,end:number|null=null,direction:'forward'|'backward'|'none'|null=null;
@@ -386,7 +387,7 @@ function mountComponentInternal(target:Element|undefined,model:Model,components:
           let last=-1,reordered=false;for(const record of planned)if(record.index>=0){if(record.index<last)reordered=true;last=record.index;}
           const stable=reordered?orderedIndices(planned.map(record=>record.index)):undefined;
           if(!prepared.length&&!removed.length&&!reordered)return;
-          stageStructure(()=>{const cleanupErrors:unknown[]=[];try{let before:Node=anchor;for(let index=planned.length-1;index>=0;index--){const record=planned[index];if(record.index<0)before.parentNode!.insertBefore(record.start.parentNode!,before);else if(stable&&!stable.has(index)&&record.end.nextSibling!==before)move(record,before);before=record.start;record.index=index;}}catch(error){try{disposePrepared();}catch(cleanup){throw new AggregateError([error,cleanup],'Structural commit and staged cleanup failed',{cause:error});}throw error;}records.clear();keys.forEach((key,index)=>records.set(key,planned[index]));for(let index=removed.length-1;index>=0;index--)try{disposeBag(removed[index].effects,removed[index].cleanups);}catch(error){cleanupErrors.push(error);}return cleanupErrors;},disposePrepared);
+          stageStructure(()=>{if(!alive){try{disposePrepared();}catch(error){return [error];}return;}const cleanupErrors:unknown[]=[];try{if(!anchor.parentNode)throw new TypeError('Iteration anchor is detached');let before:Node=anchor;for(let index=planned.length-1;index>=0;index--){const record=planned[index];if(record.index<0)before.parentNode!.insertBefore(record.start.parentNode!,before);else if(stable&&!stable.has(index)&&record.end.nextSibling!==before)move(record,before);before=record.start;record.index=index;}}catch(error){try{disposePrepared();}catch(cleanup){throw new AggregateError([error,cleanup],'Structural commit and staged cleanup failed',{cause:error});}throw error;}records.clear();keys.forEach((key,index)=>records.set(key,planned[index]));for(let index=removed.length-1;index>=0;index--)try{disposeBag(removed[index].effects,removed[index].cleanups);}catch(error){cleanupErrors.push(error);}return cleanupErrors;},disposePrepared);
         });
       },budget,undefined,limits.maxUpdatesPerFlush);effects.push(update);return;
     }

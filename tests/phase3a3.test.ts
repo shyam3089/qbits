@@ -74,7 +74,7 @@ test('shared runtime budgets are exact and failed staged reservations roll back 
       let recordFailure='';try{api.mountComponent(host,parentModule.model,[childModule.default],{},{maxListRecords:2549});}catch(error){recordFailure=(error as Error).message;}const recordFailedEmpty=!host.childNodes.length;
       const exactDispose=api.mountComponent(host,parentModule.model,[childModule.default],{},{maxListRecords:2550});const paragraphs=host.querySelectorAll('p').length;exactDispose();
       let domFailure='';try{api.mountComponent(host,staticModule.model,[],{},{maxDomNodes:2});}catch(error){domFailure=(error as Error).message;}const domFailedEmpty=!host.childNodes.length;const domDispose=api.mountComponent(host,staticModule.model,[],{},{maxDomNodes:3});domDispose();
-      let workFailure='';try{api.mountComponent(host,staticModule.model,[],{},{maxWorkPerOperation:1});}catch(error){workFailure=(error as Error).message;}const workFailedEmpty=!host.childNodes.length;const workDispose=api.mountComponent(host,staticModule.model,[],{},{maxWorkPerOperation:2});workDispose();
+      let workFailure='';try{api.mountComponent(host,staticModule.model,[],{},{maxWorkPerOperation:2});}catch(error){workFailure=(error as Error).message;}const workFailedEmpty=!host.childNodes.length;const workDispose=api.mountComponent(host,staticModule.model,[],{},{maxWorkPerOperation:3});workDispose();
       let componentFailure='';try{api.mountComponent(host,branchModule.model,[leafModule.default],{},{maxComponentInstances:1});}catch(error){componentFailure=(error as Error).message;}const componentFailedEmpty=!host.childNodes.length;const componentDispose=api.mountComponent(host,branchModule.model,[leafModule.default],{},{maxComponentInstances:2});componentDispose();
       let effectFailure='';try{api.mountComponent(host,effectsModule.model,[],{},{maxReactiveEffects:1});}catch(error){effectFailure=(error as Error).message;}const effectFailedEmpty=!host.childNodes.length;const effectDispose=api.mountComponent(host,effectsModule.model,[],{},{maxReactiveEffects:2});effectDispose();
       const dispose=api.mountComponent(host,transactionModule.model,[],{},{maxListRecords:3}),buttons=host.querySelectorAll('button'),first=buttons[3];first.focus();buttons[0].click();const failed={labels:[...host.querySelectorAll('button')].slice(3).map(node=>node.textContent),same:host.querySelectorAll('button')[3]===first,focused:document.activeElement===first};buttons[1].click();buttons[2].click();const reused=[...host.querySelectorAll('button')].slice(3).map(node=>node.textContent);dispose();
@@ -85,7 +85,7 @@ test('shared runtime budgets are exact and failed staged reservations roll back 
   },{runtime,child,parent,transaction,staticTree,leaf,branch,effects,sequence});
   assert.match(result.recordFailure,/List records.*2549/);assert.equal(result.recordFailedEmpty,true);assert.equal(result.paragraphs,2500);
   assert.match(result.domFailure,/Framework DOM nodes.*2/);assert.equal(result.domFailedEmpty,true);assert.match(result.effectFailure,/Reactive effects.*1/);assert.equal(result.effectFailedEmpty,true);
-  assert.match(result.workFailure,/Framework work.*1/);assert.equal(result.workFailedEmpty,true);assert.match(result.componentFailure,/Component instances.*1/);assert.equal(result.componentFailedEmpty,true);
+  assert.match(result.workFailure,/Framework work.*2/);assert.equal(result.workFailedEmpty,true);assert.match(result.componentFailure,/Component instances.*1/);assert.equal(result.componentFailedEmpty,true);
   assert.deepEqual(result.failed,{labels:['1','2'],same:true,focused:true});assert.deepEqual(result.reused,['1','3']);assert.deepEqual(result.errors,['List records exceeds the configured limit of 3']);assert.equal(result.empty,true);
   assert.deepEqual(result.sequenceResult,result.reference);
   }finally{await browser.close();}
@@ -106,9 +106,9 @@ component ClassAccounted:
   try{const page=await browser.newPage();const result=await page.evaluate(async({runtime,sources})=>{
     const urls=[runtime,...sources].map(value=>URL.createObjectURL(new Blob([value],{type:'text/javascript'})));
     try{const api=await import(urls[0]),component=await import(urls[1]),prop=await import(urls[2]),classComponent=await import(urls[3]),host=document.createElement('main'),failures:string[]=[];
-      for(let attempt=0;attempt<2;attempt++)try{api.mountComponent(host,component.model,[],{},{maxWorkPerOperation:3});}catch(error){failures.push((error as Error).message);}
-      const emptyAfterFailures=!host.childNodes.length,dispose=api.mountComponent(host,component.model,[],{},{maxWorkPerOperation:4}),exactNodes=host.childNodes.length;dispose();
-      const initializationFailures:string[]=[];for(const [model,limit] of [[prop.model,1],[classComponent.model,3]] as const)try{api.mountComponent(host,model,[],{},{maxWorkPerOperation:limit});}catch(error){initializationFailures.push((error as Error).message);}
+      for(let attempt=0;attempt<2;attempt++)try{api.mountComponent(host,component.model,[],{},{maxWorkPerOperation:6});}catch(error){failures.push((error as Error).message);}
+      const emptyAfterFailures=!host.childNodes.length,dispose=api.mountComponent(host,component.model,[],{},{maxWorkPerOperation:7}),exactNodes=host.childNodes.length;dispose();
+      const initializationFailures:string[]=[];for(const [model,limit] of [[prop.model,1],[classComponent.model,6]] as const)try{api.mountComponent(host,model,[],{},{maxWorkPerOperation:limit});}catch(error){initializationFailures.push((error as Error).message);}
       const invalid={props:{},classes:{},states:{items:{kind:'list',items:[{kind:'literal',value:Number.NaN}]}},computed:{},init:[],cleanup:[],roots:[]};
       let numericFailure='';try{api.mountComponent(host,invalid,[]);}catch(error){numericFailure=(error as Error).message;}
       const invalidCondition={props:{},classes:{},states:{},computed:{},init:[],cleanup:[],roots:[{kind:'conditional',condition:{kind:'literal',value:Number.POSITIVE_INFINITY},consequent:[],alternate:[]}]};
@@ -116,8 +116,8 @@ component ClassAccounted:
       return{failures,initializationFailures,emptyAfterFailures,exactNodes,numericFailure,conditionFailure,empty:!host.childNodes.length};
     }finally{urls.forEach(value=>URL.revokeObjectURL(value));}
   },{runtime,sources});
-  assert.deepEqual(result.failures,['Framework work exceeds the configured limit of 3','Framework work exceeds the configured limit of 3']);
-  assert.deepEqual(result.initializationFailures,['Framework work exceeds the configured limit of 1','Framework work exceeds the configured limit of 3']);
+  assert.deepEqual(result.failures,['Framework work exceeds the configured limit of 6','Framework work exceeds the configured limit of 6']);
+  assert.deepEqual(result.initializationFailures,['Framework work exceeds the configured limit of 1','Framework work exceeds the configured limit of 6']);
   assert.equal(result.emptyAfterFailures,true);assert.equal(result.exactNodes,1);assert.match(result.numericFailure,/safe integer range/);assert.match(result.conditionFailure,/safe integer range/);assert.equal(result.empty,true);
   }finally{await browser.close();}
 });

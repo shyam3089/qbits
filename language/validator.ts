@@ -124,6 +124,7 @@ export function validate(ast:Component,source:string,filename='<input>',options:
       } else {
         const owner=type(statement.target,scope);
         if(owner.startsWith('list:')){
+          targetType(statement.target,scope,write);
           const item=owner.slice(5) as Type;if(!['append','remove','move','sort'].includes(statement.method.value))error(statement.method.span,`Unsupported list operation ${statement.method.value}`);
           const expected=['move','sort'].includes(statement.method.value)?2:1;if(statement.arguments.length!==expected)error(statement.span,`${statement.method.value} requires ${expected} argument(s)`);
           if(statement.method.value==='sort'){const field=statement.arguments[0],ascending=statement.arguments[1];if(!item.startsWith('class:')||field.kind!=='literal'||typeof field.value!=='string'||!recordFields.get(item.slice(6))?.has(field.value))error(field?.span??statement.span,'sort requires a literal class field name');if(type(ascending,scope)!=='boolean')error(ascending.span,'sort direction must be boolean');continue;}
