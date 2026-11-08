@@ -1,13 +1,39 @@
-# Qbits 0.1.0-beta.2 release candidate
+# Qbits 1.0.0 release preparation
 
 The framework was renamed from Qubits to Qbits. The npm package and language identity
 change from `qubits` to `qbits`; imports must use `qbits/compiler`, `qbits/runtime`, and
 `qbits/vite`. The `.qb` extension, `qb` executable, and `npm create qb` initializer remain
 unchanged. No compatibility alias for the unpublished `qubits` package is provided.
 
-This candidate retains the language, compiler, runtime, Vite, CLI and scaffolder
-surfaces frozen for beta.1 and described in [docs/api.md](docs/api.md). It is prepared
-from the verified remediation commit `ec1f3c5` without adding APIs or syntax.
+This stable candidate promotes the verified `0.1.0-beta.2` baseline at `85afa955`
+without adding features, changing runtime behavior or updating dependencies. The
+supported public surface in [docs/api.md](docs/api.md) is frozen under Semantic
+Versioning starting with 1.0.0.
+
+Experimental interfaces remain outside that guarantee: client-side routing; parser,
+validator, generator and AST exports; generated models and the low-level runtime ABI;
+`mountCounter`; disposer `refresh`/`updateState` extensions; and local-tarball override flags.
+Generated components and runtimes must use the same Qbits version.
+
+Compatibility requires Node.js 22+, ES modules and Vite `^6.4.5` for the Vite plugin.
+Firefox is release-gated; other browser compatibility is not claimed by this preparation.
+Transactions remain synchronous, development uses full reload, and SSR, routing guards,
+nested routes and the other features in [limitations.md](docs/limitations.md) remain unsupported.
+
+After both 1.0.0 packages are published, the default npm flow is:
+
+```sh
+npm create qb myapp
+cd myapp
+npm install
+npm run check
+npm run dev
+npm run build
+```
+
+The scaffolder pins the generated Qbits dependency to its own version and creates
+files without installing dependencies. Local tarball verification exercises npm/pnpm,
+the default create command, production builds and Firefox before any publication.
 
 Security and correctness fixes since beta.1:
 
@@ -25,7 +51,7 @@ unchanged, but the accounting is stricter. Applications with low custom ceilings
 fail earlier and should review those limits for their trusted workloads. Existing
 syntax, public signatures and Apache-2.0 notices are unchanged.
 
-Retained beta highlights:
+Core capabilities retained from beta.2:
 
 - Iterative module-graph traversal with configurable aggregate limits.
 - Shared runtime budgets across nested component trees and staged mounts.
@@ -45,8 +71,8 @@ Dependency security evidence (Phase 3F.2.1, 2026-11-07):
   checks, Firefox checks, and external npm/pnpm tarball applications passed with Vite
   6.4.5. This automated evidence does not replace independent human security review.
 
-Beta.2 preparation produces local candidate tarballs only. Existing beta.1 tags and
-npm staged submissions remain unchanged; this preparation creates no tag, npm stage,
+1.0.0 preparation produces local candidate tarballs only. Existing signed beta tags and
+npm submissions remain unchanged; this preparation creates no tag, npm stage,
 approval or publication. Independent human security review, authenticated ownership
 and provenance prerequisites, and explicit approval for the exact release remain
 required. Existing automated checks are not a security certification.

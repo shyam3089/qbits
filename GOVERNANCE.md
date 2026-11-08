@@ -12,5 +12,5 @@ protection and access separately. This implementation changes neither.
 
 Software is licensed under Apache-2.0; see LICENSE and NOTICE. The Qbits name,
 logo and official identity are addressed separately in TRADEMARKS.md. Packages
-remain private and unpublished. Publishing, deployment and visibility changes
-require separate authorization. GitHub Actions jobs remain disabled.
+are prepared locally; registry publication, deployment and visibility changes
+require separate authorization. GitHub Actions administration is separate from release preparation.

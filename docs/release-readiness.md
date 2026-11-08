@@ -4,6 +4,19 @@ Release decisions use validation evidence produced locally on the exact candidat
 GitHub CI is supplementary and is not a release requirement. This checklist does not
 authorize publishing, tagging, publishing-workflow activation, or deployment.
 
+## Current candidate - 1.0.0 preparation, 2026-11-08
+
+- Promote the verified `0.1.0-beta.2` baseline at `85afa955` to `qbits` and
+  `create-qb` version `1.0.0`, with no new features or dependency changes.
+- Freeze the supported public APIs in [api.md](api.md) under Semantic Versioning;
+  keep its experimental interfaces and compatibility limitations explicit.
+- Verify `npm create qb myapp` defaults locally using the installed candidate and
+  matching framework version. Actual registry availability requires publication.
+- Rerun build, full tests, sync, docs, npm audit, external npm/pnpm installation and
+  Firefox production checks. Inspect intended archive contents and record checksums.
+- Preserve signed beta tags, Apache-2.0 notices and existing npm submissions. No new
+  tags, npm staging, approvals, publication, Actions or visibility changes are authorized.
+
 ## Phase 3F.4.5 - beta.2 preparation, 2026-11-08
 
 - Candidate: `qbits` and `create-qb` version `0.1.0-beta.2`, based on the verified
@@ -16,8 +29,8 @@ authorize publishing, tagging, publishing-workflow activation, or deployment.
 - Existing beta.1 tags and npm staged submissions remain untouched. No new tag,
   npm staging, approval, publication or GitHub Actions change is part of preparation.
 
-The beta.1 validation records below are historical evidence, not a substitute for
-the beta.2 local gate or the outstanding human and publication prerequisites.
+The beta validation records are historical evidence, not a substitute for
+the 1.0.0 local gate or the outstanding human and publication prerequisites.
 
 ## Phase 3F.2 - candidate verification (beta.1 evidence)
 
@@ -72,7 +85,7 @@ Owner actions required before any npm staging or publication:
    repository `qubits`, workflow filename `publish.yml`, environment `npm-publish`,
    and stage-publish-only permission. Complete the first trusted publish within npm's
    two-day validation window.
-4. Obtain separate written approval for the exact `v0.1.0-beta.2` commit, signed tag,
+4. Obtain separate written approval for the exact `v1.0.0` commit, signed tag,
    GitHub release, publishing-workflow activation and npm staging. Only then replace
    `on: []` with the approved release trigger and remove the publish job's `if: false` guard.
 5. Review both staged tarballs and provenance records, then separately approve or reject
@@ -83,7 +96,7 @@ Owner actions required before any npm staging or publication:
 
 - [ ] Approve the frozen API, experimental labels, limitations, and migration policy.
 - [ ] Review and approve the recorded local validation evidence; GitHub CI is supplementary.
-- [x] Confirm `v0.1.0-beta.2` is the exact version in both packages and generated docs.
+- [x] Confirm `v1.0.0` is the exact version in both packages and generated docs.
 - [ ] Record explicit human authorization for tag and publication steps.
 
 ## Phase 3F.5 - publish and verify

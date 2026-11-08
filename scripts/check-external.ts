@@ -85,10 +85,13 @@ try {
   const { mkdir } = await import('node:fs/promises'); await mkdir(runner);
   await writeFile(join(runner,'package.json'),'{"private":true}');
   run(runner,['install','--offline','--ignore-scripts','--no-audit','--no-fund',creator]);
-  const absentApp = join(temp,'no-registry');
-  run(runner,['exec','--offline','--',identity.createPackageName,absentApp]);
+  const absentApp = join(runner,'default-app');
+  // Exercise npm create with a directory and no scaffolder overrides. Offline mode
+  // selects the installed candidate without touching registry publication state.
+  run(runner,['create',identity.createCommand,'default-app','--offline']);
   const registryManifest = JSON.parse(await readFile(join(absentApp,'package.json'),'utf8'));
   assert.equal(registryManifest.dependencies[identity.packageName],JSON.parse(await readFile(join(root,'package.json'),'utf8')).version,'Public scaffolding must use the matching framework version');
+  assert.equal(registryManifest.devDependencies.vite,JSON.parse(await readFile(join(root,'packages/create/package.json'),'utf8')).frameworkViteRange,'Default scaffolding must retain the supported Vite range');
   const app = join(temp,'myapp');
   // Exercise the advertised npm create entry point using the installed local
   // creator. Offline mode prevents resolving an unrelated registry package.

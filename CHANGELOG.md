@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.0 - Unreleased
+
+- Promote the verified `0.1.0-beta.2` baseline without new features, runtime changes
+  or dependency updates; retain its three security/correctness fixes and stricter
+  expression and `count` work-budget accounting.
+- Freeze the documented supported public APIs under Semantic Versioning. Keep routing,
+  compiler internals, generated-code ABI and mount-handle extensions explicitly experimental.
+- Document Node.js 22+, ES modules, Vite `^6.4.5`, matching compiler/runtime versions,
+  Firefox verification and the existing synchronous-transaction and platform limitations.
+- Document and verify the default `npm create qb myapp` path and matching framework
+  dependency version using locally installed candidate packages. Registry availability
+  still requires separately authorized publication of both packages.
+- Preserve Apache-2.0 notices and signed beta tags; preparation creates no tag or npm stage.
+
 ## 0.1.0-beta.2 - Unreleased
 
 - Cancel staged list commits after their owning range is disposed, safely releasing

@@ -18,4 +18,6 @@ assert.ok(examples >= 2,'Syntax and packaged example must both compile');
 const manifest = JSON.parse(await readFile('package.json','utf8'));
 const docs = JSON.parse(await readFile('docs/manifest.json','utf8'));
 assert.equal(docs.version,manifest.version); assert.deepEqual(docs.identity,identity);
+const api=await readFile('docs/api.md','utf8');
+assert.ok(api.includes(`# ${identity.displayName} v${manifest.version} public API`),'API reference must identify the current public contract');
 console.log(`Compiled ${examples} documented examples for ${identity.displayName} ${manifest.version}.`);

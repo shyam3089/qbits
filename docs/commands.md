@@ -1,4 +1,4 @@
-<!-- Generated for Qbits 0.1.0-beta.2 by npm run sync. -->
+<!-- Generated for Qbits 1.0.0 by npm run sync. -->
 # Commands
 
 Installed app commands come from the root README/AGENTS.md. npm: npm install, npm run dev, npm run check, npm run build. pnpm: pnpm install, pnpm run dev, pnpm run check, pnpm run build. See [package managers](package-managers.md); never change an existing app manager silently.
@@ -30,5 +30,5 @@ line, column, span and message. Lines/columns are one-based, spans zero-based ex
 Exit 0 means valid; exit 1 means syntax, I/O, usage, or no-source errors.
 
 Target scaffolding: npm create qb myapp requires create-qb.
-This candidate is not published. See the repository's README for local tarball commands.
+Registry installation requires published packages. See the repository's README for local tarball commands.
 Never rely on npm fetching it until an authorized release is confirmed in the registry.

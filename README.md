@@ -5,14 +5,27 @@ JavaScript. It provides fine-grained reactivity, keyed lists, components, one de
 slot, shared reactive state, typed child events, lifecycle hooks, and safe text/property
 rendering without executing source expressions.
 
-The supported beta surface is frozen in the [API reference](docs/api.md). See the
+The supported 1.0.0 public surface is frozen in the [API reference](docs/api.md). See the
 [complete grammar](docs/syntax.md), [compilable examples](docs/examples.md), and
 [current limitations](docs/limitations.md). The client-side router and low-level
 compiler/runtime internals are experimental as described in the API reference.
 
-Requires Node.js 22+ and npm or pnpm. This beta candidate is not published. Until a
-release is explicitly authorized, follow the [local package quick start](docs/local-packages.md).
-After both packages are published, the intended registry command is `npm create qb myapp`.
+Requires Node.js 22+ and npm or pnpm. Once `qbits@1.0.0` and `create-qb@1.0.0` are
+published, the default npm setup is:
+
+```sh
+npm create qb myapp
+cd myapp
+npm install
+npm run check
+npm run dev
+```
+
+Run `npm run build` for production output. The scaffolder creates files without
+installing dependencies or overwriting an existing directory. Release preparation
+does not publish packages; use the [local package quick start](docs/local-packages.md)
+until the registry packages are available. Firefox is the verified browser; other
+browser compatibility and experimental interfaces are qualified in the API reference.
 
 To work on the framework itself, run from the repository root:
 
@@ -71,8 +84,8 @@ See the [changelog](CHANGELOG.md), [release notes](RELEASE_NOTES.md),
 Software is licensed under [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for
 creator attribution, [third-party notices](THIRD_PARTY_NOTICES.md), and
 [brand guidance](TRADEMARKS.md) for the Qbits name and logo. Packages are configured
-as public beta candidates but remain unpublished. GitHub Actions jobs are disabled;
-their configuration is retained for review. Nothing here publishes packages or deploys a website.
+for public distribution; preparation does not publish packages or deploy a website.
+Registry release actions and GitHub Actions administration require separate authorization.
 
 Qbits batches synchronous reactive changes, orders computed dependencies, updates
 child props without remounting, and reconciles keyed ranges while preserving DOM
