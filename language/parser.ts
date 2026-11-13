@@ -186,16 +186,23 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
   }
   function query():Query {
     const start=word('query').span.start;const queryName=id();block();const methodToken=take('identifier');if(!['get','post','put','patch','delete'].includes(methodToken.value))fail(source,filename,methodToken.span,'Query requires get, post, put, patch, or delete');const url=expression();take('NEWLINE');
-    const params:Query['params']=[],headers:Query['headers']=[];let body:Expression|undefined,response:Node<string>|undefined,responseList=false,client:Node<string>|undefined;
+    const params:Query['params']=[],headers:Query['headers']=[];let body:Expression|undefined,response:Node<string>|undefined,responseList=false,client:Node<string>|undefined,debounce:Node<number>|undefined,timeout:Node<number>|undefined,retry:Node<number>|undefined,cache:Node<number>|undefined,poll:Node<number>|undefined,refreshOnFocus=false,lastEnd=url.span.end;
+    const duration=(label:string):Node<number>=>{const number=take('number'),unit=take('identifier');if(unit.value!=='ms'&&unit.value!=='s')fail(source,filename,unit.span,`${label} duration requires ms or s`);const value=Number(number.value)*(unit.value==='s'?1000:1);if(value<1||value>2_147_483_647)fail(source,filename,{start:number.span.start,end:unit.span.end},`${label} duration must be between 1ms and 2147483647ms`);return {value,span:{start:number.span.start,end:unit.span.end}};};
     while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){
-      if(at('param')){const lineStart=word('param').span.start,name=id();symbol('=');const value=expression();take('NEWLINE');params.push({name,value,span:{start:lineStart,end:value.span.end}});}
-      else if(at('header')){const lineStart=word('header').span.start,nameToken=take('string');symbol('=');const value=expression();take('NEWLINE');headers.push({name:{value:nameToken.value,span:nameToken.span},value,span:{start:lineStart,end:value.span.end}});}
-      else if(at('body')){const token=word('body');if(body)fail(source,filename,token.span,'Query may declare body only once');body=expression();take('NEWLINE');}
-      else if(at('response')){const token=word('response');if(response)fail(source,filename,token.span,'Query may declare response only once');if(at('list')){word('list');symbol('[');response=id();symbol(']');responseList=true;}else response=id();take('NEWLINE');}
-      else if(at('client')){const token=word('client');if(client)fail(source,filename,token.span,'Query may override client only once');client=id();take('NEWLINE');}
+      if(at('param')){const lineStart=word('param').span.start,name=id();symbol('=');const value=expression();take('NEWLINE');params.push({name,value,span:{start:lineStart,end:value.span.end}});lastEnd=value.span.end;}
+      else if(at('header')){const lineStart=word('header').span.start,nameToken=take('string');symbol('=');const value=expression();take('NEWLINE');headers.push({name:{value:nameToken.value,span:nameToken.span},value,span:{start:lineStart,end:value.span.end}});lastEnd=value.span.end;}
+      else if(at('body')){const token=word('body');if(body)fail(source,filename,token.span,'Query may declare body only once');body=expression();take('NEWLINE');lastEnd=body.span.end;}
+      else if(at('response')){const token=word('response');if(response)fail(source,filename,token.span,'Query may declare response only once');if(at('list')){word('list');symbol('[');response=id();const close=symbol(']');lastEnd=close.span.end;responseList=true;}else{response=id();lastEnd=response.span.end;}take('NEWLINE');}
+      else if(at('client')){const token=word('client');if(client)fail(source,filename,token.span,'Query may override client only once');client=id();take('NEWLINE');lastEnd=client.span.end;}
+      else if(at('debounce')){const token=word('debounce');if(debounce)fail(source,filename,token.span,'Query may declare debounce only once');debounce=duration('debounce');take('NEWLINE');lastEnd=debounce.span.end;}
+      else if(at('timeout')){const token=word('timeout');if(timeout)fail(source,filename,token.span,'Query may declare timeout only once');timeout=duration('timeout');take('NEWLINE');lastEnd=timeout.span.end;}
+      else if(at('retry')){const token=word('retry');if(retry)fail(source,filename,token.span,'Query may declare retry only once');const count=take('number'),value=Number(count.value);if(value>10)fail(source,filename,count.span,'retry must be between 0 and 10');retry={value,span:count.span};take('NEWLINE');lastEnd=count.span.end;}
+      else if(at('cache')){const token=word('cache');if(cache)fail(source,filename,token.span,'Query may declare cache only once');cache=duration('cache');take('NEWLINE');lastEnd=cache.span.end;}
+      else if(at('refresh')){const token=word('refresh');if(refreshOnFocus)fail(source,filename,token.span,'Query may declare refresh on-focus only once');word('on');symbol('-');const focus=word('focus');refreshOnFocus=true;take('NEWLINE');lastEnd=focus.span.end;}
+      else if(at('poll')){const token=word('poll');if(poll)fail(source,filename,token.span,'Query may declare poll only once');poll=duration('poll');take('NEWLINE');lastEnd=poll.span.end;}
       else fail(source,filename,peek().span,'Unsupported query configuration');
     }
-    take('DEDENT');if(!response)fail(source,filename,queryName.span,'Query requires a typed response');return {name:queryName,method:methodToken.value as HttpMethod,url,params,headers,body,response,responseList,client,span:{start,end:(client?.span.end??response.span.end)}};
+    take('DEDENT');if(!response)fail(source,filename,queryName.span,'Query requires a typed response');return {name:queryName,method:methodToken.value as HttpMethod,url,params,headers,body,response,responseList,client,debounce,timeout,retry,cache,refreshOnFocus,poll,dependencies:[],span:{start,end:lastEnd}};
   }
   while(peek().kind!=='DEDENT'&&peek().kind!=='eof') {
     if(at('http')&&peek(1).value==='client'){if(roots.length)fail(source,filename,peek().span,'HTTP client declarations must precede elements');httpClients.push(httpClient());}

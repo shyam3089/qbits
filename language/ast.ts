@@ -25,7 +25,8 @@ export interface HttpClient {name:Node<string>;base?:Expression;auth?:{scheme:'b
 export interface Query {
   name:Node<string>;method:HttpMethod;url:Expression;params:{name:Node<string>;value:Expression;span:Span}[];
   headers:{name:Node<string>;value:Expression;span:Span}[];body?:Expression;response:Node<string>;
-  responseList:boolean;client?:Node<string>;span:Span;
+  responseList:boolean;client?:Node<string>;debounce?:Node<number>;timeout?:Node<number>;retry?:Node<number>;
+  cache?:Node<number>;refreshOnFocus:boolean;poll?:Node<number>;dependencies:Node<string>[];span:Span;
 }
 export type Statement =
   | {kind:'navigate';path:Expression;span:Span}
