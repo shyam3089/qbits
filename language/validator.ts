@@ -4,7 +4,7 @@ import {resolveCompilerLimits,type CompilerLimits} from './limits.js';
 
 export const elements=new Set(['main','section','div','h1','h2','h3','h4','h5','h6','p','span','label','button','input','ul','ol','li']);
 export interface ValidationOptions {sourceExtension?:string;components?:Map<string,Component>;shared?:Map<string,Component>;limits?:Partial<CompilerLimits>}
-type Type='string'|'number'|'boolean'|'unknown'|`class:${string}`|`shared:${string}`|`list:${string}`;
+type Type='string'|'number'|'boolean'|'unknown'|`class:${string}`|`shared:${string}`|`list:${string}`|`resource:${string}`;
 
 export function validate(ast:Component,source:string,filename='<input>',options:ValidationOptions={}):void {
   const limits=resolveCompilerLimits(options.limits);
@@ -42,6 +42,7 @@ export function validate(ast:Component,source:string,filename='<input>',options:
     if(expression.kind==='reference')return env.get(expression.name)??error(expression.span,`Unknown state or prop ${JSON.stringify(expression.name)}`);
     if(expression.kind==='member'){
       const owner=type(expression.object,env);if(owner.startsWith('shared:')){const store=options.shared?.get(owner.slice(7)),member=store?.states.find(state=>state.name.value===expression.name.value);if(!member)return error(expression.name.span,`Unknown shared value ${JSON.stringify(expression.name.value)} on ${owner.slice(7)}`);if(member.initial.kind==='literal')return primitive(member.initial.value);if(member.initial.kind==='list'){if(member.initial.itemType)return `list:${['string','number','boolean'].includes(member.initial.itemType.value)?member.initial.itemType.value:`class:${member.initial.itemType.value}`}`;const first=member.initial.items[0];if(first?.kind==='literal')return `list:${primitive(first.value)}`;if(first?.kind==='construct')return `list:class:${first.name.value}`;}return error(expression.name.span,`Invalid shared value ${JSON.stringify(expression.name.value)}`);}
+      if(owner.startsWith('resource:')){const value=owner.slice(9) as Type,member=expression.name.value;if(member==='data')return value;if(['loading','refreshing','success','empty'].includes(member))return 'boolean';if(member==='error')return 'string';return error(expression.name.span,`Unknown resource member ${JSON.stringify(member)}`);}
       if(!owner.startsWith('class:'))error(expression.object.span,'Member access requires a class instance or shared state');
       const member=recordEnvs.get(owner.slice(6))?.get(expression.name.value);return member??error(expression.name.span,`Unknown member ${JSON.stringify(expression.name.value)} on ${owner.slice(6)}`);
     }
@@ -91,6 +92,9 @@ export function validate(ast:Component,source:string,filename='<input>',options:
   const env=new Map<string,Type>();const writable=new Set<string>();for(const [name] of options.shared??[])env.set(name,`shared:${name}`);
   for(const prop of ast.props){if(env.has(prop.name.value)||prop.name.value==='class')error(prop.name.span,'Duplicate or reserved declaration');env.set(prop.name.value,primitive(prop.initial.value));}
   for(const state of ast.states){if(env.has(state.name.value)||classes.has(state.name.value)||imported.has(state.name.value)||state.name.value==='class')error(state.name.span,'Duplicate or reserved declaration');const actual=type(state.initial,env);if(actual==='list:unknown')error(state.initial.span,'Empty list state needs an item to infer its type');env.set(state.name.value,actual);writable.add(state.name.value);}
+  const clientNames=new Set<string>();for(const client of ast.httpClients){if(clientNames.has(client.name.value))error(client.name.span,`Duplicate HTTP client ${JSON.stringify(client.name.value)}`);clientNames.add(client.name.value);if(client.base&&type(client.base,env)!=='string')error(client.base.span,'HTTP client base requires a string');const seen=new Set<string>();for(const item of client.interceptors){const key=`${item.phase}:${item.handler.value}`;if(seen.has(key))error(item.span,'Duplicate HTTP interceptor');seen.add(key);}}
+  if(ast.client&&!clientNames.has(ast.client.value))error(ast.client.span,`Unknown HTTP client ${JSON.stringify(ast.client.value)}`);
+  for(const query of ast.queries){if(env.has(query.name.value)||classes.has(query.name.value)||imported.has(query.name.value))error(query.name.span,'Duplicate or reserved declaration');const responseName=query.response.value;const responseType:Type=['string','number','boolean'].includes(responseName)?responseName as Type:classes.has(responseName)?`class:${responseName}`:error(query.response.span,`Unknown response type ${JSON.stringify(responseName)}`);if(type(query.url,env)!=='string')error(query.url.span,'Query URL requires a string');if(query.body&&query.method==='get')error(query.body.span,'GET queries cannot declare a body');for(const param of query.params){const actual=type(param.value,env);if(!['string','number','boolean'].includes(actual))error(param.value.span,'Query parameters require string, number, or boolean values');}for(const header of query.headers)if(type(header.value,env)!=='string')error(header.value.span,'Query headers require string values');const selected=query.client??ast.client;if(selected&&!clientNames.has(selected.value))error(selected.span,`Unknown HTTP client ${JSON.stringify(selected.value)}`);env.set(query.name.value,`resource:${query.responseList?`list:${responseType}`:responseType}`);}
   for(const item of ast.computed){if(env.has(item.name.value))error(item.name.span,'Duplicate or reserved declaration');env.set(item.name.value,'unknown');}
   validateComputed(ast.computed,env);
   function targetType(target:Expression,scope:Map<string,Type>,write:Set<string>):Type {
@@ -130,6 +134,8 @@ export function validate(ast:Component,source:string,filename='<input>',options:
           if(statement.method.value==='sort'){const field=statement.arguments[0],ascending=statement.arguments[1];if(!item.startsWith('class:')||field.kind!=='literal'||typeof field.value!=='string'||!recordFields.get(item.slice(6))?.has(field.value))error(field?.span??statement.span,'sort requires a literal class field name');if(type(ascending,scope)!=='boolean')error(ascending.span,'sort direction must be boolean');continue;}
           if(statement.arguments[0]&&type(statement.arguments[0],scope)!==item)error(statement.arguments[0].span,`List operation requires ${item}`);
           if(statement.method.value==='move'&&type(statement.arguments[1],scope)!=='number')error(statement.arguments[1].span,'move index must be a number');
+        } else if(owner.startsWith('resource:')){
+          if(statement.method.value!=='refresh'||statement.arguments.length)error(statement.span,'Resources support only refresh() with no arguments');
         } else if(owner.startsWith('class:')){
           if(statement.arguments.length)error(statement.span,'Class actions do not accept arguments');if(!recordActions.get(owner.slice(6))?.has(statement.method.value))error(statement.method.span,`Unknown action ${statement.method.value}`);
         } else error(statement.target.span,'Calls are limited to class actions and list append/remove/move/sort operations');

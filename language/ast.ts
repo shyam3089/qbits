@@ -19,6 +19,14 @@ export interface Import {name?:Node<string>;path:Node<string>;span:Span;kind?:'c
 export interface Prop {name:Node<string>;initial:Node<Literal>;span:Span}
 export interface State {name:Node<string>;initial:Expression;span:Span}
 export interface Computed {name:Node<string>;expression:Expression;span:Span}
+export type HttpMethod='get'|'post'|'put'|'patch'|'delete';
+export interface HttpInterceptor {phase:'request'|'response'|'error';handler:Node<string>;span:Span}
+export interface HttpClient {name:Node<string>;base?:Expression;auth?:{scheme:'bearer';provider:Node<string>;span:Span};interceptors:HttpInterceptor[];span:Span}
+export interface Query {
+  name:Node<string>;method:HttpMethod;url:Expression;params:{name:Node<string>;value:Expression;span:Span}[];
+  headers:{name:Node<string>;value:Expression;span:Span}[];body?:Expression;response:Node<string>;
+  responseList:boolean;client?:Node<string>;span:Span;
+}
 export type Statement =
   | {kind:'navigate';path:Expression;span:Span}
   | {kind:'assign';target:Expression;value:Expression;span:Span}
@@ -37,6 +45,6 @@ export interface SlotNode {kind:'slot';span:Span}
 export interface RouterNode {kind:'router';routes:{path:Node<string>;children:ViewNode[];span:Span}[];span:Span}
 export type ViewNode = ElementNode | ConditionalNode | IterationNode | SlotNode | RouterNode;
 export interface Component {
-  kind:'Component'|'SharedState';name:Node<string>;span:Span;imports:Import[];classes:ClassDecl[];props:Prop[];states:State[];computed:Computed[];init:Statement[];cleanup:Statement[];roots:ViewNode[];emits:EmittedEvent[];
+  kind:'Component'|'SharedState';name:Node<string>;span:Span;imports:Import[];classes:ClassDecl[];props:Prop[];states:State[];computed:Computed[];httpClients:HttpClient[];client?:Node<string>;queries:Query[];init:Statement[];cleanup:Statement[];roots:ViewNode[];emits:EmittedEvent[];
 }
 export interface Diagnostic {filename:string;line:number;column:number;span:Span;message:string}

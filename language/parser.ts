@@ -1,4 +1,4 @@
-import type {Action,ClassDecl,Component,Computed,ConditionExpression,ElementNode,Expression,Handler,Import,IterationNode,Literal,Node,Prop,SlotNode,State,Statement,ViewNode} from './ast.js';
+import type {Action,ClassDecl,Component,Computed,ConditionExpression,ElementNode,Expression,Handler,HttpClient,HttpMethod,Import,IterationNode,Literal,Node,Prop,Query,SlotNode,State,Statement,ViewNode} from './ast.js';
 import {tokenize,type Token} from './tokenizer.js';
 import {fail} from './diagnostics.js';
 import {resolveCompilerLimits,type CompilerLimits} from './limits.js';
@@ -52,7 +52,7 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
         } else value=expressionNode({kind:'construct',name,arguments:args.values,span:{start:name.span.start,end:args.end}});
       } else value=expressionNode({kind:'reference',name:name.value,span:name.span});
     }
-    let memberDepth=0;while(at('.')) {if(++memberDepth>limits.maxExpressionDepth)fail(source,filename,peek().span,`Expression nesting exceeds the configured limit of ${limits.maxExpressionDepth} levels`);symbol('.');const name=id();value=expressionNode({kind:'member',object:value,name,span:{start:value.span.start,end:name.span.end}});}
+    let memberDepth=0;while(at('.')) {if(++memberDepth>limits.maxExpressionDepth)fail(source,filename,peek().span,`Expression nesting exceeds the configured limit of ${limits.maxExpressionDepth} levels`);symbol('.');const member=take('identifier'),name={value:member.value,span:member.span};value=expressionNode({kind:'member',object:value,name,span:{start:value.span.start,end:name.span.end}});}
     return value;
   }
   function addition():Expression {
@@ -169,13 +169,39 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     const start=word('shared').span.start,name=id();block();const states:State[]=[];
     while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){const state=id();symbol('=');const initial=expression();take('NEWLINE');states.push({name:state,initial,span:{start:state.span.start,end:initial.span.end}});}
     take('DEDENT');take('eof');if(!states.length)fail(source,filename,name.span,'Shared state requires at least one value');
-    return {kind:'SharedState',name,span:{start,end:states.at(-1)!.span.end},imports:[],classes,props:[],states,computed:[],init:[],cleanup:[],roots:[],emits:[]};
+    return {kind:'SharedState',name,span:{start,end:states.at(-1)!.span.end},imports:[],classes,props:[],states,computed:[],httpClients:[],queries:[],init:[],cleanup:[],roots:[],emits:[]};
   }
   const start=word('component').span.start;const name=id();const props:Prop[]=[];
   if(at('(')){cursor++;if(!at(')'))do{const prop=id();symbol('=');const initial=literal();props.push({name:prop,initial,span:{start:prop.span.start,end:initial.span.end}});if(!at(','))break;cursor++;}while(true);symbol(')');}
-  block();const states:State[]=[];const derived:Computed[]=[];const init:Statement[]=[];const cleanup:Statement[]=[];const roots:ViewNode[]=[];
+  block();const states:State[]=[];const derived:Computed[]=[];const httpClients:HttpClient[]=[];const queries:Query[]=[];let defaultClient:Node<string>|undefined;const init:Statement[]=[];const cleanup:Statement[]=[];const roots:ViewNode[]=[];
+  function httpClient():HttpClient {
+    const start=word('http').span.start;word('client');const clientName=id();block();let base:Expression|undefined,auth:HttpClient['auth'];const interceptors:HttpClient['interceptors']=[];
+    while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){
+      if(at('base')){const token=word('base');if(base)fail(source,filename,token.span,'HTTP client may declare base only once');base=expression();take('NEWLINE');}
+      else if(at('auth')){const authStart=word('auth').span.start;word('bearer');const provider=id();take('NEWLINE');if(auth)fail(source,filename,provider.span,'HTTP client may declare auth only once');auth={scheme:'bearer',provider,span:{start:authStart,end:provider.span.end}};}
+      else if(at('interceptor')){const interceptorStart=word('interceptor').span.start,first=take('identifier');let phase:'request'|'response'|'error'='request',handler:Node<string>;if(['request','response','error'].includes(first.value)){phase=first.value as typeof phase;handler=id();}else handler={value:first.value,span:first.span};take('NEWLINE');interceptors.push({phase,handler,span:{start:interceptorStart,end:handler.span.end}});}
+      else fail(source,filename,peek().span,'Expected base, auth bearer, or interceptor in HTTP client');
+    }
+    take('DEDENT');return {name:clientName,base,auth,interceptors,span:{start,end:(interceptors.at(-1)?.span.end??auth?.span.end??base?.span.end??clientName.span.end)}};
+  }
+  function query():Query {
+    const start=word('query').span.start;const queryName=id();block();const methodToken=take('identifier');if(!['get','post','put','patch','delete'].includes(methodToken.value))fail(source,filename,methodToken.span,'Query requires get, post, put, patch, or delete');const url=expression();take('NEWLINE');
+    const params:Query['params']=[],headers:Query['headers']=[];let body:Expression|undefined,response:Node<string>|undefined,responseList=false,client:Node<string>|undefined;
+    while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){
+      if(at('param')){const lineStart=word('param').span.start,name=id();symbol('=');const value=expression();take('NEWLINE');params.push({name,value,span:{start:lineStart,end:value.span.end}});}
+      else if(at('header')){const lineStart=word('header').span.start,nameToken=take('string');symbol('=');const value=expression();take('NEWLINE');headers.push({name:{value:nameToken.value,span:nameToken.span},value,span:{start:lineStart,end:value.span.end}});}
+      else if(at('body')){const token=word('body');if(body)fail(source,filename,token.span,'Query may declare body only once');body=expression();take('NEWLINE');}
+      else if(at('response')){const token=word('response');if(response)fail(source,filename,token.span,'Query may declare response only once');if(at('list')){word('list');symbol('[');response=id();symbol(']');responseList=true;}else response=id();take('NEWLINE');}
+      else if(at('client')){const token=word('client');if(client)fail(source,filename,token.span,'Query may override client only once');client=id();take('NEWLINE');}
+      else fail(source,filename,peek().span,'Unsupported query configuration');
+    }
+    take('DEDENT');if(!response)fail(source,filename,queryName.span,'Query requires a typed response');return {name:queryName,method:methodToken.value as HttpMethod,url,params,headers,body,response,responseList,client,span:{start,end:(client?.span.end??response.span.end)}};
+  }
   while(peek().kind!=='DEDENT'&&peek().kind!=='eof') {
-    if(at('computed')) {if(roots.length)fail(source,filename,peek().span,'Computed declarations must precede elements');derived.push(computed());}
+    if(at('http')&&peek(1).value==='client'){if(roots.length)fail(source,filename,peek().span,'HTTP client declarations must precede elements');httpClients.push(httpClient());}
+    else if(at('client')&&peek(1).kind==='identifier'&&peek(2).kind==='NEWLINE'){if(roots.length)fail(source,filename,peek().span,'Client selection must precede elements');const token=word('client');if(defaultClient)fail(source,filename,token.span,'Client may be declared once per component');defaultClient=id();take('NEWLINE');}
+    else if(at('query')&&peek(1).kind==='identifier'&&peek(2).value===':'){if(roots.length)fail(source,filename,peek().span,'Query declarations must precede elements');queries.push(query());}
+    else if(at('computed')) {if(roots.length)fail(source,filename,peek().span,'Computed declarations must precede elements');derived.push(computed());}
     else if(at('on')&&(peek(1).value==='init'||peek(1).value==='cleanup')) {
       if(roots.length)fail(source,filename,peek().span,'Lifecycle declarations must precede elements');word('on');const phase=take('identifier');block();const body=statements();take('DEDENT');(phase.value==='init'?init:cleanup).push(...body);
     } else if(peek(1)?.value==='=') {
@@ -183,5 +209,5 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     } else roots.push(view());
   }
   take('DEDENT');take('eof');if(!roots.length)fail(source,filename,name.span,'Component requires at least one root element');
-  return {kind:'Component',name,span:{start,end:roots.at(-1)!.span.end},imports,classes,props,states,computed:derived,init,cleanup,roots,emits:[]};
+  return {kind:'Component',name,span:{start,end:roots.at(-1)!.span.end},imports,classes,props,states,computed:derived,httpClients,client:defaultClient,queries,init,cleanup,roots,emits:[]};
 }
