@@ -32,7 +32,8 @@ export interface InstantBlock {resource:Node<string>;assignments:{field:Node<str
 export interface HttpAction {
   name:Node<string>;parameters:Node<string>[];method:HttpMethod;url:Expression;
   params:{name:Node<string>;value:Expression;span:Span}[];headers:{name:Node<string>;value:Expression;span:Span}[];
-  body?:Expression;response:Node<string>;responseList:boolean;client?:Node<string>;refresh:Node<string>[];instant:InstantBlock[];span:Span;
+  body?:Expression;response?:Node<string>;responseList:boolean;client?:Node<string>;refresh:Node<string>[];instant:InstantBlock[];
+  uploads:{name:Node<string>;value:Expression;span:Span}[];download?:Node<string>;span:Span;
 }
 export type Statement =
   | {kind:'navigate';path:Expression;span:Span}
