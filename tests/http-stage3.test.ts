@@ -45,13 +45,14 @@ component Imperative:
     client api
     done = false
     on init:
-        await http.get("health") response Result
-        done = true
+        result = await http.get("health") response Result
+        done = result.value == "ready"
     button text="send":
         on click:
-            await http.post("events", "body") client api response string
-            done = true
+            result = await http.post("events", "body") client api response string
+            done = result == "saved"
     p text=str(done)`,'Imperative.qb');assert.equal(imperative.ast.init[0].kind,'awaitHttp');
+  assert.equal(imperative.ast.init[0].kind==='awaitHttp'&&imperative.ast.init[0].binding?.value,'result');
   assert.throws(()=>compile(actionSource.replace('        refresh cart\n',''),'Actions.qb'),(error:unknown)=>error instanceof CompileError&&/must also be refreshed/.test(error.message));
   assert.throws(()=>compile(actionSource.replace('count = count + amount','missing = count + amount'),'Actions.qb'),/Unknown instant field/);
   assert.throws(()=>compile(actionSource.replace('post "https:\/\/api.test\/cart\/increment"','get "https://api.test/cart/increment"'),'Actions.qb'),/GET actions cannot declare a body/);
@@ -60,6 +61,31 @@ component Imperative:
     on init:
         await http.get("/x") response Missing
     p text="bad"`,'Bad.qb'),/Unknown response type/);
+  assert.throws(()=>compile(`component Bad:
+    on init:
+        result = await http.get("/x")
+    p text="bad"`,'Bad.qb'),/Bound imperative HTTP calls require a response type/);
+  assert.throws(()=>compile(`component Bad:
+    result = "state"
+    on init:
+        result = await http.get("/x") response string
+    p text=result`,'Bad.qb'),/Result binding "result" conflicts with an existing name/);
+  assert.throws(()=>compile(`component Bad:
+    value = ""
+    on init:
+        value = result
+        result = await http.get("/x") response string
+    p text=value`,'Bad.qb'),/Unknown state or prop "result"/);
+  assert.throws(()=>compile(`component Bad:
+    value = ""
+    button text="load":
+        on click:
+            result = await http.get("/x") response string
+            value = result
+    button text="leak":
+        on click:
+            value = result
+    p text=value`,'Bad.qb'),/Unknown state or prop "result"/);
 });
 
 test('actions layer overlapping instant updates, rollback independently, refresh shared consumers, and survive owner destruction',async()=>{
@@ -113,8 +139,8 @@ test('all action verbs execute only when called and imperative await uses inheri
     done = false
     button text="send":
         on click:
-            await http.post("imperative", "payload") response string
-            done = true
+            result = await http.post("imperative", "payload") response string
+            done = result == "ok"
     p text=str(done)`).code;
   const runtime=await readFile('dist/lib/runtime/index.js','utf8'),browser=await firefox.launch({headless:true});try{const page=await browser.newPage();await page.route('https://app.test/',route=>route.fulfill({body:'<!doctype html>',contentType:'text/html'}));await page.goto('https://app.test/');await page.addScriptTag({content:'globalThis.__name=(value)=>value;'});const result=await page.evaluate(async({runtime,verbs,imperative})=>{const urls=[runtime,verbs,imperative].map(source=>URL.createObjectURL(new Blob([source],{type:'text/javascript'}))),wait=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms)),waitFor=async(check:()=>boolean)=>{const end=Date.now()+2000;while(!check()){if(Date.now()>end)throw new Error('Stage 3 verb timeout');await wait(5);}};try{const api=await import(urls[0]),verbsModule=await import(urls[1]),imperativeModule=await import(urls[2]),calls:{method:string;url:string;body:unknown;auth:string|null}[]=[];(globalThis as any).fetch=(input:RequestInfo|URL,init?:RequestInit)=>{calls.push({method:String(init?.method),url:String(input),body:init?.body,auth:new Headers(init?.headers).get('authorization')});return Promise.resolve(new Response(JSON.stringify('ok'),{headers:{'content-type':'application/json'}}));};const verbsHost=document.createElement('main'),disposeVerbs=verbsModule.default(verbsHost,api);const before=calls.length;for(const button of verbsHost.querySelectorAll('button'))(button as HTMLButtonElement).click();await waitFor(()=>verbsHost.querySelector('p')?.textContent==='truetruetruetruetrue');const methods=calls.map(call=>call.method),restore=api.configureHttpApplication({functions:{getToken:()=> 'token'}}),imperativeHost=document.createElement('main'),disposeImperative=imperativeModule.default(imperativeHost,api);(imperativeHost.querySelector('button') as HTMLButtonElement).click();await waitFor(()=>imperativeHost.querySelector('p')?.textContent==='true');const imperativeCall=calls.at(-1);disposeImperative();restore();disposeVerbs();return {before,methods,imperativeCall};}finally{urls.forEach(URL.revokeObjectURL);}}, {runtime,verbs,imperative});assert.equal(result.before,0);assert.deepEqual(result.methods.slice(0,5),['GET','POST','PUT','PATCH','DELETE']);assert.equal(result.imperativeCall.method,'POST');assert.equal(result.imperativeCall.url,'https://api.test/imperative');assert.equal(result.imperativeCall.auth,'Bearer token');}
   finally{await browser.close();}
@@ -137,4 +163,61 @@ test('component cleanup aborts owned imperative reads without surfacing stale fa
     on init:
         await http.get("https://api.test/owned") response string
     p text="mounted"`).code,runtime=await readFile('dist/lib/runtime/index.js','utf8'),browser=await firefox.launch({headless:true});try{const page=await browser.newPage(),errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await page.route('https://app.test/',route=>route.fulfill({body:'<!doctype html>',contentType:'text/html'}));await page.goto('https://app.test/');const result=await page.evaluate(async({runtime,component})=>{const urls=[runtime,component].map(source=>URL.createObjectURL(new Blob([source],{type:'text/javascript'})));try{const api=await import(urls[0]),view=await import(urls[1]);let aborted=0;(globalThis as any).fetch=(_input:RequestInfo|URL,init?:RequestInit)=>new Promise((_resolve,reject)=>init?.signal?.addEventListener('abort',()=>{aborted++;reject(new DOMException('aborted','AbortError'));},{once:true}));const host=document.createElement('main'),dispose=view.default(host,api);dispose();await new Promise(resolve=>setTimeout(resolve,20));return {aborted,text:host.textContent};}finally{urls.forEach(URL.revokeObjectURL);}}, {runtime,component});assert.deepEqual(result,{aborted:1,text:''});assert.deepEqual(errors,[]);}finally{await browser.close();}
+});
+
+test('imperative result bindings support every verb, typed records and lists, isolated scope, failures, and cleanup',async()=>{
+  const bound=compile(`class Result:
+    value = ""
+component BoundResults:
+    value = "pending"
+    count = 0
+    on init:
+        initial = await http.get("https://api.test/initial") response Result
+        value = initial.value
+    button text="":
+        on click:
+            results = await http.get("https://api.test/list") response list[Result]
+            count = len(results)
+    button text="":
+        on click:
+            result = await http.post("https://api.test/post", "post") response Result
+            value = result.value
+    button text="":
+        on click:
+            result = await http.put("https://api.test/put", "put") response Result
+            value = result.value
+    button text="":
+        on click:
+            result = await http.patch("https://api.test/patch", "patch") response Result
+            value = result.value
+    button text="":
+        on click:
+            result = await http.delete("https://api.test/delete", "delete") response Result
+            value = result.value
+    p text=value + ":" + str(count)`).code;
+  const cleanup=compile(`class Result:
+    value = ""
+component BoundCleanup:
+    value = "mounted"
+    button text="read":
+        on click:
+            result = await http.get("https://api.test/read") response Result
+            value = result.value
+    button text="write":
+        on click:
+            result = await http.post("https://api.test/write", "payload") response Result
+            value = result.value
+    p text=value`).code;
+  const failure=compile(`class Result:
+    value = ""
+component BoundFailure:
+    value = "unchanged"
+    button text="":
+        on click:
+            result = await http.get("https://api.test/fail") response Result
+            value = result.value
+    p text=value`).code;
+  const runtime=await readFile('dist/lib/runtime/index.js','utf8'),browser=await firefox.launch({headless:true});
+  try{const page=await browser.newPage(),errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await page.route('https://app.test/',route=>route.fulfill({body:'<!doctype html>',contentType:'text/html'}));await page.goto('https://app.test/');await page.addScriptTag({content:'globalThis.__name=(value)=>value;'});const result=await page.evaluate(async({runtime,bound,cleanup,failure})=>{const urls=[runtime,bound,cleanup,failure].map(source=>URL.createObjectURL(new Blob([source],{type:'text/javascript'}))),wait=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms)),waitFor=async(check:()=>boolean)=>{const end=Date.now()+2500;while(!check()){if(Date.now()>end)throw new Error('Bound result timeout');await wait(5);}},json=(value:unknown)=>new Response(JSON.stringify(value),{headers:{'content-type':'application/json'}});try{const api=await import(urls[0]),boundView=await import(urls[1]),cleanupView=await import(urls[2]),failureView=await import(urls[3]),calls:{method:string;url:string;signal:AbortSignal|null}[]=[];(globalThis as any).fetch=(input:RequestInfo|URL,init?:RequestInit)=>{const url=String(input),method=String(init?.method??'GET');calls.push({method,url,signal:init?.signal??null});if(url.endsWith('/initial'))return Promise.resolve(json({value:'initial'}));if(url.endsWith('/list'))return Promise.resolve(json([{value:'a'},{value:'b'}]));if(url.endsWith('/fail'))return Promise.resolve(json({value:7}));return Promise.resolve(json({value:method.toLowerCase()}));};const host=document.createElement('main'),dispose=boundView.default(host,api);await waitFor(()=>host.querySelector('p')?.textContent==='initial:0');for(const button of host.querySelectorAll('button')){(button as HTMLButtonElement).click();await wait(10);}await waitFor(()=>host.querySelector('p')?.textContent==='delete:2');const boundText=host.textContent,methods=calls.slice(0,6).map(call=>call.method),cleanupResolvers:((value:Response)=>void)[]=[];(globalThis as any).fetch=(input:RequestInfo|URL,init?:RequestInit)=>{calls.push({method:String(init?.method??'GET'),url:String(input),signal:init?.signal??null});return new Promise((resolve,reject)=>{cleanupResolvers.push(resolve);init?.signal?.addEventListener('abort',()=>reject(new DOMException('aborted','AbortError')),{once:true});});};const safeHost=document.createElement('main'),safeDispose=cleanupView.default(safeHost,api);(safeHost.querySelectorAll('button')[0] as HTMLButtonElement).click();await waitFor(()=>cleanupResolvers.length===1);const safeSignal=calls.at(-1)?.signal;safeDispose();await wait(10);const unsafeHost=document.createElement('main'),unsafeDispose=cleanupView.default(unsafeHost,api);(unsafeHost.querySelectorAll('button')[1] as HTMLButtonElement).click();await waitFor(()=>cleanupResolvers.length===2);const unsafeSignal=calls.at(-1)?.signal;unsafeDispose();cleanupResolvers[1](json({value:'stale'}));await wait(10);(globalThis as any).fetch=()=>Promise.resolve(json({value:7}));const failureHost=document.createElement('main'),failureDispose=failureView.default(failureHost,api);(failureHost.querySelector('button') as HTMLButtonElement).click();await wait(30);const failureText=failureHost.textContent;failureDispose();dispose();return {methods,boundText,safeAborted:safeSignal?.aborted,unsafeHadSignal:Boolean(unsafeSignal),safeText:safeHost.textContent,unsafeText:unsafeHost.textContent,failureText};}finally{urls.forEach(URL.revokeObjectURL);}}, {runtime,bound,cleanup,failure});assert.deepEqual(result.methods,['GET','GET','POST','PUT','PATCH','DELETE']);assert.equal(result.boundText,'delete:2');assert.equal(result.safeAborted,true);assert.equal(result.unsafeHadSignal,false);assert.equal(result.safeText,'');assert.equal(result.unsafeText,'');assert.equal(result.failureText,'unchanged');assert.ok(errors.some(message=>message.includes('response.value requires string')));}
+  finally{await browser.close();}
 });

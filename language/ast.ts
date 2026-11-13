@@ -40,7 +40,7 @@ export type Statement =
   | {kind:'eventAssign';target:Expression;member:Node<'value'|'checked'>;span:Span}
   | {kind:'call';target:Expression;method:Node<string>;arguments:Expression[];span:Span}
   | {kind:'invoke';action:Node<string>;arguments:Expression[];span:Span}
-  | {kind:'awaitHttp';method:Node<HttpMethod>;arguments:Expression[];client?:Node<string>;response?:Node<string>;responseList:boolean;span:Span}
+  | {kind:'awaitHttp';binding?:Node<string>;method:Node<HttpMethod>;arguments:Expression[];client?:Node<string>;response?:Node<string>;responseList:boolean;span:Span}
   | {kind:'emit';event:Node<string>;payload?:Expression;payloadType?:EventPayloadType;span:Span};
 export type EventPayloadType = 'string'|'number'|'boolean';
 export interface EmittedEvent {name:string;payload:EventPayloadType|null}
