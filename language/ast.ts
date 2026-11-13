@@ -28,11 +28,19 @@ export interface Query {
   responseList:boolean;client?:Node<string>;debounce?:Node<number>;timeout?:Node<number>;retry?:Node<number>;
   cache?:Node<number>;refreshOnFocus:boolean;poll?:Node<number>;dependencies:Node<string>[];span:Span;
 }
+export interface InstantBlock {resource:Node<string>;assignments:{field:Node<string>;value:Expression;span:Span}[];span:Span}
+export interface HttpAction {
+  name:Node<string>;parameters:Node<string>[];method:HttpMethod;url:Expression;
+  params:{name:Node<string>;value:Expression;span:Span}[];headers:{name:Node<string>;value:Expression;span:Span}[];
+  body?:Expression;response:Node<string>;responseList:boolean;client?:Node<string>;refresh:Node<string>[];instant:InstantBlock[];span:Span;
+}
 export type Statement =
   | {kind:'navigate';path:Expression;span:Span}
   | {kind:'assign';target:Expression;value:Expression;span:Span}
   | {kind:'eventAssign';target:Expression;member:Node<'value'|'checked'>;span:Span}
   | {kind:'call';target:Expression;method:Node<string>;arguments:Expression[];span:Span}
+  | {kind:'invoke';action:Node<string>;arguments:Expression[];span:Span}
+  | {kind:'awaitHttp';method:Node<HttpMethod>;arguments:Expression[];client?:Node<string>;response?:Node<string>;responseList:boolean;span:Span}
   | {kind:'emit';event:Node<string>;payload?:Expression;payloadType?:EventPayloadType;span:Span};
 export type EventPayloadType = 'string'|'number'|'boolean';
 export interface EmittedEvent {name:string;payload:EventPayloadType|null}
@@ -46,6 +54,6 @@ export interface SlotNode {kind:'slot';span:Span}
 export interface RouterNode {kind:'router';routes:{path:Node<string>;children:ViewNode[];span:Span}[];span:Span}
 export type ViewNode = ElementNode | ConditionalNode | IterationNode | SlotNode | RouterNode;
 export interface Component {
-  kind:'Component'|'SharedState';name:Node<string>;span:Span;imports:Import[];classes:ClassDecl[];props:Prop[];states:State[];computed:Computed[];httpClients:HttpClient[];client?:Node<string>;queries:Query[];init:Statement[];cleanup:Statement[];roots:ViewNode[];emits:EmittedEvent[];
+  kind:'Component'|'SharedState';name:Node<string>;span:Span;imports:Import[];classes:ClassDecl[];props:Prop[];states:State[];computed:Computed[];httpClients:HttpClient[];client?:Node<string>;queries:Query[];httpActions:HttpAction[];init:Statement[];cleanup:Statement[];roots:ViewNode[];emits:EmittedEvent[];
 }
 export interface Diagnostic {filename:string;line:number;column:number;span:Span;message:string}

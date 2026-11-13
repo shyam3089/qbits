@@ -1,4 +1,4 @@
-import type {Action,ClassDecl,Component,Computed,ConditionExpression,ElementNode,Expression,Handler,HttpClient,HttpMethod,Import,IterationNode,Literal,Node,Prop,Query,SlotNode,State,Statement,ViewNode} from './ast.js';
+import type {Action,ClassDecl,Component,Computed,ConditionExpression,ElementNode,Expression,Handler,HttpAction,HttpClient,HttpMethod,Import,IterationNode,Literal,Node,Prop,Query,SlotNode,State,Statement,ViewNode} from './ast.js';
 import {tokenize,type Token} from './tokenizer.js';
 import {fail} from './diagnostics.js';
 import {resolveCompilerLimits,type CompilerLimits} from './limits.js';
@@ -81,12 +81,14 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
   const condition=expression;
   const block=()=>{symbol(':');take('NEWLINE');take('INDENT');};
   function statement(eventKind?:string):Statement {
+    if(at('await')){const start=word('await').span.start;word('http');symbol('.');const method=take('identifier');if(!['get','post','put','patch','delete'].includes(method.value))fail(source,filename,method.span,'await http requires get, post, put, patch, or delete');const args=argumentsList();let client:Node<string>|undefined,response:Node<string>|undefined,responseList=false,end=args.end;while(peek().kind!=='NEWLINE'){if(at('client')){const token=word('client');if(client)fail(source,filename,token.span,'Imperative HTTP call may select one client');client=id();end=client.span.end;}else if(at('response')){const token=word('response');if(response)fail(source,filename,token.span,'Imperative HTTP call may declare one response type');if(at('list')){word('list');symbol('[');response=id();end=symbol(']').span.end;responseList=true;}else{response=id();end=response.span.end;}}else fail(source,filename,peek().span,'Expected client or response after imperative HTTP call');}take('NEWLINE');return {kind:'awaitHttp',method:{value:method.value as HttpMethod,span:method.span},arguments:args.values,client,response,responseList,span:{start,end}};}
     if(at('navigate')&&!['=','.'].includes(peek(1).value)){const start=word('navigate').span.start,path=expression();take('NEWLINE');return {kind:'navigate',path,span:{start,end:path.span.end}};}
     if(at('emit')) {
       const start=word('emit').span.start,event=id(),args=at('(')?argumentsList():{values:[],end:event.span.end};
       if(args.values.length>1)fail(source,filename,event.span,'Emitted events accept at most one payload');
       take('NEWLINE');return {kind:'emit',event,payload:args.values[0],span:{start,end:args.end}};
     }
+    if(peek().kind==='identifier'&&peek(1).value==='('){const action=id(),start=action.span.start,args=argumentsList();take('NEWLINE');return {kind:'invoke',action,arguments:args.values,span:{start,end:args.end}};}
     const start=peek().span.start;const target=atom();
     if(at('=')) {
       symbol('=');
@@ -169,11 +171,11 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     const start=word('shared').span.start,name=id();block();const states:State[]=[];
     while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){const state=id();symbol('=');const initial=expression();take('NEWLINE');states.push({name:state,initial,span:{start:state.span.start,end:initial.span.end}});}
     take('DEDENT');take('eof');if(!states.length)fail(source,filename,name.span,'Shared state requires at least one value');
-    return {kind:'SharedState',name,span:{start,end:states.at(-1)!.span.end},imports:[],classes,props:[],states,computed:[],httpClients:[],queries:[],init:[],cleanup:[],roots:[],emits:[]};
+    return {kind:'SharedState',name,span:{start,end:states.at(-1)!.span.end},imports:[],classes,props:[],states,computed:[],httpClients:[],queries:[],httpActions:[],init:[],cleanup:[],roots:[],emits:[]};
   }
   const start=word('component').span.start;const name=id();const props:Prop[]=[];
   if(at('(')){cursor++;if(!at(')'))do{const prop=id();symbol('=');const initial=literal();props.push({name:prop,initial,span:{start:prop.span.start,end:initial.span.end}});if(!at(','))break;cursor++;}while(true);symbol(')');}
-  block();const states:State[]=[];const derived:Computed[]=[];const httpClients:HttpClient[]=[];const queries:Query[]=[];let defaultClient:Node<string>|undefined;const init:Statement[]=[];const cleanup:Statement[]=[];const roots:ViewNode[]=[];
+  block();const states:State[]=[];const derived:Computed[]=[];const httpClients:HttpClient[]=[];const queries:Query[]=[];const httpActions:HttpAction[]=[];let defaultClient:Node<string>|undefined;const init:Statement[]=[];const cleanup:Statement[]=[];const roots:ViewNode[]=[];
   function httpClient():HttpClient {
     const start=word('http').span.start;word('client');const clientName=id();block();let base:Expression|undefined,auth:HttpClient['auth'];const interceptors:HttpClient['interceptors']=[];
     while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){
@@ -204,10 +206,25 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     }
     take('DEDENT');if(!response)fail(source,filename,queryName.span,'Query requires a typed response');return {name:queryName,method:methodToken.value as HttpMethod,url,params,headers,body,response,responseList,client,debounce,timeout,retry,cache,refreshOnFocus,poll,dependencies:[],span:{start,end:lastEnd}};
   }
+  function httpAction():HttpAction {
+    const start=word('action').span.start,actionName=id(),parameters:Node<string>[]=[];symbol('(');if(!at(')'))do{const parameter=id();if(parameters.some(item=>item.value===parameter.value))fail(source,filename,parameter.span,`Duplicate action parameter ${JSON.stringify(parameter.value)}`);parameters.push(parameter);if(!at(','))break;symbol(',');}while(true);symbol(')');block();const methodToken=take('identifier');if(!['get','post','put','patch','delete'].includes(methodToken.value))fail(source,filename,methodToken.span,'Action requires get, post, put, patch, or delete');const url=expression();take('NEWLINE');const params:HttpAction['params']=[],headers:HttpAction['headers']=[],refresh:Node<string>[]=[],instant:HttpAction['instant']=[];let body:Expression|undefined,response:Node<string>|undefined,responseList=false,client:Node<string>|undefined,lastEnd=url.span.end;
+    while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){
+      if(at('param')){const lineStart=word('param').span.start,name=id();symbol('=');const value=expression();take('NEWLINE');params.push({name,value,span:{start:lineStart,end:value.span.end}});lastEnd=value.span.end;}
+      else if(at('header')){const lineStart=word('header').span.start,nameToken=take('string');symbol('=');const value=expression();take('NEWLINE');headers.push({name:{value:nameToken.value,span:nameToken.span},value,span:{start:lineStart,end:value.span.end}});lastEnd=value.span.end;}
+      else if(at('body')){const token=word('body');if(body)fail(source,filename,token.span,'Action may declare body only once');body=expression();take('NEWLINE');lastEnd=body.span.end;}
+      else if(at('response')){const token=word('response');if(response)fail(source,filename,token.span,'Action may declare response only once');if(at('list')){word('list');symbol('[');response=id();lastEnd=symbol(']').span.end;responseList=true;}else{response=id();lastEnd=response.span.end;}take('NEWLINE');}
+      else if(at('client')){const token=word('client');if(client)fail(source,filename,token.span,'Action may override client only once');client=id();take('NEWLINE');lastEnd=client.span.end;}
+      else if(at('refresh')){word('refresh');const resource=id();if(refresh.some(item=>item.value===resource.value))fail(source,filename,resource.span,`Duplicate refresh target ${JSON.stringify(resource.value)}`);refresh.push(resource);take('NEWLINE');lastEnd=resource.span.end;}
+      else if(at('instant')){const instantStart=word('instant').span.start,resource=id();block();const assignments:HttpAction['instant'][number]['assignments']=[];while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){const field=id();symbol('=');const value=expression();take('NEWLINE');assignments.push({field,value,span:{start:field.span.start,end:value.span.end}});}take('DEDENT');if(!assignments.length)fail(source,filename,resource.span,'instant requires at least one field assignment');const instantEnd=assignments.at(-1)!.span.end;instant.push({resource,assignments,span:{start:instantStart,end:instantEnd}});lastEnd=instantEnd;}
+      else fail(source,filename,peek().span,'Unsupported action configuration');
+    }
+    take('DEDENT');if(!response)fail(source,filename,actionName.span,'Action requires a typed response');return {name:actionName,parameters,method:methodToken.value as HttpMethod,url,params,headers,body,response,responseList,client,refresh,instant,span:{start,end:lastEnd}};
+  }
   while(peek().kind!=='DEDENT'&&peek().kind!=='eof') {
     if(at('http')&&peek(1).value==='client'){if(roots.length)fail(source,filename,peek().span,'HTTP client declarations must precede elements');httpClients.push(httpClient());}
     else if(at('client')&&peek(1).kind==='identifier'&&peek(2).kind==='NEWLINE'){if(roots.length)fail(source,filename,peek().span,'Client selection must precede elements');const token=word('client');if(defaultClient)fail(source,filename,token.span,'Client may be declared once per component');defaultClient=id();take('NEWLINE');}
     else if(at('query')&&peek(1).kind==='identifier'&&peek(2).value===':'){if(roots.length)fail(source,filename,peek().span,'Query declarations must precede elements');queries.push(query());}
+    else if(at('action')&&peek(1).kind==='identifier'&&peek(2).value==='('){if(roots.length)fail(source,filename,peek().span,'Action declarations must precede elements');httpActions.push(httpAction());}
     else if(at('computed')) {if(roots.length)fail(source,filename,peek().span,'Computed declarations must precede elements');derived.push(computed());}
     else if(at('on')&&(peek(1).value==='init'||peek(1).value==='cleanup')) {
       if(roots.length)fail(source,filename,peek().span,'Lifecycle declarations must precede elements');word('on');const phase=take('identifier');block();const body=statements();take('DEDENT');(phase.value==='init'?init:cleanup).push(...body);
@@ -216,5 +233,5 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     } else roots.push(view());
   }
   take('DEDENT');take('eof');if(!roots.length)fail(source,filename,name.span,'Component requires at least one root element');
-  return {kind:'Component',name,span:{start,end:roots.at(-1)!.span.end},imports,classes,props,states,computed:derived,httpClients,client:defaultClient,queries,init,cleanup,roots,emits:[]};
+  return {kind:'Component',name,span:{start,end:roots.at(-1)!.span.end},imports,classes,props,states,computed:derived,httpClients,client:defaultClient,queries,httpActions,init,cleanup,roots,emits:[]};
 }
