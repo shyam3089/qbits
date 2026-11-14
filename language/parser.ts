@@ -16,14 +16,15 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
   function nestedExpression<T>(span:Token['span'],run:()=>T):T {if(++expressionDepth>limits.maxExpressionDepth)fail(source,filename,span,`Expression nesting exceeds the configured limit of ${limits.maxExpressionDepth} levels`);try{return run();}finally{expressionDepth--;}}
   function id():Node<string> {
     const token=take('identifier');
-    if(['component','import','from','text','class','computed','action','for','in','key','str','len','on','emit','init','cleanup','if','else','and','or','not','var','let','const','true','false'].includes(token.value)) fail(source,filename,token.span,`Reserved word ${JSON.stringify(token.value)} cannot be an identifier`);
+    if(['component','import','from','text','class','computed','action','state','for','in','key','str','len','on','emit','init','cleanup','if','else','and','or','not','var','let','const','true','false','null','File'].includes(token.value)) fail(source,filename,token.span,`Reserved word ${JSON.stringify(token.value)} cannot be an identifier`);
     return {value:token.value,span:token.span};
   }
   function literal():Node<Literal> {
     const token=peek();
     if(token.kind==='string'||token.kind==='number'){cursor++;return {value:token.kind==='number'?Number(token.value):token.value,span:token.span};}
     if(at('true')||at('false')){cursor++;return {value:token.value==='true',span:token.span};}
-    fail(source,filename,token.span,'Expected a string, number or boolean literal');
+    if(at('null')){cursor++;return {value:null,span:token.span};}
+    fail(source,filename,token.span,'Expected a string, number, boolean or null literal');
   }
   function argumentsList():{values:Expression[];end:number} {
     symbol('(');const values:Expression[]=[];
@@ -33,11 +34,11 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
   function atom():Expression {
     const token=peek();let value:Expression;
     if(at('(')){symbol('(');value=nestedExpression(token.span,expression);symbol(')');}
-    else if(token.kind==='string'||token.kind==='number'||at('true')||at('false')) {const item=literal();value=expressionNode({kind:'literal',...item});}
+    else if(token.kind==='string'||token.kind==='number'||at('true')||at('false')||at('null')) {const item=literal();value=expressionNode({kind:'literal',...item});}
     else if(at('[')) {
       const start=symbol('[').span.start;const items:Expression[]=[];
       if(!at(']')) do {if(items.length>=limits.maxCollectionItems)fail(source,filename,peek().span,`Collection exceeds the configured limit of ${limits.maxCollectionItems} items`);items.push(nestedExpression(peek().span,expression));if(!at(','))break;cursor++;}while(true);
-      const close=symbol(']');let itemType:Node<string>|undefined;if(at('as')){word('as');itemType=id();}
+      const close=symbol(']');let itemType:Node<string>|undefined;if(at('as')){word('as');if(at('File')){const item=take('identifier');itemType={value:item.value,span:item.span};}else itemType=id();}
       value=expressionNode({kind:'list',items,...(itemType?{itemType}:{}),span:{start,end:itemType?.span.end??close.span.end}});
     } else {
       const name=(at('str')||at('len')||at('contains')||at('count'))?(()=>{const token=take('identifier');return {value:token.value,span:token.span};})():id();
@@ -96,8 +97,8 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
       symbol('=');
       if(at('event')) {
         word('event');symbol('.');const member=take('identifier');
-        if(member.value!=='value'&&member.value!=='checked') fail(source,filename,member.span,`Expected ${eventKind==='change'?'checked':'value'} event member`);
-        take('NEWLINE');return {kind:'eventAssign',target,member:{value:member.value,span:member.span} as Node<'value'|'checked'>,span:{start,end:member.span.end}};
+        if(!['value','checked','file','files'].includes(member.value)) fail(source,filename,member.span,eventKind==='input'?'Expected value for input event':eventKind==='change'?'Expected checked for change event':'Expected an approved event member');
+        take('NEWLINE');return {kind:'eventAssign',target,member:{value:member.value,span:member.span} as Node<'value'|'checked'|'file'|'files'>,span:{start,end:member.span.end}};
       }
       const value=expression();take('NEWLINE');return {kind:'assign',target,value,span:{start,end:value.span.end}};
     }
@@ -118,7 +119,9 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     function attribute(indented=false):void {const key=take('identifier');symbol('=');if(Object.hasOwn(attributes,key.value))fail(source,filename,key.span,`Duplicate attribute ${key.value}`);Object.defineProperty(attributes,key.value,{value:expression(),enumerable:true});if(indented){indentedAttributes.push(key.value);take('NEWLINE');}}
     while(peek().kind==='identifier'&&peek(1).value==='=')attribute();
     const node:ElementNode={kind:'element',tag,attributes,indentedAttributes,children,span:{start:tag.span.start,end:tokens[cursor-1].span.end}};
-    if(at(':')) {
+    if(at('on')) {
+      const inputType=node.attributes.type,inlineStart=word('on').span.start,event=take('identifier');if(tag.value!=='input'||inputType?.kind!=='literal'||inputType.value!=='file'||event.value!=='change')fail(source,filename,event.span,'Inline native handlers are supported only for file-input change actions');const body=[statement(event.value)];if(body[0].kind!=='invoke')fail(source,filename,body[0].span,'Inline file-input change requires a direct action invocation');node.handler={event:{value:event.value,span:event.span},kind:'change',statements:body,span:{start:inlineStart,end:body[0].span.end}};node.span.end=node.handler.span.end;
+    } else if(at(':')) {
       block();while(peek().kind!=='DEDENT'&&peek().kind!=='eof') {
         if(at('on')) {if(node.handler)fail(source,filename,peek().span,'Duplicate event handler');node.handler=handler();node.span.end=node.handler.span.end;}
         else if(peek().kind==='identifier'&&peek(1).value==='='){attribute(true);node.span.end=tokens[cursor-2].span.end;}
@@ -232,8 +235,8 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     else if(at('computed')) {if(roots.length)fail(source,filename,peek().span,'Computed declarations must precede elements');derived.push(computed());}
     else if(at('on')&&(peek(1).value==='init'||peek(1).value==='cleanup')) {
       if(roots.length)fail(source,filename,peek().span,'Lifecycle declarations must precede elements');word('on');const phase=take('identifier');block();const body=statements();take('DEDENT');(phase.value==='init'?init:cleanup).push(...body);
-    } else if(peek(1)?.value==='=') {
-      if(roots.length)fail(source,filename,peek().span,'State declarations must precede elements');const state=id();symbol('=');const initial=expression();states.push({name:state,initial,span:{start:state.span.start,end:initial.span.end}});take('NEWLINE');
+    } else if(at('state')||peek(1)?.value==='=') {
+      if(roots.length)fail(source,filename,peek().span,'State declarations must precede elements');const start=at('state')?word('state').span.start:peek().span.start,state=id();symbol('=');const initial=expression();states.push({name:state,initial,span:{start,end:initial.span.end}});take('NEWLINE');
     } else roots.push(view());
   }
   take('DEDENT');take('eof');if(!roots.length)fail(source,filename,name.span,'Component requires at least one root element');

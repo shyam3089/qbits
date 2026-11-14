@@ -1,6 +1,6 @@
 export interface Span { start:number; end:number }
 export interface Node<T> { value:T; span:Span }
-export type Literal = string | number | boolean;
+export type Literal = string | number | boolean | null;
 export type Expression =
   | {kind:'not';argument:Expression;span:Span}
   | {kind:'equal'|'notEqual'|'and'|'or';left:Expression;right:Expression;span:Span}
@@ -38,7 +38,7 @@ export interface HttpAction {
 export type Statement =
   | {kind:'navigate';path:Expression;span:Span}
   | {kind:'assign';target:Expression;value:Expression;span:Span}
-  | {kind:'eventAssign';target:Expression;member:Node<'value'|'checked'>;span:Span}
+  | {kind:'eventAssign';target:Expression;member:Node<'value'|'checked'|'file'|'files'>;span:Span}
   | {kind:'call';target:Expression;method:Node<string>;arguments:Expression[];span:Span}
   | {kind:'invoke';action:Node<string>;arguments:Expression[];span:Span}
   | {kind:'awaitHttp';binding?:Node<string>;method:Node<HttpMethod>;arguments:Expression[];client?:Node<string>;response?:Node<string>;responseList:boolean;span:Span}
