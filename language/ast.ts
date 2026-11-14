@@ -15,7 +15,7 @@ export type Expression =
   | {kind:'construct';name:Node<string>;arguments:Expression[];span:Span}
   | {kind:'list';items:Expression[];itemType?:Node<string>;span:Span};
 export type ConditionExpression = Expression;
-export interface Import {name?:Node<string>;path:Node<string>;span:Span;kind?:'component'|'shared'}
+export interface Import {name?:Node<string>;path:Node<string>;span:Span;kind?:'component'|'shared'|'service'}
 export interface Prop {name:Node<string>;initial:Node<Literal>;span:Span}
 export interface State {name:Node<string>;initial:Expression;span:Span}
 export interface Computed {name:Node<string>;expression:Expression;span:Span}
@@ -30,7 +30,7 @@ export interface Query {
 }
 export interface InstantBlock {resource:Node<string>;assignments:{field:Node<string>;value:Expression;span:Span}[];span:Span}
 export interface HttpAction {
-  name:Node<string>;parameters:Node<string>[];method:HttpMethod;url:Expression;
+  name:Node<string>;parameters:Node<string>[];parameterTypes?:string[];method:HttpMethod;url:Expression;
   params:{name:Node<string>;value:Expression;span:Span}[];headers:{name:Node<string>;value:Expression;span:Span}[];
   body?:Expression;response?:Node<string>;responseList:boolean;client?:Node<string>;refresh:Node<string>[];instant:InstantBlock[];
   uploads:{name:Node<string>;value:Expression;span:Span}[];download?:Node<string>;span:Span;
@@ -59,6 +59,6 @@ export interface SlotNode {kind:'slot';span:Span}
 export interface RouterNode {kind:'router';routes:{path:Node<string>;children:ViewNode[];span:Span}[];span:Span}
 export type ViewNode = ElementNode | ConditionalNode | IterationNode | SlotNode | RouterNode;
 export interface Component {
-  kind:'Component'|'SharedState';name:Node<string>;span:Span;imports:Import[];classes:ClassDecl[];props:Prop[];states:State[];computed:Computed[];httpClients:HttpClient[];client?:Node<string>;queries:Query[];httpActions:HttpAction[];sockets:SocketDecl[];sse:SocketDecl[];init:Statement[];cleanup:Statement[];roots:ViewNode[];emits:EmittedEvent[];
+  kind:'Component'|'SharedState'|'Service';name:Node<string>;span:Span;imports:Import[];uses:Node<string>[];classes:ClassDecl[];props:Prop[];states:State[];computed:Computed[];httpClients:HttpClient[];client?:Node<string>;queries:Query[];httpActions:HttpAction[];sockets:SocketDecl[];sse:SocketDecl[];init:Statement[];cleanup:Statement[];roots:ViewNode[];emits:EmittedEvent[];
 }
 export interface Diagnostic {filename:string;line:number;column:number;span:Span;message:string}

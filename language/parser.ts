@@ -16,7 +16,7 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
   function nestedExpression<T>(span:Token['span'],run:()=>T):T {if(++expressionDepth>limits.maxExpressionDepth)fail(source,filename,span,`Expression nesting exceeds the configured limit of ${limits.maxExpressionDepth} levels`);try{return run();}finally{expressionDepth--;}}
   function id():Node<string> {
     const token=take('identifier');
-    if(['component','import','from','text','class','computed','action','state','for','in','key','str','len','on','emit','init','cleanup','if','else','and','or','not','var','let','const','true','false','null','File'].includes(token.value)) fail(source,filename,token.span,`Reserved word ${JSON.stringify(token.value)} cannot be an identifier`);
+    if(token.value==='service'||token.value==='use'||['component','import','from','text','class','computed','action','state','for','in','key','str','len','on','emit','init','cleanup','if','else','and','or','not','var','let','const','true','false','null','File'].includes(token.value)) fail(source,filename,token.span,`Reserved word ${JSON.stringify(token.value)} cannot be an identifier`);
     return {value:token.value,span:token.span};
   }
   function literal():Node<Literal> {
@@ -180,11 +180,12 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     const start=word('shared').span.start,name=id();block();const states:State[]=[];
     while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){const state=id();symbol('=');const initial=expression();take('NEWLINE');states.push({name:state,initial,span:{start:state.span.start,end:initial.span.end}});}
     take('DEDENT');take('eof');if(!states.length)fail(source,filename,name.span,'Shared state requires at least one value');
-    return {kind:'SharedState',name,span:{start,end:states.at(-1)!.span.end},imports:[],classes,props:[],states,computed:[],httpClients:[],queries:[],httpActions:[],sockets:[],sse:[],init:[],cleanup:[],roots:[],emits:[]};
+    return {kind:'SharedState',name,span:{start,end:states.at(-1)!.span.end},imports:[],uses:[],classes,props:[],states,computed:[],httpClients:[],queries:[],httpActions:[],sockets:[],sse:[],init:[],cleanup:[],roots:[],emits:[]};
   }
-  const start=word('component').span.start;const name=id();const props:Prop[]=[];
+  const service=at('service'),start=word(service?'service':'component').span.start;const name=id();const props:Prop[]=[];
+  if(service&&at('('))fail(source,filename,peek().span,'Services do not accept props');
   if(at('(')){cursor++;if(!at(')'))do{const prop=id();symbol('=');const initial=literal();props.push({name:prop,initial,span:{start:prop.span.start,end:initial.span.end}});if(!at(','))break;cursor++;}while(true);symbol(')');}
-  block();const states:State[]=[];const derived:Computed[]=[];const httpClients:HttpClient[]=[];const queries:Query[]=[];const httpActions:HttpAction[]=[];const sockets:SocketDecl[]=[],sse:SocketDecl[]=[];let defaultClient:Node<string>|undefined;const init:Statement[]=[];const cleanup:Statement[]=[];const roots:ViewNode[]=[];
+  block();const uses:Node<string>[]=[],states:State[]=[];const derived:Computed[]=[];const httpClients:HttpClient[]=[];const queries:Query[]=[];const httpActions:HttpAction[]=[];const sockets:SocketDecl[]=[],sse:SocketDecl[]=[];let defaultClient:Node<string>|undefined;const init:Statement[]=[];const cleanup:Statement[]=[];const roots:ViewNode[]=[];
   function httpClient():HttpClient {
     const start=word('http').span.start;word('client');const clientName=id();block();let base:Expression|undefined,auth:HttpClient['auth'];const interceptors:HttpClient['interceptors']=[];
     while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){
@@ -253,7 +254,8 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     take('DEDENT');if(!url)fail(source,filename,name.span,`${label} requires connect`);return {name,url,client,message,disconnect,span:{start,end:lastEnd}};
   }
   while(peek().kind!=='DEDENT'&&peek().kind!=='eof') {
-    if(at('http')&&peek(1).value==='client'){if(roots.length)fail(source,filename,peek().span,'HTTP client declarations must precede elements');httpClients.push(httpClient());}
+    if(at('use')){if(roots.length)fail(source,filename,peek().span,'Service use declarations must precede elements');word('use');const used=id();if(uses.some(item=>item.value===used.value))fail(source,filename,used.span,`Duplicate service use ${JSON.stringify(used.value)}`);uses.push(used);take('NEWLINE');}
+    else if(at('http')&&peek(1).value==='client'){if(roots.length)fail(source,filename,peek().span,'HTTP client declarations must precede elements');httpClients.push(httpClient());}
     else if(at('client')&&peek(1).kind==='identifier'&&peek(2).kind==='NEWLINE'){if(roots.length)fail(source,filename,peek().span,'Client selection must precede elements');const token=word('client');if(defaultClient)fail(source,filename,token.span,'Client may be declared once per component');defaultClient=id();take('NEWLINE');}
     else if(at('query')&&peek(1).kind==='identifier'&&peek(2).value===':'){if(roots.length)fail(source,filename,peek().span,'Query declarations must precede elements');queries.push(query());}
     else if(at('action')&&peek(1).kind==='identifier'&&peek(2).value==='('){if(roots.length)fail(source,filename,peek().span,'Action declarations must precede elements');httpActions.push(httpAction());}
@@ -264,8 +266,9 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
       if(roots.length)fail(source,filename,peek().span,'Lifecycle declarations must precede elements');word('on');const phase=take('identifier');block();const body=statements();take('DEDENT');(phase.value==='init'?init:cleanup).push(...body);
     } else if(at('state')||peek(1)?.value==='=') {
       if(roots.length)fail(source,filename,peek().span,'State declarations must precede elements');const start=at('state')?word('state').span.start:peek().span.start,state=id();symbol('=');const initial=expression();states.push({name:state,initial,span:{start,end:initial.span.end}});take('NEWLINE');
-    } else roots.push(view());
+    } else if(service)fail(source,filename,peek().span,'Services support use, client, query, and action declarations only');else roots.push(view());
   }
-  take('DEDENT');take('eof');if(!roots.length)fail(source,filename,name.span,'Component requires at least one root element');
-  return {kind:'Component',name,span:{start,end:roots.at(-1)!.span.end},imports,classes,props,states,computed:derived,httpClients,client:defaultClient,queries,httpActions,sockets,sse,init,cleanup,roots,emits:[]};
+  take('DEDENT');take('eof');if(service&&!queries.length&&!httpActions.length)fail(source,filename,name.span,'Service requires at least one query or action');if(!service&&!roots.length)fail(source,filename,name.span,'Component requires at least one root element');
+  const end=roots.at(-1)?.span.end??httpActions.at(-1)?.span.end??queries.at(-1)?.span.end??uses.at(-1)?.span.end??name.span.end;
+  return {kind:service?'Service':'Component',name,span:{start,end},imports,uses,classes,props,states,computed:derived,httpClients,client:defaultClient,queries,httpActions,sockets,sse,init,cleanup,roots,emits:[]};
 }

@@ -59,9 +59,9 @@ export function compileFile(filename:string,source?:string,watch?:(path:string)=
 
   const rootCounts=new Map<Component,number|null>();
   for(let index=order.length-1;index>=0;index--){
-    const record=order[index],ast=record.ast!,components=new Map<string,Component>(),shared=new Map<string,Component>();
-    for(const dependency of record.dependencies){const imported=dependency.record.ast!;dependency.entry.kind=imported.kind==='SharedState'?'shared':'component';(imported.kind==='SharedState'?shared:components).set(dependency.entry.name!.value,imported);}
-    validate(ast,record.text,record.file,{sourceExtension:identity.sourceExtension,components,shared,limits:options.limits});
+    const record=order[index],ast=record.ast!,components=new Map<string,Component>(),shared=new Map<string,Component>(),services=new Map<string,Component>();
+    for(const dependency of record.dependencies){const imported=dependency.record.ast!,kind=imported.kind==='SharedState'?'shared':imported.kind==='Service'?'service':'component';dependency.entry.kind=kind;(kind==='shared'?shared:kind==='service'?services:components).set(dependency.entry.name!.value,imported);}
+    validate(ast,record.text,record.file,{sourceExtension:identity.sourceExtension,components,shared,services,limits:options.limits});
     function check(nodes:Component['roots']):void {for(const node of nodes){if(node.kind==='slot')continue;if(node.kind==='router'){for(const route of node.routes)check(route.children);continue;}if(node.kind==='conditional'){check(node.consequent);check(node.alternate);continue;}if(node.kind==='iteration'){check(node.children);continue;}const child=components.get(node.tag.value);if(child&&node.attributes.class&&rootCounts.get(child)!==1)fail(record.text,record.file,node.attributes.class.span,'Ambiguous class forwarding: component must resolve to a single root element');check(node.children);}}
     function count(nodes:Component['roots']):number|null {let total=0;for(const node of nodes){if(node.kind==='iteration'||node.kind==='slot'||node.kind==='router')return null;if(node.kind==='conditional'){const consequent=count(node.consequent),alternate=node.alternate.length?count(node.alternate):0;if(consequent===null||alternate===null||consequent!==alternate)return null;total+=consequent;continue;}const child=components.get(node.tag.value),resolved=child?rootCounts.get(child):1;if(resolved===undefined||resolved===null)return null;total+=resolved;}return total;}
     check(ast.roots);rootCounts.set(ast,count(ast.roots));
