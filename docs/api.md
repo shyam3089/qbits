@@ -9,7 +9,8 @@ grammar in [syntax.md](syntax.md) and the supported interfaces listed below are 
 The supported language includes relative component and CSS imports; typed literal props;
 primitive and typed-list state; file-local data classes; computed values; conditions;
 keyed iteration; text, input, and checkbox bindings; closed actions; lifecycle hooks;
-one unnamed slot; root-class forwarding; shared reactive state; and typed child events.
+one unnamed slot; root-class forwarding; shared reactive state; typed child events; and
+component-owned text WebSockets.
 The compiler rejects syntax outside [syntax.md](syntax.md). Generated output is an ES
 module and is intended to be used with the matching Qbits runtime version.
 

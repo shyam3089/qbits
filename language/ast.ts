@@ -35,6 +35,10 @@ export interface HttpAction {
   body?:Expression;response?:Node<string>;responseList:boolean;client?:Node<string>;refresh:Node<string>[];instant:InstantBlock[];
   uploads:{name:Node<string>;value:Expression;span:Span}[];download?:Node<string>;span:Span;
 }
+export interface SocketDecl {
+  name:Node<string>;url:Expression;client?:Node<string>;message?:{parameter:Node<string>;statements:Statement[];span:Span};
+  disconnect?:{statements:Statement[];reconnect?:Node<number>;span:Span};span:Span;
+}
 export type Statement =
   | {kind:'navigate';path:Expression;span:Span}
   | {kind:'assign';target:Expression;value:Expression;span:Span}
@@ -55,6 +59,6 @@ export interface SlotNode {kind:'slot';span:Span}
 export interface RouterNode {kind:'router';routes:{path:Node<string>;children:ViewNode[];span:Span}[];span:Span}
 export type ViewNode = ElementNode | ConditionalNode | IterationNode | SlotNode | RouterNode;
 export interface Component {
-  kind:'Component'|'SharedState';name:Node<string>;span:Span;imports:Import[];classes:ClassDecl[];props:Prop[];states:State[];computed:Computed[];httpClients:HttpClient[];client?:Node<string>;queries:Query[];httpActions:HttpAction[];init:Statement[];cleanup:Statement[];roots:ViewNode[];emits:EmittedEvent[];
+  kind:'Component'|'SharedState';name:Node<string>;span:Span;imports:Import[];classes:ClassDecl[];props:Prop[];states:State[];computed:Computed[];httpClients:HttpClient[];client?:Node<string>;queries:Query[];httpActions:HttpAction[];sockets:SocketDecl[];init:Statement[];cleanup:Statement[];roots:ViewNode[];emits:EmittedEvent[];
 }
 export interface Diagnostic {filename:string;line:number;column:number;span:Span;message:string}

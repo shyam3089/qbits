@@ -4,7 +4,7 @@ import {resolveCompilerLimits,type CompilerLimits} from './limits.js';
 
 export const elements=new Set(['main','section','div','h1','h2','h3','h4','h5','h6','p','span','label','button','input','progress','ul','ol','li']);
 export interface ValidationOptions {sourceExtension?:string;components?:Map<string,Component>;shared?:Map<string,Component>;limits?:Partial<CompilerLimits>}
-type Type='string'|'number'|'boolean'|'null'|'file'|'file?'|'event:file'|'unknown'|`class:${string}`|`shared:${string}`|`list:${string}`|`resource:${string}`|`action:${string}`;
+type Type='string'|'number'|'boolean'|'null'|'file'|'file?'|'event:file'|'unknown'|`class:${string}`|`shared:${string}`|`list:${string}`|`resource:${string}`|`action:${string}`|`socket:${string}`;
 
 export function validate(ast:Component,source:string,filename='<input>',options:ValidationOptions={}):void {
   const limits=resolveCompilerLimits(options.limits);
@@ -48,6 +48,7 @@ export function validate(ast:Component,source:string,filename='<input>',options:
       if(owner==='event:file'){if(expression.name.value==='file')return 'file?';if(expression.name.value==='files')return 'list:file';return error(expression.name.span,`File input events expose only file and files, received ${JSON.stringify(expression.name.value)}`);}
       if(owner.startsWith('resource:')){const value=owner.slice(9) as Type,member=expression.name.value;if(member==='data')return value;if(['loading','refreshing','success','empty'].includes(member))return 'boolean';if(member==='error')return 'string';return error(expression.name.span,`Unknown resource member ${JSON.stringify(member)}`);}
       if(owner.startsWith('action:')){const member=expression.name.value;if(member==='data')return httpActionTypes.get(owner.slice(7))??'unknown';if(member==='loading'||member==='success')return 'boolean';if(member==='progress'&&transferActionNames.has(owner.slice(7)))return 'number';if(member==='error')return 'string';return error(expression.name.span,`Unknown action member ${JSON.stringify(member)}`);}
+      if(owner.startsWith('socket:')){const member=expression.name.value;if(member==='connected'||member==='connecting')return 'boolean';if(member==='state'||member==='error')return 'string';return error(expression.name.span,`Unknown socket member ${JSON.stringify(member)}`);}
       if(!owner.startsWith('class:'))error(expression.object.span,'Member access requires a class instance or shared state');
       const member=recordEnvs.get(owner.slice(6))?.get(expression.name.value);return member??error(expression.name.span,`Unknown member ${JSON.stringify(expression.name.value)} on ${owner.slice(6)}`);
     }
@@ -109,6 +110,7 @@ export function validate(ast:Component,source:string,filename='<input>',options:
   for(const query of ast.queries)visitQuery(query.name.value,[]);
   const httpActionMap=new Map<string,Component['httpActions'][number]>(),httpActionParameterTypes=new Map<string,(Type|undefined)[]>();
   for(const action of ast.httpActions){if(env.has(action.name.value)||classes.has(action.name.value)||imported.has(action.name.value)||httpActionMap.has(action.name.value))error(action.name.span,'Duplicate or reserved declaration');let responseType:Type='unknown';if(action.response){const responseName=action.response.value;responseType=['string','number','boolean'].includes(responseName)?responseName as Type:classes.has(responseName)?`class:${responseName}`:error(action.response.span,`Unknown response type ${JSON.stringify(responseName)}`);if(action.responseList)responseType=`list:${responseType}`;}httpActionMap.set(action.name.value,action);httpActionTypes.set(action.name.value,responseType);if(action.uploads.length||action.download)transferActionNames.add(action.name.value);httpActionParameterTypes.set(action.name.value,action.parameters.map(()=>undefined));env.set(action.name.value,`action:${action.name.value}`);}
+  const socketNames=new Set<string>();for(const socket of ast.sockets){if(env.has(socket.name.value)||classes.has(socket.name.value)||imported.has(socket.name.value)||socketNames.has(socket.name.value))error(socket.name.span,'Duplicate or reserved declaration');socketNames.add(socket.name.value);env.set(socket.name.value,`socket:${socket.name.value}`);}
   for(const item of ast.computed){if(env.has(item.name.value))error(item.name.span,'Duplicate or reserved declaration');env.set(item.name.value,'unknown');}
   validateComputed(ast.computed,env);
   function targetType(target:Expression,scope:Map<string,Type>,write:Set<string>):Type {
@@ -159,12 +161,17 @@ export function validate(ast:Component,source:string,filename='<input>',options:
           if(statement.method.value!=='refresh'||statement.arguments.length)error(statement.span,'Resources support only refresh() with no arguments');
         } else if(owner.startsWith('action:')){
           const action=httpActionMap.get(owner.slice(7));if(statement.method.value!=='cancel'||statement.arguments.length)error(statement.span,'Transfer actions support only cancel() with no arguments');if(!action?.uploads.length&&!action?.download)error(statement.span,'cancel() is available only on transfer actions');
+        } else if(owner.startsWith('socket:')){
+          if(statement.method.value==='send'){if(statement.arguments.length!==1)error(statement.span,'Socket send() requires one string argument');if(statement.arguments[0]&&type(statement.arguments[0],scope)!=='string')error(statement.arguments[0].span,'Socket send() requires a string');}
+          else if(statement.method.value==='close'){if(statement.arguments.length)error(statement.span,'Socket close() does not accept arguments');}
+          else error(statement.method.span,`Unsupported socket operation ${statement.method.value}`);
         } else if(owner.startsWith('class:')){
           if(statement.arguments.length)error(statement.span,'Class actions do not accept arguments');if(!recordActions.get(owner.slice(6))?.has(statement.method.value))error(statement.method.span,`Unknown action ${statement.method.value}`);
         } else error(statement.target.span,'Calls are limited to class actions and list append/remove/move/sort operations');
       }
     }
   }
+  for(const socket of ast.sockets){if(type(socket.url,env)!=='string')error(socket.url.span,'Socket connect requires a string URL');if(socket.url.kind==='literal'){const value=socket.url.value as string;if(!value||value.length>2048||/[\r\n\0]/.test(value))error(socket.url.span,'Socket URL must be non-empty, at most 2048 characters, and contain no controls');let parsed:URL;try{parsed=new URL(value,'http://qbits.local/');}catch{return error(socket.url.span,'Invalid socket URL');}if(!['http:','https:','ws:','wss:'].includes(parsed.protocol)||parsed.username||parsed.password||parsed.hash)error(socket.url.span,'Socket URL must use http(s) or ws(s) without credentials or fragments');}const selected=socket.client??ast.client;if(selected&&!clientNames.has(selected.value))error(selected.span,`Unknown HTTP client ${JSON.stringify(selected.value)}`);if(socket.message){const messageEnv=new Map(env);if(messageEnv.has(socket.message.parameter.value))error(socket.message.parameter.span,`Socket message parameter ${JSON.stringify(socket.message.parameter.value)} conflicts with an existing name`);messageEnv.set(socket.message.parameter.value,'string');validateStatements(socket.message.statements,messageEnv,writable,undefined,false,true,true);}if(socket.disconnect)validateStatements(socket.disconnect.statements,env,writable,undefined,false,true,true);}
   validateStatements(ast.init,env,writable,undefined,false,true);validateStatements(ast.cleanup,env,writable,undefined,false,true);
   const conditionType=type;
   function reactiveConditionReference(expression:ConditionExpression,reactive:Set<string>):boolean {

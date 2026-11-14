@@ -9,4 +9,6 @@ Each root component tree shares defaults of 100,000 component instances, 250,000
 
 These controls bound framework-accounted synchronous work, not total process memory, browser layout/paint cost, dependency behavior or arbitrary host JavaScript. Component mount/cleanup functions, application code, prop getters/proxies, Vite configuration and npm dependencies are trusted and can execute with normal host permissions or retain resources outside the accounting model. Transactions do not span timers, promises, network activity or other asynchronous side effects. This is defense in depth, not a sandbox or security certification.
 
+WebSocket connections accept only same-origin ws:/wss: targets relative to the page or selected HTTP client base; secure pages require wss:. Credentials and URL fragments are rejected. Browser WebSockets cannot set application-defined Authorization headers, so Qbits does not invoke bearer providers or place bearer tokens in socket URLs. Inbound text is limited to 1 MiB, outbound messages to 64 KiB, and queued outbound data to 1 MiB. Binary input is rejected.
+
 Use lockfiles, review source/config/dependencies, and keep development servers local. Phase 3A.3 uses a documented automated security and quality gate; passing it is release evidence, not security certification. Software is licensed under Apache-2.0; see LICENSE and NOTICE.

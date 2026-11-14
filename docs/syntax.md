@@ -365,6 +365,33 @@ side effects transactional.
 
 See the [shared-cart example](../examples/shared-cart/App.qb), its [store](../examples/shared-cart/Cart.qb), and [consumer](../examples/shared-cart/AddToCart.qb).
 
+## WebSockets
+
+Components declare browser WebSockets before their view. Messages are text and the
+message parameter is a local, read-only string. Socket fields are `state`, `connected`,
+`connecting`, and `error`; handlers can call `send(string)` or `close()`.
+
+```text
+component SocketExample:
+    state last = ""
+    socket alerts:
+        connect "/alerts"
+
+        on message(data):
+            last = data
+
+        on disconnect:
+            reconnect 3s
+    p text=last
+```
+
+`reconnect` accepts `ms` or `s` durations up to 30 seconds and uses bounded exponential
+backoff with jitter. A relative URL uses the selected component HTTP client's base URL,
+if present, and converts HTTP(S) to WS(S). Socket URLs cannot escape that configured
+origin. HTTP bearer providers and interceptors are not applied to WebSocket handshakes.
+Binary messages are rejected. Component disposal closes the connection and removes its
+listeners and reconnect timer.
+
 ## Events and lifecycle
 
 `click`, text-input `input`, and checkbox `change` handlers accept one or more closed,
