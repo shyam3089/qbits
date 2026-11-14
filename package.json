@@ -78,6 +78,7 @@
     "test:docs": "tsx scripts/check-docs.ts",
     "test:external": "tsx scripts/check-external.ts",
     "bench:reactivity": "tsx scripts/benchmark-reactivity.ts",
+    "bench:paired": "tsx scripts/benchmark-paired.ts",
     "bench:startup": "tsx scripts/benchmark-startup.ts",
     "bench:validator": "tsx scripts/benchmark-validator.ts",
     "bench:frameworks:build": "npm --prefix benchmarks/framework-comparison run build",

@@ -9,7 +9,7 @@ const compilers:[string,{compile:typeof compile}][]=[];
 if(baselineIndex>=0){const path=process.argv[baselineIndex+1];if(!path)throw new Error('--baseline-compiler requires a path');compilers.push(['baseline',await import(pathToFileURL(path).href)]);}
 compilers.push(['candidate',{compile}]);
 const source='component Startup:\n    main:\n'+Array.from({length:1000},(_,index)=>`        p text="Product ${index}"`).join('\n');
-const summary=(values:number[])=>{const sorted=[...values].sort((left,right)=>left-right);return {median:sorted[Math.floor(sorted.length/2)],p95:sorted[Math.ceil(sorted.length*.95)-1],min:sorted[0],max:sorted.at(-1),samples:sorted.length};};
+const summary=(values:number[])=>{const sorted=[...values].sort((left,right)=>left-right),mean=values.reduce((sum,value)=>sum+value,0)/values.length,variance=values.reduce((sum,value)=>sum+(value-mean)**2,0)/values.length;return {median:sorted[Math.floor(sorted.length/2)],p95:sorted[Math.ceil(sorted.length*.95)-1],mean,variance,stddev:Math.sqrt(variance),min:sorted[0],max:sorted.at(-1),samples:sorted.length};};
 const entries=compilers.map(([name,compiler])=>({name,compiler,code:compiler.compile(source,'startup.qb').code,compileTimes:[] as number[],startupTimes:[] as number[]}));
 const browser=await firefox.launch({headless:true}),firefoxVersion=browser.version(),page=await browser.newPage();
 try{
