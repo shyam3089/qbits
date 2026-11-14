@@ -117,7 +117,11 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
   function element():ElementNode {
     const tag=id();const attributes:Record<string,Expression>={};const indentedAttributes:string[]=[];const children:ViewNode[]=[];
     function attribute(indented=false):void {const key=take('identifier');symbol('=');if(Object.hasOwn(attributes,key.value))fail(source,filename,key.span,`Duplicate attribute ${key.value}`);Object.defineProperty(attributes,key.value,{value:expression(),enumerable:true});if(indented){indentedAttributes.push(key.value);take('NEWLINE');}}
-    while(peek().kind==='identifier'&&peek(1).value==='=')attribute();
+    while(peek().kind==='identifier'){
+      if(peek(1).value==='='){attribute();continue;}
+      if(peek().value==='multiple'){const flag=take('identifier');if(Object.hasOwn(attributes,flag.value))fail(source,filename,flag.span,`Duplicate attribute ${flag.value}`);Object.defineProperty(attributes,flag.value,{value:{kind:'literal',value:true,span:flag.span},enumerable:true});continue;}
+      break;
+    }
     const node:ElementNode={kind:'element',tag,attributes,indentedAttributes,children,span:{start:tag.span.start,end:tokens[cursor-1].span.end}};
     if(at('on')) {
       const inputType=node.attributes.type,inlineStart=word('on').span.start,event=take('identifier');if(tag.value!=='input'||inputType?.kind!=='literal'||inputType.value!=='file'||event.value!=='change')fail(source,filename,event.span,'Inline native handlers are supported only for file-input change actions');const body=[statement(event.value)];if(body[0].kind!=='invoke')fail(source,filename,body[0].span,'Inline file-input change requires a direct action invocation');node.handler={event:{value:event.value,span:event.span},kind:'change',statements:body,span:{start:inlineStart,end:body[0].span.end}};node.span.end=node.handler.span.end;
