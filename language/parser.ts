@@ -180,11 +180,11 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     const start=word('shared').span.start,name=id();block();const states:State[]=[];
     while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){const state=id();symbol('=');const initial=expression();take('NEWLINE');states.push({name:state,initial,span:{start:state.span.start,end:initial.span.end}});}
     take('DEDENT');take('eof');if(!states.length)fail(source,filename,name.span,'Shared state requires at least one value');
-    return {kind:'SharedState',name,span:{start,end:states.at(-1)!.span.end},imports:[],classes,props:[],states,computed:[],httpClients:[],queries:[],httpActions:[],sockets:[],init:[],cleanup:[],roots:[],emits:[]};
+    return {kind:'SharedState',name,span:{start,end:states.at(-1)!.span.end},imports:[],classes,props:[],states,computed:[],httpClients:[],queries:[],httpActions:[],sockets:[],sse:[],init:[],cleanup:[],roots:[],emits:[]};
   }
   const start=word('component').span.start;const name=id();const props:Prop[]=[];
   if(at('(')){cursor++;if(!at(')'))do{const prop=id();symbol('=');const initial=literal();props.push({name:prop,initial,span:{start:prop.span.start,end:initial.span.end}});if(!at(','))break;cursor++;}while(true);symbol(')');}
-  block();const states:State[]=[];const derived:Computed[]=[];const httpClients:HttpClient[]=[];const queries:Query[]=[];const httpActions:HttpAction[]=[];const sockets:SocketDecl[]=[];let defaultClient:Node<string>|undefined;const init:Statement[]=[];const cleanup:Statement[]=[];const roots:ViewNode[]=[];
+  block();const states:State[]=[];const derived:Computed[]=[];const httpClients:HttpClient[]=[];const queries:Query[]=[];const httpActions:HttpAction[]=[];const sockets:SocketDecl[]=[],sse:SocketDecl[]=[];let defaultClient:Node<string>|undefined;const init:Statement[]=[];const cleanup:Statement[]=[];const roots:ViewNode[]=[];
   function httpClient():HttpClient {
     const start=word('http').span.start;word('client');const clientName=id();block();let base:Expression|undefined,auth:HttpClient['auth'];const interceptors:HttpClient['interceptors']=[];
     while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){
@@ -231,33 +231,34 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     }
     take('DEDENT');if(!response&&!uploads.length&&!download)fail(source,filename,actionName.span,'Action requires a typed response or transfer directive');return {name:actionName,parameters,method:methodToken.value as HttpMethod,url,params,headers,body,response,responseList,client,refresh,instant,uploads,download,span:{start,end:lastEnd}};
   }
-  function socket():SocketDecl {
-    const start=word('socket').span.start,name=id();block();let url:Expression|undefined,client:Node<string>|undefined,message:SocketDecl['message'],disconnect:SocketDecl['disconnect'],lastEnd=name.span.end;
+  function connection(kind:'socket'|'sse'):SocketDecl {
+    const label=kind==='socket'?'Socket':'SSE',start=word(kind).span.start,name=id();block();let url:Expression|undefined,client:Node<string>|undefined,message:SocketDecl['message'],disconnect:SocketDecl['disconnect'],lastEnd=name.span.end;
     while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){
-      if(at('connect')){const token=word('connect');if(url)fail(source,filename,token.span,'Socket may declare connect only once');url=expression();take('NEWLINE');lastEnd=url.span.end;}
-      else if(at('client')){const token=word('client');if(client)fail(source,filename,token.span,'Socket may select one client');client=id();take('NEWLINE');lastEnd=client.span.end;}
+      if(at('connect')){const token=word('connect');if(url)fail(source,filename,token.span,`${label} may declare connect only once`);url=expression();take('NEWLINE');lastEnd=url.span.end;}
+      else if(at('client')){const token=word('client');if(client)fail(source,filename,token.span,`${label} may select one client`);client=id();take('NEWLINE');lastEnd=client.span.end;}
       else if(at('on')){
         const handlerStart=word('on').span.start,event=take('identifier');
         if(event.value==='message'){
-          if(message)fail(source,filename,event.span,'Socket may declare on message only once');symbol('(');const parameter=id();symbol(')');block();const body=statements();take('DEDENT');if(!body.length)fail(source,filename,event.span,'Socket message handler requires at least one statement');message={parameter,statements:body,span:{start:handlerStart,end:body.at(-1)!.span.end}};lastEnd=message.span.end;
+          if(message)fail(source,filename,event.span,`${label} may declare on message only once`);symbol('(');const parameter=id();symbol(')');block();const body=statements();take('DEDENT');if(!body.length)fail(source,filename,event.span,`${label} message handler requires at least one statement`);message={parameter,statements:body,span:{start:handlerStart,end:body.at(-1)!.span.end}};lastEnd=message.span.end;
         }else if(event.value==='disconnect'){
-          if(disconnect)fail(source,filename,event.span,'Socket may declare on disconnect only once');if(at('('))fail(source,filename,peek().span,'Socket disconnect handler does not accept a parameter');block();const body:Statement[]=[];let reconnect:Node<number>|undefined,end=event.span.end;
+          if(disconnect)fail(source,filename,event.span,`${label} may declare on disconnect only once`);if(at('('))fail(source,filename,peek().span,`${label} disconnect handler does not accept a parameter`);block();const body:Statement[]=[];let reconnect:Node<number>|undefined,end=event.span.end;
           while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){
-            if(at('reconnect')){const token=word('reconnect');if(reconnect)fail(source,filename,token.span,'Socket may declare reconnect only once');const number=take('number'),unit=take('identifier');if(unit.value!=='ms'&&unit.value!=='s')fail(source,filename,unit.span,'reconnect duration requires ms or s');const value=Number(number.value)*(unit.value==='s'?1000:1);if(value<1||value>30_000)fail(source,filename,{start:number.span.start,end:unit.span.end},'reconnect duration must be between 1ms and 30s');reconnect={value,span:{start:number.span.start,end:unit.span.end}};take('NEWLINE');end=unit.span.end;}
+            if(at('reconnect')){const token=word('reconnect');if(reconnect)fail(source,filename,token.span,`${label} may declare reconnect only once`);const number=take('number'),unit=take('identifier');if(unit.value!=='ms'&&unit.value!=='s')fail(source,filename,unit.span,'reconnect duration requires ms or s');const value=Number(number.value)*(unit.value==='s'?1000:1);if(value<1||value>30_000)fail(source,filename,{start:number.span.start,end:unit.span.end},'reconnect duration must be between 1ms and 30s');reconnect={value,span:{start:number.span.start,end:unit.span.end}};take('NEWLINE');end=unit.span.end;}
             else{const item=statement();body.push(item);end=item.span.end;}
           }
-          take('DEDENT');if(!body.length&&!reconnect)fail(source,filename,event.span,'Socket disconnect handler requires a statement or reconnect directive');disconnect={statements:body,reconnect,span:{start:handlerStart,end}};lastEnd=end;
-        }else fail(source,filename,event.span,'Socket handlers support only message and disconnect');
-      }else fail(source,filename,peek().span,'Unsupported socket configuration');
+          take('DEDENT');if(!body.length&&!reconnect)fail(source,filename,event.span,`${label} disconnect handler requires a statement or reconnect directive`);disconnect={statements:body,reconnect,span:{start:handlerStart,end}};lastEnd=end;
+        }else fail(source,filename,event.span,`${label} handlers support only message and disconnect`);
+      }else fail(source,filename,peek().span,`Unsupported ${kind} configuration`);
     }
-    take('DEDENT');if(!url)fail(source,filename,name.span,'Socket requires connect');return {name,url,client,message,disconnect,span:{start,end:lastEnd}};
+    take('DEDENT');if(!url)fail(source,filename,name.span,`${label} requires connect`);return {name,url,client,message,disconnect,span:{start,end:lastEnd}};
   }
   while(peek().kind!=='DEDENT'&&peek().kind!=='eof') {
     if(at('http')&&peek(1).value==='client'){if(roots.length)fail(source,filename,peek().span,'HTTP client declarations must precede elements');httpClients.push(httpClient());}
     else if(at('client')&&peek(1).kind==='identifier'&&peek(2).kind==='NEWLINE'){if(roots.length)fail(source,filename,peek().span,'Client selection must precede elements');const token=word('client');if(defaultClient)fail(source,filename,token.span,'Client may be declared once per component');defaultClient=id();take('NEWLINE');}
     else if(at('query')&&peek(1).kind==='identifier'&&peek(2).value===':'){if(roots.length)fail(source,filename,peek().span,'Query declarations must precede elements');queries.push(query());}
     else if(at('action')&&peek(1).kind==='identifier'&&peek(2).value==='('){if(roots.length)fail(source,filename,peek().span,'Action declarations must precede elements');httpActions.push(httpAction());}
-    else if(at('socket')&&peek(1).kind==='identifier'&&peek(2).value===':'){if(roots.length)fail(source,filename,peek().span,'Socket declarations must precede elements');sockets.push(socket());}
+    else if(at('socket')&&peek(1).kind==='identifier'&&peek(2).value===':'){if(roots.length)fail(source,filename,peek().span,'Socket declarations must precede elements');sockets.push(connection('socket'));}
+    else if(at('sse')&&peek(1).kind==='identifier'&&peek(2).value===':'){if(roots.length)fail(source,filename,peek().span,'SSE declarations must precede elements');sse.push(connection('sse'));}
     else if(at('computed')) {if(roots.length)fail(source,filename,peek().span,'Computed declarations must precede elements');derived.push(computed());}
     else if(at('on')&&(peek(1).value==='init'||peek(1).value==='cleanup')) {
       if(roots.length)fail(source,filename,peek().span,'Lifecycle declarations must precede elements');word('on');const phase=take('identifier');block();const body=statements();take('DEDENT');(phase.value==='init'?init:cleanup).push(...body);
@@ -266,5 +267,5 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     } else roots.push(view());
   }
   take('DEDENT');take('eof');if(!roots.length)fail(source,filename,name.span,'Component requires at least one root element');
-  return {kind:'Component',name,span:{start,end:roots.at(-1)!.span.end},imports,classes,props,states,computed:derived,httpClients,client:defaultClient,queries,httpActions,sockets,init,cleanup,roots,emits:[]};
+  return {kind:'Component',name,span:{start,end:roots.at(-1)!.span.end},imports,classes,props,states,computed:derived,httpClients,client:defaultClient,queries,httpActions,sockets,sse,init,cleanup,roots,emits:[]};
 }

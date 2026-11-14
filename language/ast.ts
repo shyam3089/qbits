@@ -59,6 +59,6 @@ export interface SlotNode {kind:'slot';span:Span}
 export interface RouterNode {kind:'router';routes:{path:Node<string>;children:ViewNode[];span:Span}[];span:Span}
 export type ViewNode = ElementNode | ConditionalNode | IterationNode | SlotNode | RouterNode;
 export interface Component {
-  kind:'Component'|'SharedState';name:Node<string>;span:Span;imports:Import[];classes:ClassDecl[];props:Prop[];states:State[];computed:Computed[];httpClients:HttpClient[];client?:Node<string>;queries:Query[];httpActions:HttpAction[];sockets:SocketDecl[];init:Statement[];cleanup:Statement[];roots:ViewNode[];emits:EmittedEvent[];
+  kind:'Component'|'SharedState';name:Node<string>;span:Span;imports:Import[];classes:ClassDecl[];props:Prop[];states:State[];computed:Computed[];httpClients:HttpClient[];client?:Node<string>;queries:Query[];httpActions:HttpAction[];sockets:SocketDecl[];sse:SocketDecl[];init:Statement[];cleanup:Statement[];roots:ViewNode[];emits:EmittedEvent[];
 }
 export interface Diagnostic {filename:string;line:number;column:number;span:Span;message:string}

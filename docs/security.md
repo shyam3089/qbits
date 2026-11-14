@@ -11,4 +11,6 @@ These controls bound framework-accounted synchronous work, not total process mem
 
 WebSocket connections accept only same-origin ws:/wss: targets relative to the page or selected HTTP client base; secure pages require wss:. Credentials and URL fragments are rejected. Browser WebSockets cannot set application-defined Authorization headers, so Qbits does not invoke bearer providers or place bearer tokens in socket URLs. Inbound text is limited to 1 MiB, outbound messages to 64 KiB, and queued outbound data to 1 MiB. Binary input is rejected.
 
+SSE accepts only same-origin HTTP(S) targets relative to the page or selected HTTP client base; non-loopback streams require HTTPS. Credentials and URL fragments are rejected. Qbits does not invoke bearer providers, apply HTTP interceptors, add Authorization headers, or place tokens in stream URLs. Same-origin cookies follow browser policy. SSE text messages are limited to 1 MiB, and failed EventSource instances are closed before bounded framework reconnection.
+
 Use lockfiles, review source/config/dependencies, and keep development servers local. Phase 3A.3 uses a documented automated security and quality gate; passing it is release evidence, not security certification. Software is licensed under Apache-2.0; see LICENSE and NOTICE.

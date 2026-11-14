@@ -392,6 +392,32 @@ origin. HTTP bearer providers and interceptors are not applied to WebSocket hand
 Binary messages are rejected. Component disposal closes the connection and removes its
 listeners and reconnect timer.
 
+## Server-Sent Events
+
+SSE declarations use the same reactive connection fields and lifecycle rules as
+WebSockets, but are receive-only and expose only `close()`.
+
+```text
+component NotificationStream:
+    state last = ""
+    sse notifications:
+        connect "/notifications"
+
+        on message(data):
+            last = data
+
+        on disconnect:
+            reconnect 3s
+    p text=last
+```
+
+Messages are browser-decoded UTF-8 strings limited to 1 MiB. Qbits closes a failed
+`EventSource` before scheduling its bounded retry so native and framework reconnects
+cannot overlap. Relative URLs inherit the selected HTTP client base, but must remain
+same-origin HTTP(S); non-loopback connections require HTTPS. Bearer providers,
+interceptors, custom headers, and query-token injection are not applied. Same-origin
+cookies follow the browser's normal cookie policy.
+
 ## Events and lifecycle
 
 `click`, text-input `input`, and checkbox `change` handlers accept one or more closed,
