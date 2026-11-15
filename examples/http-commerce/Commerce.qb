@@ -1,0 +1,18 @@
+class CartSummary:
+    count = 0
+    total = 0
+
+service Commerce:
+    client api
+    query cart:
+        get "cart"
+        response CartSummary
+        cache 60s
+        refresh on-focus
+    action add(amount):
+        post "cart/items"
+        body amount
+        response CartSummary
+        refresh cart
+        instant cart:
+            count = count + amount

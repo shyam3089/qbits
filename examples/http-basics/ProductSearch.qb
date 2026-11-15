@@ -1,0 +1,34 @@
+class Product:
+    id = 0
+    name = ""
+    price = 0
+
+component ProductSearch:
+    term = ""
+    http client api:
+        base "https://api.example.test/v1/"
+    client api
+    query products:
+        get "products"
+        param q = term
+        response list[Product]
+        debounce 300ms
+        timeout 10s
+        retry 2
+        cache 60s
+        refresh on-focus
+    input:
+        value=term
+        on input:
+            term = event.value
+    if products.loading:
+        p text="Loading products"
+    else:
+        if products.success:
+            for product in products.data key=product.id:
+                p text=product.name + " - " + str(product.price)
+        else:
+            p text=products.error
+    button text="Refresh":
+        on click:
+            products.refresh()

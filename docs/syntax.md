@@ -1,4 +1,4 @@
-# Qbits syntax through Phase 3D.4
+# Qbits syntax through Stage 4E
 
 One default component is declared per file. Imports precede the component.
 The Phase 1 counter remains valid:
@@ -507,8 +507,31 @@ lines/columns. NEWLINE covers the physical ending or is zero-width at EOF. INDEN
 covers leading spaces; DEDENT is zero-width at the next code token or EOF. Block
 spans end at their final statement, excluding trailing comments.
 
+## HTTP, files, connections, and services
+
+The complete reference and tutorials are in [HTTP, transfers, connections, and
+services](http-stage4e.md). The approved declarations are:
+
+- `http client`, `client`, named auth/interceptors, and per-operation clients;
+- typed `query` resources with params, headers, bodies, dependencies, debounce,
+  timeout, retry, cache, focus refresh, polling, state fields, and `refresh()`;
+- typed HTTP `action` declarations, imperative `await http.verb(...)`, `refresh`,
+  and `instant` optimistic assignments;
+- nullable `File` and `[] as File` state, file-input `bind`, `multiple`,
+  `event.file`, and `event.files`;
+- upload/download actions, `progress` (`-1` or `0–100`), and transfer `cancel()`;
+- `socket` and `sse` declarations with text messages, close/send where applicable,
+  disconnect handlers, and bounded reconnect;
+- imported root-application-scoped `service` declarations selected with `use`.
+
+Queries and actions require explicit response declarations when they consume a
+response. Automatic replay features are limited to safe GET queries. Ordinary HTTP
+actions cannot be cancelled; `cancel()` is available only for transfers. Client,
+authentication, cache isolation, disposal, security, and known limitations are part
+of the HTTP reference and must not be inferred from general component lifecycle.
+
 Ordering comparisons, broader expression/assignment forms, event members and
-controls, class inheritance/custom constructors/action parameters,
+controls, class inheritance/custom constructors/class-action parameters,
 filter/sort/index expressions, nested routing, SSR, plugins and LSP remain deferred.
 Development reloads on component/CSS edits and recovers from located errors.
 Reload resets state; state-preserving HMR and generated JavaScript source maps are deferred.

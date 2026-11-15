@@ -133,3 +133,7 @@ Mount App from main.ts with the browser runtime. The starter includes Counter.cs
 .counter-button { color: rgb(20, 80, 160); }
 .counter.compact { padding: 4px; }
 ```
+
+## HTTP tutorials
+
+Start with [reactive product search](../examples/http-basics/ProductSearch.qb), then use the [complete e-commerce storefront](../examples/http-commerce/Storefront.qb) with its [shared commerce service](../examples/http-commerce/Commerce.qb). The [HTTP guide](http-stage4e.md) explains every declaration, state, lifecycle rule, security boundary and limitation used by these files. All three example files are checked as one module graph.

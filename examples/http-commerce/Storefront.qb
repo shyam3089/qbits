@@ -1,0 +1,66 @@
+import Commerce from "./Commerce.qb"
+
+class UploadReceipt:
+    name = ""
+    size = 0
+
+component Storefront:
+    state receipt = null
+    state attachments = [] as File
+    state alert = ""
+    state update = ""
+    http client api:
+        base "https://api.example.test/v1/"
+        auth bearer getToken
+        interceptor addTrace
+        interceptor response unwrap
+        interceptor error reportError
+    client api
+    use Commerce
+    action uploadReceipt(file):
+        post "receipts"
+        upload "receipt" = file
+        response UploadReceipt
+    action downloadInvoice():
+        get "invoice"
+        download "invoice.pdf"
+    socket alerts:
+        connect "orders/alerts"
+        on message(data):
+            alert = data
+        on disconnect:
+            reconnect 1s
+    sse updates:
+        connect "orders/updates"
+        on message(data):
+            update = data
+        on disconnect:
+            reconnect 1s
+    input type="file" bind=receipt
+    input type="file" multiple bind=attachments
+    button text="Add item":
+        on click:
+            Commerce.add(1)
+    button text="Upload receipt":
+        on click:
+            uploadReceipt(receipt)
+    button text="Download invoice":
+        on click:
+            downloadInvoice()
+    button text="Cancel download":
+        on click:
+            downloadInvoice.cancel()
+    button text="Acknowledge alert":
+        on click:
+            alerts.send("ack")
+    if Commerce.cart.success:
+        p text="Items: " + str(Commerce.cart.data.count) + ", total: " + str(Commerce.cart.data.total)
+    else:
+        p text=Commerce.cart.error
+    if uploadReceipt.progress:
+        progress value=uploadReceipt.progress max=100
+    if downloadInvoice.progress:
+        progress value=downloadInvoice.progress max=100
+    p text=uploadReceipt.error + downloadInvoice.error
+    p text=alerts.state + ":" + alert
+    p text=updates.state + ":" + update
