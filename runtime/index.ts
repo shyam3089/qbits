@@ -58,7 +58,7 @@ let transactionDepth=0;
 let committing=false;
 export interface HttpApplicationConfig {client?:HttpClientConfig;functions?:Readonly<Record<string,Function>>}
 let httpApplication:HttpApplicationConfig=Object.freeze({});
-export function configureHttpApplication(config:HttpApplicationConfig):()=>void {if(!config||typeof config!=='object')throw new TypeError('HTTP application configuration must be an object');const previous=httpApplication;httpApplication=Object.freeze({client:config.client,functions:Object.freeze({...config.functions})});return()=>{httpApplication=previous;};}
+export function configureHttpApplication(config:HttpApplicationConfig):()=>void {if(!config||typeof config!=='object')throw new TypeError('HTTP application configuration must be an object');const previous=httpApplication,functions=Object.assign(Object.create(null),config.functions??{});httpApplication=Object.freeze({client:config.client,functions:Object.freeze(functions)});return()=>{httpApplication=previous;};}
 export class HttpError extends Error {readonly status:number;readonly response?:Response;constructor(message:string,status=0,response?:Response,options?:ErrorOptions){super(message,options);this.name='HttpError';this.status=status;this.response=response;}}
 const httpMethods=new Set<HttpMethod>(['GET','POST','PUT','PATCH','DELETE']);
 function plainHttpRecord(value:unknown):value is Record<string,unknown>{if(!value||typeof value!=='object'||Array.isArray(value))return false;const prototype=Object.getPrototypeOf(value);return prototype===Object.prototype||prototype===null;}

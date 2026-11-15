@@ -41,6 +41,30 @@ Copying these assets does not require the Qbits compiler or runtime. Extension
 packaging, icons, themes, language servers, snippets, and semantic token providers
 are intentionally outside Stage 6A.
 
+## Framework-owned code displays
+
+Web documentation and examples can use the opt-in browser highlighter. The module
+loads the TextMate engine only when one of its asynchronous functions is called, so
+the compiler and runtime bundles do not include highlighting code.
+
+```ts
+import {highlightQbitsElement} from 'qbits/highlight';
+import 'qbits/highlight.css';
+
+const code = document.querySelector<HTMLElement>('[data-qbits-code]');
+if (code) void highlightQbitsElement(code);
+```
+
+`highlightQbits(source)` returns escaped highlighted markup for documentation
+renderers. `tokenizeQbits(source)` returns tokens and TextMate scopes without HTML.
+The DOM helper creates text nodes and fixed-class spans; it does not insert source as
+HTML. Highlighting input is bounded to 1,000,000 UTF-16 code units.
+
+The stylesheet follows the operating-system color scheme and supports explicit
+`data-qbits-theme="light"` or `data-qbits-theme="dark"` on the code block or an
+ancestor. Every color is a `--qbits-code-*` custom property, so applications can
+override the palette without replacing the tokenizer or grammar.
+
 ## Scope contract
 
 The grammar uses conventional scope families so existing themes work without Qbits

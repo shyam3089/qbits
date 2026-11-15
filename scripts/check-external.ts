@@ -110,7 +110,7 @@ try {
   const installed = join(app,'node_modules',identity.packageName);
   assert.ok(!(await realpath(installed)).startsWith(root),'Framework must be installed from tarball, not linked to checkout');
   const manifest = JSON.parse(await readFile(join(installed,'package.json'),'utf8'));
-  assert.equal(manifest.private,undefined); assert.equal(manifest.scripts?.postinstall,undefined);
+  assert.equal(manifest.private,undefined); assert.equal(manifest.scripts?.postinstall,'node tooling/install.mjs');
   assert.equal(Object.keys(manifest.bin)[0],identity.cliName);
   assert.equal(JSON.parse(await readFile(join(runner,'node_modules',identity.createPackageName,'package.json'),'utf8')).version,manifest.version);
   for (const topic of ['agent','api','syntax','examples','commands','security','limitations']) assert.ok((await readFile(join(installed,'docs',topic + '.md'),'utf8')).length);
@@ -128,6 +128,8 @@ try {
   const compiler = await import(pathToFileURL(join(installed,'dist/lib/language/index.js')).href);
   const sourcePath = join(app,`src/Counter${identity.sourceExtension}`); const original = await readFile(sourcePath,'utf8');
   assert.ok(compiler.compile(original,sourcePath).code);
+  const mainPath=join(app,'src/main.ts'),mainSource=await readFile(mainPath,'utf8');
+  await writeFile(mainPath,mainSource+`\nimport {highlightQbitsElement} from '${identity.packageName}/highlight';\nimport '${identity.packageName}/highlight.css';\nconst code=document.createElement('pre');code.dataset.qbitsCode='';code.textContent='component Highlighted:\\n    state count = 1\\n    # safe';document.body.append(code);void highlightQbitsElement(code);\n`);
   console.log('Installed docs, init, local CLI and compiler checks passed.');
   browser = await firefox.launch({headless:true}); const page = await browser.newPage();
   const pageErrors: string[] = [];
@@ -144,6 +146,8 @@ try {
   const url = await startServer(app,false); const pid = server!.pid;
   const first=page.getByRole('button').nth(0),second=page.getByRole('button').nth(1);
   await page.goto(url); await page.getByRole('button',{name:'First: 0',exact:true}).waitFor();
+  const highlighted=page.locator('[data-qbits-code]');await highlighted.locator('.qbits-token--type',{hasText:'component'}).waitFor();
+  assert.equal(await highlighted.getAttribute('data-language'),`source.${identity.languageId}`);
   await first.click(); assert.equal(await first.textContent(),'First: 1');assert.equal(await second.textContent(),'Second: 0');
   assert.equal(await page.locator('.counter').nth(0).getAttribute('class'),'counter compact');
   assert.equal(await first.evaluate(e=>getComputedStyle(e).color),'rgb(20, 80, 160)');

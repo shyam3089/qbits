@@ -29,7 +29,12 @@
     "./vite": {
       "types": "./dist/lib/tooling/vite.d.ts",
       "import": "./dist/lib/tooling/vite.js"
-    }
+    },
+    "./highlight": {
+      "types": "./dist/lib/editor/highlight.d.ts",
+      "import": "./dist/lib/editor/highlight.js"
+    },
+    "./highlight.css": "./editor/qbits-highlight.css"
   },
   "files": [
     "tooling/install.mjs",
@@ -38,7 +43,9 @@
     "tooling/package-manager.mjs",
     "dist/lib",
     "identity.json",
-    "editor",
+    "editor/qbits.tmLanguage.json",
+    "editor/language-configuration.json",
+    "editor/qbits-highlight.css",
     "examples/http-basics",
     "examples/http-commerce",
     "docs/agent.md",
@@ -96,8 +103,7 @@
     "tsx": "^4.19.4",
     "typescript": "~5.8.3",
     "vite": "^6.4.5",
-    "vscode-oniguruma": "^2.0.1",
-    "vscode-textmate": "^9.3.2"
+    "vscode-oniguruma": "^2.0.1"
   },
   "engines": {
     "node": ">=22"
@@ -119,5 +125,8 @@
   },
   "bin": {
     "qb": "dist/lib/tooling/cli.js"
+  },
+  "dependencies": {
+    "vscode-textmate": "^9.3.2"
   }
 }

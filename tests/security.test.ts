@@ -129,15 +129,22 @@ test('runtime limits, hostile props, and __proto__ iteration fail without corrup
     for __proto__ in items key=__proto__:
         p text=str(__proto__)`).code;
   const recursiveModule=`export const model={props:{},classes:{},states:{},computed:{},init:[],cleanup:[],roots:[{kind:'element',tag:'Loop',component:0,attributes:{},children:[]}]};export default function recursive(target,runtime){return runtime.mountComponent(target,model,[recursive]);}`;
+  const inheritedHttpFunction=compile(`component HttpPrototype:
+    http client api:
+        base "https://api.example.test/"
+        auth bearer constructor
+    client api
+    p text="safe"`,'HttpPrototype.qb').code;
   const browser=await firefox.launch({headless:true});
   try{
     const page=await browser.newPage();
-    const result=await page.evaluate(async({runtime,protoModule,recursiveModule})=>{
-      const urls=[runtime,protoModule,recursiveModule].map(source=>URL.createObjectURL(new Blob([source],{type:'text/javascript'}))),runtimeUrl=urls[0],protoUrl=urls[1];const host=document.createElement('main');document.body.append(host);
+    const result=await page.evaluate(async({runtime,protoModule,recursiveModule,inheritedHttpFunction})=>{
+      (globalThis as any).__name=(value:unknown)=>value;
+      const urls=[runtime,protoModule,recursiveModule,inheritedHttpFunction].map(source=>URL.createObjectURL(new Blob([source],{type:'text/javascript'}))),runtimeUrl=urls[0],protoUrl=urls[1];const host=document.createElement('main');document.body.append(host);
       try{
         const api=await import(runtimeUrl),root=await import(protoUrl);const dispose=root.default(host,api);const protoText=host.textContent;dispose();
         const emptyModel={props:{value:''},classes:{},states:{},computed:{},init:[],cleanup:[],roots:[]};
-        let getter='',proxy='',depth='',collection='',invalidLimit='';
+        let getter='',proxy='',depth='',collection='',invalidLimit='',httpFunction='';
         try{api.mountComponent(host,emptyModel,[],Object.defineProperty({},'value',{enumerable:true,get(){throw new Error('getter blocked');}}));}catch(error){getter=error.message;}
         try{api.mountComponent(host,emptyModel,[],new Proxy({value:''},{ownKeys(){throw new Error('proxy blocked');}}));}catch(error){proxy=error.message;}
         const listModel={props:{},classes:{},states:{items:{kind:'list',items:[1,2,3].map(value=>({kind:'literal',value}))}},computed:{},init:[],cleanup:[],roots:[]};
@@ -145,9 +152,11 @@ test('runtime limits, hostile props, and __proto__ iteration fail without corrup
         try{api.mountComponent(host,emptyModel,[],{}, {maxUpdatesPerFlush:0});}catch(error){invalidLimit=error.message;}
         const recursive=await import(urls[2]);
         try{api.mountComponent(host,recursive.model,[recursive.default],{}, {maxComponentDepth:8});}catch(error){depth=error.message;}
-        return{protoText,getter,proxy,collection,invalidLimit,depth,empty:host.childNodes.length===0,polluted:({}).polluted};
+        const inherited=await import(urls[3]),restore=api.configureHttpApplication({functions:{token:()=> 'safe'}});
+        try{inherited.default(host,api);}catch(error){httpFunction=error.message;}finally{restore();}
+        return{protoText,getter,proxy,collection,invalidLimit,depth,httpFunction,empty:host.childNodes.length===0,polluted:({}).polluted};
       }finally{host.remove();urls.forEach(value=>URL.revokeObjectURL(value));}
-    },{runtime,protoModule,recursiveModule});
-    assert.deepEqual(result,{protoText:'1',getter:'getter blocked',proxy:'proxy blocked',collection:'Collection exceeds the configured limit of 2 items',invalidLimit:'Runtime limit maxUpdatesPerFlush must be a positive safe integer',depth:'Component nesting exceeds the configured limit of 8',empty:true,polluted:undefined});
+    },{runtime,protoModule,recursiveModule,inheritedHttpFunction});
+    assert.deepEqual(result,{protoText:'1',getter:'getter blocked',proxy:'proxy blocked',collection:'Collection exceeds the configured limit of 2 items',invalidLimit:'Runtime limit maxUpdatesPerFlush must be a positive safe integer',depth:'Component nesting exceeds the configured limit of 8',httpFunction:'Unknown HTTP auth provider function constructor',empty:true,polluted:undefined});
   }finally{await browser.close();}
 });

@@ -7,7 +7,7 @@ The current package-lock.json records these dependency licenses:
 
 | Packages, including platform variants where present | Declared license |
 | --- | --- |
-| Vite, Rollup, esbuild, tsx, fdir, tinyglobby, picomatch, nanoid, PostCSS, fsevents, @types/node, @types/estree, undici-types, @napi-rs/lzma-linux-x64-gnu | MIT |
+| Vite, Rollup, esbuild, tsx, vscode-textmate, vscode-oniguruma, fdir, tinyglobby, picomatch, nanoid, PostCSS, fsevents, @types/node, @types/estree, undici-types, @napi-rs/lzma-linux-x64-gnu | MIT |
 | picocolors | ISC |
 | source-map-js | BSD-3-Clause |
 | TypeScript, Playwright, playwright-core | Apache-2.0 |

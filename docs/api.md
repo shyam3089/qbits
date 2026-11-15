@@ -33,6 +33,11 @@ There is intentionally no `qbits` root export.
   `RuntimeLimits` and `defaultRuntimeLimits` are supported configuration types. The
   `mountComponent*` functions and model types are a generated-code ABI, not a hand-authored
   application API. `mountCounter` is a legacy test/example helper and is experimental.
+- `qbits/highlight` provides the opt-in asynchronous `tokenizeQbits`,
+  `highlightQbits`, and `highlightQbitsElement` helpers backed by the shipped
+  `source.qbits` TextMate grammar. Import `qbits/highlight.css` for the default
+  light/dark theme variables. Highlighting is separate from compiler and runtime
+  entry points and accepts at most 1,000,000 UTF-16 code units per call.
 
 The tokenizer, parser, validator, generator, AST shapes, generated model objects, and
 other transitive exports from `qbits/compiler` or `qbits/runtime` are experimental.

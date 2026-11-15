@@ -8,6 +8,18 @@ Release decisions use validation evidence produced locally on the exact candidat
 GitHub CI is supplementary and is not a release requirement. This checklist does not
 authorize publishing, tagging, publishing-workflow activation, or deployment.
 
+## Current revalidation - 2026-11-15
+
+- The public npm registry already contains `qbits@1.0.1` and `create-qb@1.0.1`.
+  Consequently, `1.0.1` is not available for a new first publication and the package
+  names are not unclaimed. Changes under **Unreleased** require an explicitly chosen
+  new version before they can be published.
+- The current machine is not authenticated to npm (`npm whoami` returns `E401`), so
+  publish access, 2FA state and ownership authority remain unverified.
+- This preparation does not change versions, tags, workflows or registry state and
+  does not authorize publication. The older infrastructure notes below are retained
+  as dated historical evidence rather than current registry status.
+
 ## Previous preparation - 1.0.0 preparation, 2026-11-08
 
 - Promote the verified `0.1.0-beta.2` baseline at `85afa955` to `qbits` and
@@ -63,7 +75,7 @@ the 1.0.0 local gate or the outstanding human and publication prerequisites.
 - All referenced GitHub actions use reviewed full commit SHAs. Checkout persistence
   is disabled, workflow permissions default to read-only contents, dependency installs
   suppress lifecycle scripts, and the isolated pnpm verification CLI is version-pinned.
-- Public registry lookups returned `E404` for both `qbits` and `create-qb`. This means
+- At that time, public registry lookups returned `E404` for both `qbits` and `create-qb`. This meant
   no public package currently occupies either exact name, but it does not reserve the
   names or prove that any account can publish them. The audit machine is not logged in
   to npm, so authenticated ownership was not verified.

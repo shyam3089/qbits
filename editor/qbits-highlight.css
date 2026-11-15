@@ -1,0 +1,105 @@
+:root {
+  --qbits-code-background: #f6f8fa;
+  --qbits-code-foreground: #24292f;
+  --qbits-code-border: #d0d7de;
+  --qbits-code-keyword: #cf222e;
+  --qbits-code-type: #8250df;
+  --qbits-code-function: #6639ba;
+  --qbits-code-component: #0550ae;
+  --qbits-code-state: #953800;
+  --qbits-code-property: #116329;
+  --qbits-code-parameter: #953800;
+  --qbits-code-string: #0a3069;
+  --qbits-code-number: #0550ae;
+  --qbits-code-constant: #0550ae;
+  --qbits-code-comment: #57606a;
+  --qbits-code-operator: #cf222e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --qbits-code-background: #0d1117;
+    --qbits-code-foreground: #e6edf3;
+    --qbits-code-border: #30363d;
+    --qbits-code-keyword: #ff7b72;
+    --qbits-code-type: #d2a8ff;
+    --qbits-code-function: #d2a8ff;
+    --qbits-code-component: #79c0ff;
+    --qbits-code-state: #ffa657;
+    --qbits-code-property: #7ee787;
+    --qbits-code-parameter: #ffa657;
+    --qbits-code-string: #a5d6ff;
+    --qbits-code-number: #79c0ff;
+    --qbits-code-constant: #79c0ff;
+    --qbits-code-comment: #8b949e;
+    --qbits-code-operator: #ff7b72;
+  }
+}
+
+[data-qbits-theme="light"] {
+  color-scheme: light;
+  --qbits-code-background: #f6f8fa;
+  --qbits-code-foreground: #24292f;
+  --qbits-code-border: #d0d7de;
+  --qbits-code-keyword: #cf222e;
+  --qbits-code-type: #8250df;
+  --qbits-code-function: #6639ba;
+  --qbits-code-component: #0550ae;
+  --qbits-code-state: #953800;
+  --qbits-code-property: #116329;
+  --qbits-code-parameter: #953800;
+  --qbits-code-string: #0a3069;
+  --qbits-code-number: #0550ae;
+  --qbits-code-constant: #0550ae;
+  --qbits-code-comment: #57606a;
+  --qbits-code-operator: #cf222e;
+}
+
+[data-qbits-theme="dark"] {
+  color-scheme: dark;
+  --qbits-code-background: #0d1117;
+  --qbits-code-foreground: #e6edf3;
+  --qbits-code-border: #30363d;
+  --qbits-code-keyword: #ff7b72;
+  --qbits-code-type: #d2a8ff;
+  --qbits-code-function: #d2a8ff;
+  --qbits-code-component: #79c0ff;
+  --qbits-code-state: #ffa657;
+  --qbits-code-property: #7ee787;
+  --qbits-code-parameter: #ffa657;
+  --qbits-code-string: #a5d6ff;
+  --qbits-code-number: #79c0ff;
+  --qbits-code-constant: #79c0ff;
+  --qbits-code-comment: #8b949e;
+  --qbits-code-operator: #ff7b72;
+}
+
+.qbits-code {
+  overflow: auto;
+  display: block;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid var(--qbits-code-border);
+  border-radius: .5rem;
+  background: var(--qbits-code-background);
+  color: var(--qbits-code-foreground);
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: .875rem;
+  line-height: 1.5;
+  tab-size: 4;
+  white-space: pre;
+}
+
+.qbits-token--keyword { color: var(--qbits-code-keyword); }
+.qbits-token--type { color: var(--qbits-code-type); }
+.qbits-token--function { color: var(--qbits-code-function); }
+.qbits-token--component { color: var(--qbits-code-component); }
+.qbits-token--state { color: var(--qbits-code-state); }
+.qbits-token--property { color: var(--qbits-code-property); }
+.qbits-token--parameter { color: var(--qbits-code-parameter); }
+.qbits-token--string { color: var(--qbits-code-string); }
+.qbits-token--number { color: var(--qbits-code-number); }
+.qbits-token--constant { color: var(--qbits-code-constant); }
+.qbits-token--comment { color: var(--qbits-code-comment); font-style: italic; }
+.qbits-token--operator { color: var(--qbits-code-operator); }

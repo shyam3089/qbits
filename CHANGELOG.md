@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Add opt-in browser code highlighting through `qbits/highlight`, backed by the
+  shipped `source.qbits` TextMate grammar, with escaped/DOM-safe output, bounded
+  input, lazy engine loading, and CSS-variable light/dark themes.
+- Store configured HTTP auth/interceptor functions in a null-prototype registry so
+  inherited names such as `constructor` cannot be mistaken for host-provided
+  capabilities.
+- Extend grammar, highlighting, external-package, security, npm and pnpm regression
+  coverage without changing approved `.qb` syntax.
+
 ## 1.0.1 - 2026-11-08
 
 - Add guarded Hello World setup for direct npm installs in new empty applications,
