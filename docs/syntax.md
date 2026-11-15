@@ -535,3 +535,6 @@ controls, class inheritance/custom constructors/class-action parameters,
 filter/sort/index expressions, nested routing, SSR, plugins and LSP remain deferred.
 Development reloads on component/CSS edits and recovers from located errors.
 Reload resets state; state-preserving HMR and generated JavaScript source maps are deferred.
+
+Editor authors can reuse the theme-neutral TextMate grammar and language
+configuration described in [Qbits syntax highlighting](syntax-highlighting.md).

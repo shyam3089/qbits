@@ -1,0 +1,341 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Qbits",
+  "scopeName": "source.qbits",
+  "fileTypes": ["qb"],
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#imports" },
+    { "include": "#type-declarations" },
+    { "include": "#component-declarations" },
+    { "include": "#resource-declarations" },
+    { "include": "#lifecycle-and-events" },
+    { "include": "#control-flow" },
+    { "include": "#http-configuration" },
+    { "include": "#state-and-properties" },
+    { "include": "#elements" },
+    { "include": "#directives" },
+    { "include": "#expressions" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.number-sign.qbits",
+          "begin": "#",
+          "beginCaptures": { "0": { "name": "punctuation.definition.comment.qbits" } },
+          "end": "$"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.qbits",
+          "begin": "\"",
+          "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.qbits" } },
+          "end": "\"",
+          "endCaptures": { "0": { "name": "punctuation.definition.string.end.qbits" } },
+          "patterns": [
+            { "name": "constant.character.escape.qbits", "match": "\\\\(?:[\"\\\\/bfnrt]|u[0-9A-Fa-f]{4})" }
+          ]
+        }
+      ]
+    },
+    "imports": {
+      "patterns": [
+        {
+          "match": "^([ \\t]*)(import)\\b(?:[ \\t]+([A-Za-z_][A-Za-z0-9_]*)([ \\t]+)(from)\\b)?",
+          "captures": {
+            "2": { "name": "keyword.control.import.qbits" },
+            "3": { "name": "entity.name.type.component.qbits" },
+            "5": { "name": "keyword.control.import.from.qbits" }
+          }
+        }
+      ]
+    },
+    "type-declarations": {
+      "patterns": [
+        {
+          "match": "^([ \\t]*)(class)([ \\t]+)([A-Za-z_][A-Za-z0-9_]*)(?=[ \\t]*:)",
+          "captures": {
+            "2": { "name": "storage.type.class.qbits" },
+            "4": { "name": "entity.name.type.class.qbits" }
+          }
+        },
+        {
+          "match": "^([ \\t]*)(shared)([ \\t]+)([A-Za-z_][A-Za-z0-9_]*)(?=[ \\t]*:)",
+          "captures": {
+            "2": { "name": "storage.type.shared.qbits" },
+            "4": { "name": "entity.name.type.shared.qbits" }
+          }
+        }
+      ]
+    },
+    "component-declarations": {
+      "patterns": [
+        {
+          "begin": "^([ \\t]*)(component|service)([ \\t]+)([A-Za-z_][A-Za-z0-9_]*)",
+          "beginCaptures": {
+            "2": { "name": "storage.type.qbits" },
+            "4": { "name": "entity.name.type.qbits" }
+          },
+          "end": "(?=:)|$",
+          "patterns": [
+            { "include": "#strings" },
+            { "include": "#constants" },
+            {
+              "match": "(?:\\G|[(,])([ \\t]*)([A-Za-z_][A-Za-z0-9_]*)(?=[ \\t]*=)",
+              "captures": { "2": { "name": "variable.parameter.qbits" } }
+            },
+            { "include": "#operators" },
+            { "include": "#punctuation" }
+          ]
+        }
+      ]
+    },
+    "resource-declarations": {
+      "patterns": [
+        {
+          "match": "^([ \\t]*)(http)([ \\t]+)(client)([ \\t]+)([A-Za-z_][A-Za-z0-9_]*)(?=[ \\t]*:)",
+          "captures": {
+            "2": { "name": "storage.type.qbits" },
+            "4": { "name": "storage.type.qbits" },
+            "6": { "name": "entity.name.type.client.qbits" }
+          }
+        },
+        {
+          "match": "^([ \\t]*)(query|socket|sse)([ \\t]+)([A-Za-z_][A-Za-z0-9_]*)(?=[ \\t]*:)",
+          "captures": {
+            "2": { "name": "storage.type.qbits" },
+            "4": { "name": "entity.name.function.qbits" }
+          }
+        },
+        {
+          "begin": "^([ \\t]*)(action)([ \\t]+)([A-Za-z_][A-Za-z0-9_]*)(?=[ \\t]*\\()",
+          "beginCaptures": {
+            "2": { "name": "storage.type.function.qbits" },
+            "4": { "name": "entity.name.function.qbits" }
+          },
+          "end": "(?=:)|$",
+          "patterns": [
+            { "match": "[A-Za-z_][A-Za-z0-9_]*", "name": "variable.parameter.qbits" },
+            { "include": "#punctuation" }
+          ]
+        },
+        {
+          "match": "^([ \\t]*)(action)([ \\t]+)([A-Za-z_][A-Za-z0-9_]*)(?=[ \\t]*:)",
+          "captures": {
+            "2": { "name": "storage.type.function.qbits" },
+            "4": { "name": "entity.name.function.qbits" }
+          }
+        },
+        {
+          "match": "^([ \\t]*)(computed)([ \\t]+)([A-Za-z_][A-Za-z0-9_]*)(?=[ \\t]*=)",
+          "captures": {
+            "2": { "name": "storage.type.qbits" },
+            "4": { "name": "variable.other.readwrite.qbits" }
+          }
+        },
+        {
+          "match": "^([ \\t]*)(use|client)([ \\t]+)([A-Za-z_][A-Za-z0-9_]*)[ \\t]*$",
+          "captures": {
+            "2": { "name": "keyword.declaration.qbits" },
+            "4": { "name": "entity.name.type.qbits" }
+          }
+        }
+      ]
+    },
+    "lifecycle-and-events": {
+      "patterns": [
+        {
+          "match": "^([ \\t]*)(on)([ \\t]+)(init|cleanup)(?=[ \\t]*:)",
+          "captures": {
+            "2": { "name": "keyword.control.lifecycle.qbits" },
+            "4": { "name": "support.function.lifecycle.qbits" }
+          }
+        },
+        {
+          "match": "^([ \\t]*)(on)([ \\t]+)([A-Za-z_][A-Za-z0-9_]*)(?:[ \\t]*(\\()([A-Za-z_][A-Za-z0-9_]*)(\\)))?(?=[ \\t]*:)",
+          "captures": {
+            "2": { "name": "keyword.control.event.qbits" },
+            "4": { "name": "entity.name.function.event.qbits" },
+            "5": { "name": "punctuation.section.parameters.begin.qbits" },
+            "6": { "name": "variable.parameter.qbits" },
+            "7": { "name": "punctuation.section.parameters.end.qbits" }
+          }
+        },
+        {
+          "match": "\\b(emit|navigate)\\b",
+          "name": "keyword.control.qbits"
+        },
+        {
+          "match": "\\b(await)([ \\t]+)(http)(?=\\.)",
+          "captures": {
+            "1": { "name": "keyword.control.qbits" },
+            "3": { "name": "support.type.qbits" }
+          }
+        }
+      ]
+    },
+    "control-flow": {
+      "patterns": [
+        { "match": "^([ \\t]*)(if|else|router|slot)\\b", "captures": { "2": { "name": "keyword.control.qbits" } } },
+        {
+          "match": "^([ \\t]*)(route)([ \\t]+)",
+          "captures": { "2": { "name": "keyword.control.qbits" } }
+        },
+        {
+          "match": "^([ \\t]*)(for)([ \\t]+)([A-Za-z_][A-Za-z0-9_]*)([ \\t]+)(in)\\b",
+          "captures": {
+            "2": { "name": "keyword.control.loop.qbits" },
+            "4": { "name": "variable.other.loop.qbits" },
+            "6": { "name": "keyword.control.loop.qbits" }
+          }
+        },
+        { "match": "\\b(and|or|not)\\b", "name": "keyword.operator.logical.qbits" }
+      ]
+    },
+    "http-configuration": {
+      "patterns": [
+        {
+          "match": "^([ \\t]*)(get|post|put|patch|delete)(?=[ \\t]+)",
+          "captures": { "2": { "name": "keyword.other.http-method.qbits" } }
+        },
+        {
+          "match": "^([ \\t]*)(response)([ \\t]+)([A-Za-z_][A-Za-z0-9_]*)[ \\t]*$",
+          "captures": {
+            "2": { "name": "keyword.declaration.qbits" },
+            "4": { "name": "entity.name.type.qbits" }
+          }
+        },
+        {
+          "match": "^([ \\t]*)(auth)([ \\t]+)(bearer)([ \\t]+)([A-Za-z_][A-Za-z0-9_]*)[ \\t]*$",
+          "captures": {
+            "2": { "name": "keyword.declaration.qbits" },
+            "4": { "name": "keyword.declaration.qbits" },
+            "6": { "name": "entity.name.function.qbits" }
+          }
+        },
+        {
+          "match": "^([ \\t]*)(interceptor)(?:[ \\t]+(request|response|error))?([ \\t]+)([A-Za-z_][A-Za-z0-9_]*)[ \\t]*$",
+          "captures": {
+            "2": { "name": "keyword.declaration.qbits" },
+            "3": { "name": "constant.language.qbits" },
+            "5": { "name": "entity.name.function.qbits" }
+          }
+        },
+        {
+          "match": "^([ \\t]*)(base|auth|bearer|interceptor|param|header|body|response|client|debounce|timeout|retry|cache|poll|refresh|instant|upload|download|connect|reconnect)(?=\\b|[ \\t]*:)",
+          "captures": { "2": { "name": "keyword.declaration.qbits" } }
+        },
+        { "match": "\\b(on-focus)\\b", "name": "constant.language.qbits" },
+        {
+          "match": "\\b(list)([ \\t]*)(\\[)([A-Za-z_][A-Za-z0-9_]*)(\\])",
+          "captures": {
+            "1": { "name": "storage.type.qbits" },
+            "3": { "name": "punctuation.definition.type.begin.qbits" },
+            "4": { "name": "entity.name.type.qbits" },
+            "5": { "name": "punctuation.definition.type.end.qbits" }
+          }
+        },
+        { "match": "\\b(request|error)(?=[ \\t]+[A-Za-z_])", "name": "constant.language.qbits" }
+      ]
+    },
+    "state-and-properties": {
+      "patterns": [
+        {
+          "match": "^([ \\t]*)(state)([ \\t]+)([A-Za-z_][A-Za-z0-9_]*)(?=[ \\t]*=)",
+          "captures": {
+            "2": { "name": "storage.type.qbits" },
+            "4": { "name": "variable.other.readwrite.qbits" }
+          }
+        },
+        {
+          "match": "^([ \\t]*)([A-Za-z_][A-Za-z0-9_]*)(?=[ \\t]*=)",
+          "captures": { "2": { "name": "variable.other.readwrite.qbits" } }
+        },
+        {
+          "match": "(?<=\\.)[A-Za-z_][A-Za-z0-9_]*",
+          "name": "variable.other.property.qbits"
+        },
+        {
+          "match": "\\b(event)(\\.)(value|checked|file|files)\\b",
+          "captures": {
+            "1": { "name": "variable.language.qbits" },
+            "2": { "name": "punctuation.accessor.qbits" },
+            "3": { "name": "variable.other.property.qbits" }
+          }
+        }
+      ]
+    },
+    "elements": {
+      "patterns": [
+        {
+          "begin": "^([ \\t]*)([A-Za-z_][A-Za-z0-9_]*)(?=[ \\t]+(?:multiple\\b|[A-Za-z_][A-Za-z0-9_]*[ \\t]*=)|[ \\t]*:|[ \\t]*$)",
+          "beginCaptures": { "2": { "name": "entity.name.tag.qbits" } },
+          "end": "$",
+          "patterns": [
+            { "include": "#comments" },
+            { "include": "#strings" },
+            { "include": "#directives" },
+            {
+              "match": "\\b([A-Za-z_][A-Za-z0-9_]*)(?=[ \\t]*=)",
+              "captures": { "1": { "name": "variable.other.property.qbits" } }
+            },
+            { "include": "#expressions" }
+          ]
+        }
+      ]
+    },
+    "directives": {
+      "patterns": [
+        { "match": "\\b(key|bind)(?=[ \\t]*=)|\\bmultiple\\b(?=[ \\t]+[A-Za-z_][A-Za-z0-9_]*[ \\t]*=|[ \\t]*(?:#|$))", "name": "keyword.other.directive.qbits" },
+        { "match": "\\b(text|class|value|checked|type)(?=[ \\t]*=)", "name": "variable.other.property.qbits" }
+      ]
+    },
+    "expressions": {
+      "patterns": [
+        { "include": "#durations" },
+        { "include": "#constants" },
+        { "match": "\\b(File|number|string|boolean)\\b", "name": "support.type.primitive.qbits" },
+        { "match": "(?<=\\bas[ \\t])([A-Za-z_][A-Za-z0-9_]*)", "name": "entity.name.type.qbits" },
+        { "match": "\\b(str|len|contains|count)(?=[ \\t]*\\()", "name": "support.function.builtin.qbits" },
+        { "match": "\\b([A-Z][A-Za-z0-9_]*)(?=[ \\t]*\\()", "name": "entity.name.type.qbits" },
+        { "match": "\\b([A-Za-z_][A-Za-z0-9_]*)(?=[ \\t]*\\()", "name": "entity.name.function.qbits" },
+        { "match": "\\b(as)\\b", "name": "keyword.operator.word.qbits" },
+        { "include": "#operators" },
+        { "include": "#punctuation" }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        { "match": "\\b(true|false|null)\\b", "name": "constant.language.qbits" },
+        { "match": "(?<![A-Za-z0-9_])(?:0|[1-9][0-9]*)(?![A-Za-z0-9_])", "name": "constant.numeric.integer.qbits" }
+      ]
+    },
+    "durations": {
+      "patterns": [
+        {
+          "match": "(?<![A-Za-z0-9_])([0-9]+)(ms|s)\\b",
+          "captures": {
+            "1": { "name": "constant.numeric.integer.qbits" },
+            "2": { "name": "keyword.other.unit.duration.qbits" }
+          }
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        { "match": "==|!=|=|\\+|-", "name": "keyword.operator.qbits" }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        { "match": "[():,\\[\\]]", "name": "punctuation.separator.qbits" },
+        { "match": "\\.", "name": "punctuation.accessor.qbits" }
+      ]
+    }
+  }
+}
