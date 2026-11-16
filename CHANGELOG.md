@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.1.0 - 2026-11-16
+
 - Add opt-in browser code highlighting through `qbits/highlight`, backed by the
   shipped `source.qbits` TextMate grammar, with escaped/DOM-safe output, bounded
   input, lazy engine loading, and CSS-variable light/dark themes.

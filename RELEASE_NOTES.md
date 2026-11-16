@@ -1,4 +1,28 @@
-# Qbits 1.0.1 release
+# Qbits 1.1.0 release
+
+This minor release adds the approved typed HTTP surface through Stage 4E: clients,
+queries, actions, file uploads and downloads, WebSockets, SSE, and root-scoped
+services. It also adds opt-in browser highlighting through `qbits/highlight` and
+the built-in TextMate grammar, language configuration, and light/dark CSS themes.
+
+Configured HTTP auth providers and interceptors are now copied into a frozen
+null-prototype registry. This prevents inherited names such as `constructor` from
+being mistaken for explicitly configured host capabilities. The fix and the wider
+HTTP surface are security-sensitive and require independent human review before
+publication; automated tests are release evidence, not approval or certification.
+
+Existing public compiler, runtime and Vite APIs, approved `.qb` syntax, component
+identity, documentation, and highlighting assets remain available. The matching
+`create-qb@1.1.0` candidate is required because the scaffolder pins generated apps
+to its own framework version; neither package is published by this preparation.
+
+<!-- qbits-release:start -->
+Version: `1.1.0`; tag: `v1.1.0`; date: 2026-11-16.
+<!-- qbits-release:end -->
+
+## Previous stable release
+
+Version: `1.0.1`; tag: `v1.0.1`; date: 2026-11-08.
 
 This patch adds Hello World initialization when a lifecycle-enabled npm directly
 installs Qbits into a new empty application. It reuses existing templates, supplies
@@ -10,11 +34,7 @@ scripts, policies that block the hook, and omitted optional dependencies prevent
 The installer does not bypass those policies. Publication must remain
 blocked if the required client cannot complete the packed-artifact workflow unchanged.
 
-<!-- qbits-release:start -->
-Version: `1.0.1`; tag: `v1.0.1`; date: 2026-11-08.
-<!-- qbits-release:end -->
-
-## Previous stable release
+## Earlier stable release
 
 Version: `1.0.0`; tag: `v1.0.0`; date: 2026-11-08.
 

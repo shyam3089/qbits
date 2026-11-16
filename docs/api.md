@@ -1,6 +1,6 @@
-# Qbits v1.0.1 public API
+# Qbits v1.1.0 public API
 
-This document freezes the supported public surface for `v1.0.1`. A feature is not
+This document freezes the supported public surface for `v1.1.0`. A feature is not
 stable merely because it is exported or present in generated code. The exact `.qb`
 grammar in [syntax.md](syntax.md) and the supported interfaces listed below are the stable contract.
 

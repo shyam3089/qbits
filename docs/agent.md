@@ -1,7 +1,7 @@
-<!-- Generated for Qbits 1.0.1 by npm run sync. -->
+<!-- Generated for Qbits 1.1.0 by npm run sync. -->
 # Agent entry point
 
-Use only this installed version (1.0.1) of Qbits. Load guidance by topic:
+Use only this installed version (1.1.0) of Qbits. Load guidance by topic:
 - [api](api.md): frozen public surface and experimental features.
 - [syntax](syntax.md): approved indentation grammar and HTTP surface through Stage 4E.
 - [HTTP](http-stage4e.md): queries, resources, clients, actions, files, transfers, connections and services.

@@ -1,24 +1,33 @@
-# Release readiness: Phases 3F.2-3F.5
+# Qbits 1.1.0 release readiness
 
 <!-- qbits-release:start -->
-Version: `1.0.1`; tag: `v1.0.1`; date: 2026-11-08.
+Version: `1.1.0`; tag: `v1.1.0`; date: 2026-11-16.
 <!-- qbits-release:end -->
 
 Release decisions use validation evidence produced locally on the exact candidate commit.
 GitHub CI is supplementary and is not a release requirement. This checklist does not
 authorize publishing, tagging, publishing-workflow activation, or deployment.
 
-## Current revalidation - 2026-11-15
+## Current revalidation - 2026-11-16
 
 - The public npm registry already contains `qbits@1.0.1` and `create-qb@1.0.1`.
-  Consequently, `1.0.1` is not available for a new first publication and the package
-  names are not unclaimed. Changes under **Unreleased** require an explicitly chosen
-  new version before they can be published.
-- The current machine is not authenticated to npm (`npm whoami` returns `E401`), so
+  The local candidates are `qbits@1.1.0` and the matching `create-qb@1.1.0`; neither
+  version has been published, tagged, committed, pushed, or deployed.
+- Build, sync, docs, 119 full tests, rename, npm/pnpm external tarball tests,
+  Firefox development/production checks, direct empty-directory installation with
+  scripts permitted, package inspection, and `npm audit` all pass locally.
+- The `qbits-1.1.0.tgz` SHA-256 is
+  `c76ab0511a394b5aa75f95885436ca13cffe536c0cd189cdbea6b5b1634f9cd2`;
+  the `create-qb-1.1.0.tgz` SHA-256 is
+  `720655ec57dc231541f1c503c5d4052e90f0145b086ea5ecf03fc79db1c3bb19`.
+- The HTTP auth/interceptor null-prototype registry fix and the wider approved HTTP
+  surface are security-sensitive. Independent human review and explicit release
+  approval remain mandatory before merge, tag, or publication.
+- The current machine is not authenticated to npm (`npm whoami` returns `ENEEDAUTH`), so
   publish access, 2FA state and ownership authority remain unverified.
-- This preparation does not change versions, tags, workflows or registry state and
-  does not authorize publication. The older infrastructure notes below are retained
-  as dated historical evidence rather than current registry status.
+- This preparation changes local candidate versions and documentation only. It does
+  not authorize publication. The older infrastructure notes below are retained as
+  dated historical evidence rather than current registry status.
 
 ## Previous preparation - 1.0.0 preparation, 2026-11-08
 
