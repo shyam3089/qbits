@@ -125,9 +125,6 @@ component C:
     input type="file" bind=photo
     p text=str(photo)`,/File values are opaque/);
   rejects(`component C:
-    state kind = "file"
-    input type=kind`,/static string literal/);
-  rejects(`component C:
     state photo = null
     input type="file" on change photo = event.file`,/direct action invocation/);
 });

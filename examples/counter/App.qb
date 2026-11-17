@@ -2,6 +2,8 @@ import Counter from "./Counter.qb"
 import Greeting from "./Greeting.qb"
 import NotificationSetting from "./NotificationSetting.qb"
 import Catalog from "./Catalog.qb"
+import HtmlForm from "./HtmlForm.qb"
+import SvgChart from "./SvgChart.qb"
 
 component App:
     main class="page":
@@ -11,3 +13,5 @@ component App:
         Greeting
         NotificationSetting
         Catalog
+        HtmlForm
+        SvgChart

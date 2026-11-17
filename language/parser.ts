@@ -115,12 +115,12 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     return {event:{value:event.value,span:event.span},parameter,kind:legacyKind as Handler['kind'],statements:body,span:{start,end:body.at(-1)!.span.end}};
   }
   function element():ElementNode {
-    const tag=id();const attributes:Record<string,Expression>={};const indentedAttributes:string[]=[];const children:ViewNode[]=[];
-    function attribute(indented=false):void {const key=take('identifier');symbol('=');if(Object.hasOwn(attributes,key.value))fail(source,filename,key.span,`Duplicate attribute ${key.value}`);Object.defineProperty(attributes,key.value,{value:expression(),enumerable:true});if(indented){indentedAttributes.push(key.value);take('NEWLINE');}}
+    const first=take('identifier');let tag:Node<string>={value:first.value,span:first.span};while(at('-')&&peek(1).kind==='identifier'){symbol('-');const part=take('identifier');tag={value:`${tag.value}-${part.value}`,span:{start:tag.span.start,end:part.span.end}};}const attributes:Record<string,Expression>={};const indentedAttributes:string[]=[];const children:ViewNode[]=[];
+    function attributeName():Node<string>{const first=take('identifier');let value=first.value,end=first.span.end;while((at('-')||at(':'))&&peek(1).kind==='identifier'){const separator=take('symbol').value,part=take('identifier');value+=separator+part.value;end=part.span.end;}return {value,span:{start:first.span.start,end}};}
+    function attribute(indented=false):void {const key=attributeName();let value:Expression;if(at('=')){symbol('=');value=expression();}else value={kind:'literal',value:true,span:key.span};if(Object.hasOwn(attributes,key.value))fail(source,filename,key.span,`Duplicate attribute ${key.value}`);Object.defineProperty(attributes,key.value,{value,enumerable:true});if(indented){indentedAttributes.push(key.value);take('NEWLINE');}}
+    function assignedAttribute():boolean{let ahead=1;while(['-',':'].includes(peek(ahead).value)&&peek(ahead+1).kind==='identifier')ahead+=2;return peek(ahead).value==='=';}
     while(peek().kind==='identifier'){
-      if(peek(1).value==='='){attribute();continue;}
-      if(peek().value==='multiple'){const flag=take('identifier');if(Object.hasOwn(attributes,flag.value))fail(source,filename,flag.span,`Duplicate attribute ${flag.value}`);Object.defineProperty(attributes,flag.value,{value:{kind:'literal',value:true,span:flag.span},enumerable:true});continue;}
-      break;
+      if(peek().value==='on')break;attribute();
     }
     const node:ElementNode={kind:'element',tag,attributes,indentedAttributes,children,span:{start:tag.span.start,end:tokens[cursor-1].span.end}};
     if(at('on')) {
@@ -128,7 +128,7 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     } else if(at(':')) {
       block();while(peek().kind!=='DEDENT'&&peek().kind!=='eof') {
         if(at('on')) {if(node.handler)fail(source,filename,peek().span,'Duplicate event handler');node.handler=handler();node.span.end=node.handler.span.end;}
-        else if(peek().kind==='identifier'&&peek(1).value==='='){attribute(true);node.span.end=tokens[cursor-2].span.end;}
+        else if(peek().kind==='identifier'&&assignedAttribute()){attribute(true);node.span.end=tokens[cursor-2].span.end;}
         else {const child=view();children.push(child);node.span.end=child.span.end;}
       }take('DEDENT');
     } else take('NEWLINE');return node;
@@ -162,7 +162,7 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     if(++viewDepth>limits.maxNestingDepth)fail(source,filename,peek().span,`View nesting exceeds the configured limit of ${limits.maxNestingDepth} levels`);
     try{if(at('else'))fail(source,filename,peek().span,'else must immediately follow an if block at the same indentation');
     if(at('route'))fail(source,filename,peek().span,'route must be directly inside router');
-    if(at('router'))return router();if(at('if'))return conditional();if(at('for'))return iteration();if(at('slot'))return slot();return element();}finally{viewDepth--;}
+    if(at('router'))return router();if(at('if'))return conditional();if(at('for'))return iteration();if(at('slot')&&peek(1).kind==='NEWLINE')return slot();return element();}finally{viewDepth--;}
   }
   function computed():Computed {const start=word('computed').span.start;const name=id();symbol('=');const value=expression();take('NEWLINE');return {name,expression:value,span:{start,end:value.span.end}};}
   function action():Action {const start=word('action').span.start;const name=id();block();const body=statements();take('DEDENT');if(!body.length)fail(source,filename,name.span,'Action requires at least one statement');return {name,statements:body,span:{start,end:body.at(-1)!.span.end}};}

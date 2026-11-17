@@ -5,6 +5,6 @@
     "declaration": true, "outDir": "dist/lib", "rootDir": ".",
     "lib": ["ES2022", "DOM"], "skipLibCheck": true
   },
-  "include": ["language", "runtime", "tooling", "editor/**/*.ts", "identity.json"],
+  "include": ["language", "runtime", "dom", "tooling", "editor/**/*.ts", "identity.json"],
   "exclude": ["tests", "node_modules", "dist"]
 }

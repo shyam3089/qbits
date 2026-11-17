@@ -1,0 +1,17 @@
+component SvgChart:
+    radius = 24
+
+    figure class="svg-example":
+        svg viewBox="0 0 240 140" width=240 height=140 role="img" aria-label="Interactive SVG radius chart":
+            defs:
+                linearGradient id="chart-gradient" x1="0%" x2="100%":
+                    stop offset="0%" stop-color="#4f46e5"
+                    stop offset="100%" stop-color="#06b6d4"
+            g transform="translate(120 70)":
+                circle r=radius fill="url(#chart-gradient)" stroke="currentColor" stroke-width=2:
+                    on click:
+                        radius = radius + 4
+                path d="M -70 50 H 70" fill="none" stroke="currentColor"
+            foreignObject x=8 y=8 width=100 height=28:
+                div class="svg-label" text="Radius: " + str(radius)
+        figcaption text="Select the circle to grow it."

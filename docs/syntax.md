@@ -1,4 +1,4 @@
-# Qbits syntax through Stage 4E
+# Qbits syntax through Stage 7A
 
 One default component is declared per file. Imports precede the component.
 The Phase 1 counter remains valid:
@@ -10,6 +10,58 @@ component Counter:
         on click:
             count = count + 1
 ```
+
+## Standards-based HTML and SVG
+
+Lowercase HTML5 elements, standards-based nesting, void elements, and hyphenated
+custom elements use the existing indentation syntax. Attribute names retain standard
+spelling, including `data-*`, `aria-*`, SVG camel case such as `viewBox`, and qualified
+SVG names such as `xlink:href`. Boolean attributes may be flags; reactive booleans add
+or remove the attribute.
+
+```qbits
+component Profile:
+    name = ""
+    form aria-label="Profile":
+        label for="name" text="Name"
+        input id="name" autocomplete="name" required:
+            value=name
+            on input:
+                name = event.value
+        qbits-status data-ready=true text=name
+```
+
+`value` uses the live DOM property on `input`, `textarea`, `select`, and `option`;
+`checked` uses the input property. Writes are skipped when the live value is already
+current, preserving the control, focus, selection, and browser-managed input state.
+Other bindings, including reactive `class` and `style`, use DOM attribute semantics.
+One `on event:` block is currently supported per element. Form handlers expose only
+the typed `event.value`, `event.checked`, `event.file`, or `event.files` members already
+documented; Qbits does not expose a general executable browser event object.
+For backward compatibility, a bare `slot` line remains Qbits component projection;
+write a native HTML slot with an attribute, such as `slot name="details"`.
+
+An `svg` element enters the SVG namespace. Descendants retain SVG casing and namespace;
+`foreignObject` returns its children to HTML, and a nested `svg` enters SVG again.
+
+```qbits
+component RadiusChart:
+    radius = 24
+    svg viewBox="0 0 100 100" role="img" aria-label="Radius chart":
+        defs:
+            linearGradient id="fill":
+                stop offset="0%" stop-color="#4f46e5"
+        g transform="translate(50 50)":
+            circle r=radius fill="url(#fill)" stroke-width=2:
+                on click:
+                    radius = radius + 4
+        foreignObject x=4 y=4 width=40 height=20:
+            div text="Radius: " + str(radius)
+```
+
+Text always renders through text nodes. `script`, `innerHTML`, `outerHTML`, `srcdoc`,
+inline event-handler attributes, and `javascript:`, `vbscript:`, or `data:` URL schemes
+are rejected. Interpolated strings are never parsed as markup.
 
 Props are named, read-only, and have literal defaults. Types are inferred as
 string, number, or boolean. Numeric literals currently remain nonnegative safe

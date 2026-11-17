@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { compile, CompileError } from '../language/index.js';
 import { compileFile } from '../tooling/modules.js';
 import { identity } from '../tooling/config.js';
-import { counterSource, greetingSource, notificationSettingSource, catalogSource, appSource, counterCSS } from '../tooling/project.mjs';
+import { counterSource, greetingSource, notificationSettingSource, catalogSource, htmlFormSource, svgChartSource, appSource, counterCSS } from '../tooling/project.mjs';
 
 test('nested elements, typed defaults, imports and class spans',()=>{
   const source='import "./view.css"\ncomponent View(title = "Hello", amount = 2, enabled = true):\n    main class="one two":\n        section:\n            h1 text=title\n            p text=str(amount)\n            span text=str(enabled)\n            label text="safe <b>text</b>"';
@@ -130,14 +130,13 @@ test('module graph classifies shared imports with the configured extension',asyn
 test('props are read-only and expressions and class attributes are checked',()=>{
   const invalid:[string,RegExp][]=[
     ['component C(label = "a"):\n    button text=label:\n        on click:\n            label = label + 1',/read-only/],
-    ['component C:\n    div class=2',/static string/],
+    ['component C:\n    div class=2',/string expression/],
     ['component C:\n    div text=true',/text requires/],
     ['component C:\n    Unknown',/missing component import/],
-    ['component C:\n    div onclick="alert(1)"',/Unsupported element attribute/],
+    ['component C:\n    div onclick="alert(1)"',/Unsafe element attribute/],
     ['component C(label = other):\n    div',/literal/],
     ['component C(n = 1, n = 2):\n    div',/Duplicate/],
     ['component C:\n    button text="a" class="a" class="b"',/Duplicate attribute/],
-    ['component C:\n    div:\n        on click:\n            n = n + 1',/button elements only/],
     ['import "module.js"\ncomponent C:\n    div',/relative/],
   ];
   for(const [source,message] of invalid) assert.throws(()=>compile(source,'invalid.input'),(e:unknown)=>e instanceof CompileError&&e.diagnostic.line>0&&message.test(e.message));
@@ -152,10 +151,9 @@ test('text input binds string state through the approved event.value form',()=>{
   assert.match(code,/"kind":"input"/);
   assert.doesNotMatch(code,/innerHTML|eval\(/);
   const invalid:[string,RegExp][]=[
-    ['component C:\n    name = ""\n    input value=name',/indented input property/],
-    ['component C:\n    name = ""\n    div:\n        value=name',/indented input property/],
+    ['component C:\n    name = ""\n    div:\n        value=name',/not supported on div/],
     ['component C:\n    input:\n        value=1',/string expression/],
-    ['component C:\n    name = ""\n    button:\n        on input:\n            name = event.value',/text inputs only/],
+    ['component C:\n    name = ""\n    button:\n        on input:\n            name = event.value',/DOM event does not expose/],
     ['component C:\n    name = ""\n    input:\n        value=name\n        on input:\n            name = event.other',/Expected value/],
     ['component C:\n    name = ""\n    button:\n        on click:\n            name = name + 1',/numeric state/],
   ];
@@ -173,15 +171,12 @@ test('checkbox input binds boolean state through the approved event.checked form
   assert.match(code,/"kind":"change"/);
   assert.doesNotMatch(code,/innerHTML|eval\(/);
   const invalid:[string,RegExp][]=[
-    ['component C:\n    input type="checkbox"',/indented input property/],
-    ['component C:\n    input:\n        type="text"',/static string literal "checkbox"/],
-    ['component C:\n    kind = "checkbox"\n    input:\n        type=kind',/static string literal "checkbox"/],
     ['component C:\n    enabled = false\n    input:\n        checked=enabled',/requires input type="checkbox"/],
     ['component C:\n    enabled = "no"\n    input:\n        type="checkbox"\n        checked=enabled',/boolean expression/],
-    ['component C:\n    enabled = false\n    input:\n        on change:\n            enabled = event.checked',/checkbox inputs only/],
+    ['component C:\n    enabled = false\n    input:\n        on change:\n            enabled = event.checked',/exposes only event.value/],
     ['component C:\n    enabled = ""\n    input:\n        type="checkbox"\n        checked=false\n        on change:\n            enabled = event.checked',/boolean state/],
     ['component C:\n    enabled = false\n    input:\n        type="checkbox"\n        checked=enabled\n        on change:\n            enabled = event.value',/Expected checked/],
-    ['component C:\n    enabled = false\n    input:\n        type="checkbox"\n        checked=enabled\n        on input:\n            enabled = event.value',/text inputs only/],
+    ['component C:\n    enabled = false\n    input:\n        type="checkbox"\n        checked=enabled\n        on input:\n            enabled = event.value',/Expected checked/],
     ['component C:\n    count = 0\n    button:\n        on click:\n            count = false',/boolean state/],
     ['component C:\n    button:\n        on click:\n            missing = false',/Unknown state/],
     ['component C:\n    enabled = false\n    button:\n        on click:\n            enabled = "false"',/boolean literal assignment or numeric state increment/],
@@ -249,7 +244,7 @@ test('module graph validates props, missing files, suffixes, cycles and transiti
   const expect=(text:string,pattern:RegExp)=>assert.throws(()=>check(text),(e:unknown)=>e instanceof CompileError&&e.diagnostic.filename.startsWith(temp)&&pattern.test(e.message));
   const instance=(attributes:string)=>`import Counter from "./Counter${ext}"\ncomponent App:\n    Counter ${attributes}\n`;
   try {
-    await writeFile(join(temp,'Counter.css'),counterCSS);await writeFile(counter,counterSource());await writeFile(join(temp,'Greeting'+ext),greetingSource());await writeFile(join(temp,'NotificationSetting'+ext),notificationSettingSource());await writeFile(join(temp,'Catalog'+ext),catalogSource());await writeFile(app,appSource(identity));
+    await writeFile(join(temp,'Counter.css'),counterCSS);await writeFile(counter,counterSource());await writeFile(join(temp,'Greeting'+ext),greetingSource());await writeFile(join(temp,'NotificationSetting'+ext),notificationSettingSource());await writeFile(join(temp,'Catalog'+ext),catalogSource());await writeFile(join(temp,'HtmlForm'+ext),htmlFormSource());await writeFile(join(temp,'SvgChart'+ext),svgChartSource());await writeFile(app,appSource(identity));
     assert.ok(compileFile(app).code);
     const product=join(temp,'ProductCard'+ext);await writeFile(product,'component ProductCard(product_id = 0):\n    button text="Add":\n        on click:\n            emit add_to_cart(product_id)');
     const eventApp=`import ProductCard from "./ProductCard${ext}"\ncomponent App:\n    total = 0\n    ProductCard product_id=4:\n        on add_to_cart(product_id):\n            total = total + product_id`;

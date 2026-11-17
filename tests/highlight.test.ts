@@ -14,7 +14,7 @@ test('built-in highlighting reuses source.qbits across every shipped example',as
     assert.ok(lines.flatMap(line=>line.tokens).every(token=>token.scopes[0]==='source.qbits'));
     files++;
   }
-  assert.equal(files,18);
+  assert.equal(files,20);
 });
 
 test('built-in highlighting covers declarations, HTTP, connections, values, and comments',async()=>{

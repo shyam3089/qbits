@@ -273,7 +273,7 @@
     "elements": {
       "patterns": [
         {
-          "begin": "^([ \\t]*)([A-Za-z_][A-Za-z0-9_]*)(?=[ \\t]+(?:multiple\\b|[A-Za-z_][A-Za-z0-9_]*[ \\t]*=)|[ \\t]*:|[ \\t]*$)",
+          "begin": "^([ \\t]*)([A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*)(?=[ \\t]+(?:[A-Za-z_][A-Za-z0-9_.:-]*(?:-[A-Za-z0-9_.:-]+)*(?:[ \\t]*=|\\b))|[ \\t]*:|[ \\t]*$)",
           "beginCaptures": { "2": { "name": "entity.name.tag.qbits" } },
           "end": "$",
           "patterns": [
@@ -281,7 +281,7 @@
             { "include": "#strings" },
             { "include": "#directives" },
             {
-              "match": "\\b([A-Za-z_][A-Za-z0-9_]*)(?=[ \\t]*=)",
+              "match": "\\b([A-Za-z_][A-Za-z0-9_.:-]*(?:-[A-Za-z0-9_.:-]+)*)(?=[ \\t]*=)",
               "captures": { "1": { "name": "variable.other.property.qbits" } }
             },
             { "include": "#expressions" }

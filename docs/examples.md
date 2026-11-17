@@ -108,6 +108,52 @@ component Catalog:
                 products.append(Product(3, "Cocoa", 1))
 ```
 
+Save as src/HtmlForm.qb for native form bindings:
+
+```qbits
+component HtmlForm:
+    name = ""
+    city = "Bengaluru"
+
+    form class="native-form" aria-label="Profile form":
+        label for="profile-name" text="Name"
+        input id="profile-name" name="name" autocomplete="name" placeholder="Ada Lovelace":
+            value=name
+            on input:
+                name = event.value
+        label for="profile-city" text="City"
+        select id="profile-city" name="city":
+            value=city
+            on change:
+                city = event.value
+            option value="Bengaluru" text="Bengaluru"
+            option value="Mysuru" text="Mysuru"
+        output for="profile-name profile-city" text=name + " — " + city
+        qbits-status data-stage="7A" aria-live="polite" text="Native form bindings active"
+```
+
+Save as src/SvgChart.qb for reactive inline SVG:
+
+```qbits
+component SvgChart:
+    radius = 24
+
+    figure class="svg-example":
+        svg viewBox="0 0 240 140" width=240 height=140 role="img" aria-label="Interactive SVG radius chart":
+            defs:
+                linearGradient id="chart-gradient" x1="0%" x2="100%":
+                    stop offset="0%" stop-color="#4f46e5"
+                    stop offset="100%" stop-color="#06b6d4"
+            g transform="translate(120 70)":
+                circle r=radius fill="url(#chart-gradient)" stroke="currentColor" stroke-width=2:
+                    on click:
+                        radius = radius + 4
+                path d="M -70 50 H 70" fill="none" stroke="currentColor"
+            foreignObject x=8 y=8 width=100 height=28:
+                div class="svg-label" text="Radius: " + str(radius)
+        figcaption text="Select the circle to grow it."
+```
+
 Save as src/App.qb:
 
 ```qbits
@@ -115,6 +161,8 @@ import Counter from "./Counter.qb"
 import Greeting from "./Greeting.qb"
 import NotificationSetting from "./NotificationSetting.qb"
 import Catalog from "./Catalog.qb"
+import HtmlForm from "./HtmlForm.qb"
+import SvgChart from "./SvgChart.qb"
 
 component App:
     main class="page":
@@ -124,6 +172,8 @@ component App:
         Greeting
         NotificationSetting
         Catalog
+        HtmlForm
+        SvgChart
 ```
 
 Mount App from main.ts with the browser runtime. The starter includes Counter.css:

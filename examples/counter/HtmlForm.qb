@@ -1,0 +1,19 @@
+component HtmlForm:
+    name = ""
+    city = "Bengaluru"
+
+    form class="native-form" aria-label="Profile form":
+        label for="profile-name" text="Name"
+        input id="profile-name" name="name" autocomplete="name" placeholder="Ada Lovelace":
+            value=name
+            on input:
+                name = event.value
+        label for="profile-city" text="City"
+        select id="profile-city" name="city":
+            value=city
+            on change:
+                city = event.value
+            option value="Bengaluru" text="Bengaluru"
+            option value="Mysuru" text="Mysuru"
+        output for="profile-name profile-city" text=name + " — " + city
+        qbits-status data-stage="7A" aria-live="polite" text="Native form bindings active"

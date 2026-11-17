@@ -59,7 +59,7 @@ test('source.qbits tokenizes every shipped .qb example with the TextMate engine'
       files++;
     }
   }
-  assert.equal(files,18);
+  assert.equal(files,20);
 });
 
 test('real examples cover declarations, resources, events, directives, types, durations, and operators',async()=>{
@@ -67,6 +67,8 @@ test('real examples cover declarations, resources, events, directives, types, du
     readFile('examples/http-commerce/Commerce.qb','utf8'),
     readFile('examples/http-commerce/Storefront.qb','utf8'),
     readFile('examples/counter/Catalog.qb','utf8'),
+    readFile('examples/counter/HtmlForm.qb','utf8'),
+    readFile('examples/counter/SvgChart.qb','utf8'),
     readFile('examples/lifecycle/Connection.qb','utf8')
   ]);
   const tokens = await scopesFor(sources.join('\n'));
@@ -90,6 +92,10 @@ test('real examples cover declarations, resources, events, directives, types, du
     ['multiple','keyword.other.directive.qbits'],
     ['text','variable.other.property.qbits'],
     ['input','entity.name.tag.qbits'],
+    ['qbits-status','entity.name.tag.qbits'],
+    ['data-stage','variable.other.property.qbits'],
+    ['viewBox','variable.other.property.qbits'],
+    ['stroke-width','variable.other.property.qbits'],
     ['File','support.type.primitive.qbits'],
     ['60','constant.numeric.integer.qbits'],
     ['s','keyword.other.unit.duration.qbits'],
