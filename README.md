@@ -6,7 +6,7 @@ slot, shared reactive state, typed child events, lifecycle hooks, typed HTTP res
 file transfers, WebSockets/SSE, application-scoped services, and safe text/property
 rendering without executing source expressions.
 
-The supported 1.0.1 public surface is frozen in the [API reference](docs/api.md). See the
+The supported 1.1.0 public surface is frozen in the [API reference](docs/api.md). See the
 [complete grammar](docs/syntax.md), [HTTP and service guide](docs/http-stage4e.md),
 [compilable examples](docs/examples.md), and [current limitations](docs/limitations.md).
 The client-side router and low-level

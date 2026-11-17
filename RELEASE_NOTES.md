@@ -17,7 +17,7 @@ identity, documentation, and highlighting assets remain available. The matching
 to its own framework version; neither package is published by this preparation.
 
 <!-- qbits-release:start -->
-Version: `1.1.0`; tag: `v1.1.0`; date: 2026-11-16.
+Version: `1.1.0`; tag: `v1.1.0`; date: 2026-11-17.
 <!-- qbits-release:end -->
 
 ## Previous stable release
@@ -58,7 +58,7 @@ Firefox is release-gated; other browser compatibility is not claimed by this pre
 Transactions remain synchronous, development uses full reload, and SSR, routing guards,
 nested routes and the other features in [limitations.md](docs/limitations.md) remain unsupported.
 
-After both 1.0.1 packages are published, the default npm flow is:
+After both 1.1.0 packages are published, the default npm flow is:
 
 ```sh
 npm create qb myapp
