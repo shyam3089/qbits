@@ -1,7 +1,7 @@
 # Qbits 1.1.0 release readiness
 
 <!-- qbits-release:start -->
-Version: `1.1.0`; tag: `v1.1.0`; date: 2026-11-16.
+Version: `1.1.0`; tag: `v1.1.0`; date: 2026-11-17.
 <!-- qbits-release:end -->
 
 Release decisions use validation evidence produced locally on the exact candidate commit.
@@ -110,7 +110,7 @@ Owner actions required before any npm staging or publication:
    repository `qubits`, workflow filename `publish.yml`, environment `npm-publish`,
    and stage-publish-only permission. Complete the first trusted publish within npm's
    two-day validation window.
-4. Obtain separate written approval for the exact `v1.0.1` commit, signed tag,
+4. Obtain separate written approval for the exact `v1.1.0` commit, signed tag,
    GitHub release, publishing-workflow activation and npm staging. Only then replace
    `on: []` with the approved release trigger and remove the publish job's `if: false` guard.
 5. Review both staged tarballs and provenance records, then separately approve or reject
@@ -121,7 +121,7 @@ Owner actions required before any npm staging or publication:
 
 - [ ] Approve the frozen API, experimental labels, limitations, and migration policy.
 - [ ] Review and approve the recorded local validation evidence; GitHub CI is supplementary.
-- [x] Confirm `v1.0.1` is the exact version in both packages and generated docs.
+- [x] Confirm `v1.1.0` is the exact version in both packages and generated docs.
 - [ ] Record explicit human authorization for tag and publication steps.
 
 ## Phase 3F.5 - publish and verify

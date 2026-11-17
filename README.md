@@ -6,7 +6,7 @@ slot, shared reactive state, typed child events, lifecycle hooks, typed HTTP res
 file transfers, WebSockets/SSE, application-scoped services, and safe text/property
 rendering without executing source expressions.
 
-The supported 1.0.1 public surface is frozen in the [API reference](docs/api.md). See the
+The supported 1.1.0 public surface is frozen in the [API reference](docs/api.md). See the
 [complete grammar](docs/syntax.md), [HTTP and service guide](docs/http-stage4e.md),
 [compilable examples](docs/examples.md), and [current limitations](docs/limitations.md).
 The client-side router and low-level
@@ -80,7 +80,8 @@ storage and non-global pnpm setup. Existing projects retain their manager and lo
 The package ships version-matched [agent guidance](docs/agent.md) and topic documents.
 Generated applications get a small root AGENTS.md linking into those installed docs.
 Initialization is explicit, preserves user instructions/scripts, and is repeatable.
-There is no postinstall that changes projects or installs agent integrations.
+The guarded direct-install postinstall does not modify existing projects or install
+agent integrations.
 The external test creates an app outside this checkout using local tarballs and
 Vite dependencies from npm's cache or registry; run npm ci first. It checks reload,
 error recovery, installed docs, CLI, onboarding, production and browser boundaries.

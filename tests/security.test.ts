@@ -57,6 +57,40 @@ test('deterministic malformed-source fuzzing stays bounded and reproducible',()=
   assert.deepEqual(mutate(0x3a2f_2026),mutate(0x3a2f_2026));
 });
 
+test('frozen HTTP capability registry rejects built-in, custom inherited, and late-added names',async()=>{
+  const runtime=await readFile('dist/lib/runtime/index.js','utf8');
+  const auth=(name:string)=>compile(`component RegistryAuth:
+    http client api:
+        base "https://api.example.test/"
+        auth bearer ${name}
+    client api
+    p text="safe"`,`registry-auth-${name}.qb`).code;
+  const interceptor=compile(`component RegistryInterceptor:
+    http client api:
+        base "https://api.example.test/"
+        interceptor toString
+    client api
+    p text="safe"`,'registry-interceptor.qb').code;
+  const modules=[auth('constructor'),interceptor,auth('inherited'),auth('late')];
+  const browser=await firefox.launch({headless:true});
+  try{
+    const page=await browser.newPage();
+    const result=await page.evaluate(async({runtime,modules})=>{
+      (globalThis as any).__name=(value:unknown)=>value;
+      const urls=[runtime,...modules].map(source=>URL.createObjectURL(new Blob([source],{type:'text/javascript'}))),host=document.createElement('main');document.body.append(host);
+      try{
+        const api=await import(urls[0]),roots=[];for(const url of urls.slice(1))roots.push(await import(url));
+        const supplied=Object.assign(Object.create({inherited:()=> 'inherited'}),{safe:()=> 'safe'}),restore=api.configureHttpApplication({functions:supplied});supplied.late=()=> 'late';
+        const errors:string[]=[];for(const root of roots)try{root.default(host,api);}catch(error){errors.push((error as Error).message);}finally{host.replaceChildren();}restore();
+        const restoreOwn=api.configureHttpApplication({functions:{constructor:()=> 'own',toString:()=> undefined,inherited:()=> 'own',late:()=> 'own'}});let ownAccepted=0;
+        try{for(const root of roots){const dispose=root.default(host,api);ownAccepted++;dispose();}}finally{restoreOwn();}
+        return{errors,ownAccepted,empty:host.childNodes.length===0};
+      }finally{host.remove();urls.forEach(value=>URL.revokeObjectURL(value));}
+    },{runtime,modules});
+    assert.deepEqual(result,{errors:['Unknown HTTP auth provider function constructor','Unknown HTTP interceptor function toString','Unknown HTTP auth provider function inherited','Unknown HTTP auth provider function late'],ownAccepted:4,empty:true});
+  }finally{await browser.close();}
+});
+
 test('compiler limits reject excessive work with explicit diagnostics',()=>{
   assert.equal(defaultCompilerLimits.maxSourceLength,2*1024*1024);
   assert.throws(()=>compile('component C:\n    p text="x"','large.qb',{limits:{maxSourceLength:8}}),/Source exceeds/);

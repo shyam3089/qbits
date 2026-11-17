@@ -21,6 +21,19 @@ test('HTTP client rejects unsafe auth, cross-origin escape, invalid records and 
   await assert.rejects(()=>createHttp({fetch:async()=>response({},503)}).get('/x'),(error:unknown)=>error instanceof HttpError&&error.status===503);
 });
 
+test('HTTP client ignores inherited environments, clients, client capabilities, and schema variants',async()=>{
+  let inheritedAuthCalls=0,inheritedInterceptorCalls=0;const calls:{url:string;init:RequestInit}[]=[];
+  const inheritedClient=Object.create({base:'https://evil.example.test/',auth:()=>{inheritedAuthCalls++;return 'leaked';},request:[()=>{inheritedInterceptorCalls++;}]}) as Record<string,unknown>;
+  const clients=Object.create({ghost:{auth:()=> 'ghost'}}) as Record<string,unknown>;clients.safe=inheritedClient;
+  const environment=Object.assign(Object.create({defaultClient:'ghost'}),{fetch:async(input:RequestInfo|URL,init?:RequestInit)=>{calls.push({url:String(input),init:init!});return new Response(JSON.stringify({id:7}),{headers:{'content-type':'application/json'}});},clients});
+  const schema=Object.assign(Object.create({list:'string'}),{fields:{id:'number'}});
+  const hostileEnvironment=environment as unknown as Parameters<typeof createHttp>[0],hostileSchema=schema as unknown as {fields:{id:'number'}};
+  const value=await createHttp(hostileEnvironment).get('https://safe.example.test/item',{client:'safe',response:hostileSchema});
+  assert.deepEqual({...value as object},{id:7});assert.equal(calls[0].url,'https://safe.example.test/item');assert.equal((calls[0].init.headers as Headers).has('authorization'),false);assert.equal(inheritedAuthCalls,0);assert.equal(inheritedInterceptorCalls,0);
+  await assert.rejects(()=>createHttp(hostileEnvironment).get('/x',{client:'ghost'}),/Unknown HTTP client ghost/);
+  await assert.rejects(()=>createHttp(hostileEnvironment).get('/x',{client:'constructor'}),/Unknown HTTP client constructor/);
+});
+
 test('compiler accepts approved Stage 1 client/query syntax and reports typed errors',()=>{
   const source=`class Product:
     id = 0
