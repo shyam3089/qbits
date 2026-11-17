@@ -80,7 +80,8 @@ storage and non-global pnpm setup. Existing projects retain their manager and lo
 The package ships version-matched [agent guidance](docs/agent.md) and topic documents.
 Generated applications get a small root AGENTS.md linking into those installed docs.
 Initialization is explicit, preserves user instructions/scripts, and is repeatable.
-There is no postinstall that changes projects or installs agent integrations.
+The guarded direct-install postinstall does not modify existing projects or install
+agent integrations.
 The external test creates an app outside this checkout using local tarballs and
 Vite dependencies from npm's cache or registry; run npm ci first. It checks reload,
 error recovery, installed docs, CLI, onboarding, production and browser boundaries.

@@ -18,9 +18,10 @@ do not expose it as a production service. The scaffolder refuses existing target
 and never runs dependency installation. While private it requires a local main
 package tarball, avoiding an assumed registry identity. init runs only on explicit invocation,
 preserves unmanaged instructions/scripts and rejects ambiguous managed markers
-and symlink instruction files. No postinstall modifies user projects or installs
-agent integrations. These filesystem checks do not promise protection from
-concurrent malicious filesystem changes.
+and symlink instruction files. The guarded postinstall may scaffold only a direct,
+new, otherwise-empty application as documented; it skips existing, transitive,
+linked, and global projects and never installs agent integrations. These filesystem
+checks do not promise protection from concurrent malicious filesystem changes.
 
 GitHub Actions jobs are disabled in the retained CI configuration.
 CI uses read-only repository permissions, no publishing credentials, and ordinary
