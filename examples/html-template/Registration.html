@@ -1,0 +1,7 @@
+<form class="registration" qb-on-submit="submitted = true" aria-labelledby="registration-title">
+  <h2 id="registration-title">Create account</h2>
+  <label>Email <input type="email" autocomplete="email" required qb-model="email"></label>
+  <label>Password <input type="password" autocomplete="new-password" minlength="8" required qb-model="password"></label>
+  <button type="submit">Register</button>
+  <p qb-if="submitted" aria-live="polite">Registration submitted safely.</p>
+</form>

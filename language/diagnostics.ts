@@ -44,6 +44,7 @@ export function formatCompileError(error:CompileError):string {
   return [visible(error.message),error.frame,error.hint?`Hint: ${error.hint}`:undefined].filter(value=>value!==undefined).join('\n');
 }
 export function fail(source: string, filename: string, span: Span, message: string): never {
+  if(span.origin){source=span.origin.source;filename=span.origin.filename;span={start:span.start,end:span.end};}
   const lines = source.slice(0, span.start).split(/\r\n|\r|\n/);
   throw new CompileError({filename, span, line: lines.length, column: lines.at(-1)!.length + 1, message},source);
 }

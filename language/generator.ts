@@ -50,6 +50,7 @@ export function generate(ast:Component):string {
     return result;
   }
   function node(value:Exclude<ViewNode,{kind:'conditional'}>):unknown {
+    if(value.kind==='text')return {kind:value.kind,value:expression(value.value)};
     if(value.kind==='router')return {kind:value.kind,routes:value.routes.map(route=>({path:route.path.value,children:nodes(route.children)}))};
     if(value.kind==='slot')return {kind:value.kind};
     if(value.kind==='iteration')return {kind:value.kind,item:value.item.value,collection:expression(value.collection),key:expression(value.key),children:nodes(value.children)};
@@ -57,7 +58,8 @@ export function generate(ast:Component):string {
     const flags:Record<string,number>={text:1,value:2,checked:4,class:8,type:16,max:32};
     let staticBindings=0;
     for(const [key,item] of Object.entries(value.attributes)){const generated=expression(item) as {kind:string};attributes[key]=generated;if(generated.kind==='literal')staticBindings|=flags[key]??0;}
-    return {kind:'element',tag:value.tag.value,component:componentImports.findIndex(item=>item.name!.value===value.tag.value),attributes,...(staticBindings?{static:staticBindings}:{}),children:nodes(value.children),...(value.handler?{handler:{kind:value.handler.kind,event:value.handler.event.value,...(value.handler.parameter?{parameter:value.handler.parameter.value}:{}),...(value.handler.payloadType!==undefined?{payloadType:value.handler.payloadType}:{}),statements:value.handler.statements.map(statement)}}:{})};
+    const handler=(item:NonNullable<typeof value.handler>)=>({kind:item.kind,event:item.event.value,...(item.parameter?{parameter:item.parameter.value}:{}),...(item.payloadType!==undefined?{payloadType:item.payloadType}:{}),statements:item.statements.map(statement)});
+    return {kind:'element',tag:value.tag.value,component:componentImports.findIndex(item=>item.name!.value===value.tag.value),attributes,...(staticBindings?{static:staticBindings}:{}),children:nodes(value.children),...(value.handler?{handler:handler(value.handler)}:{}),...(value.handlers?.length?{handlers:value.handlers.map(handler)}:{}),...(value.model?{model:expression(value.model)}:{})};
   }
   const classes=Object.fromEntries(ast.classes.map(declaration=>[declaration.name.value,{fields:declaration.fields.map(field=>({name:field.name.value,initial:expression(field.initial)})),computed:Object.fromEntries(declaration.computed.map(item=>[item.name.value,expression(item.expression)])),actions:Object.fromEntries(declaration.actions.map(action=>[action.name.value,action.statements.map(statement)]))}]));
   if(ast.kind==='SharedState'){

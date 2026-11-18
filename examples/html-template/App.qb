@@ -1,0 +1,4 @@
+import Registration from "./Registration.qb"
+import ProductList from "./ProductList.qb"
+component App:
+    template "./App.html"

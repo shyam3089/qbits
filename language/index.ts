@@ -18,6 +18,7 @@ export function compile(source: string, filename = '<input>', options:CompileOpt
   const graphLimits=resolveModuleGraphLimits(options.graphLimits);
   if(utf8Length(source)>graphLimits.maxTotalSourceBytes)fail(source,filename,{start:0,end:0},`Project source exceeds the configured limit of ${graphLimits.maxTotalSourceBytes} UTF-8 bytes`);
   const ast = parse(source, filename, options.limits);
+  if(ast.template)fail(source,filename,ast.template.span,'External templates require compileFile() so the relative HTML file can be loaded securely');
   if(measureComponentComplexity(ast)>graphLimits.maxAggregateComplexity)fail(source,filename,ast.span,`Project complexity exceeds the configured limit of ${graphLimits.maxAggregateComplexity} AST objects`);
   validate(ast, source, filename, options);
   return {ast, code: generate(ast)};

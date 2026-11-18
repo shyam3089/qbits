@@ -1,4 +1,4 @@
-# Qbits syntax through Stage 7A
+# Qbits syntax through Stage 7B.0
 
 One default component is declared per file. Imports precede the component.
 The Phase 1 counter remains valid:
@@ -62,6 +62,51 @@ component RadiusChart:
 Text always renders through text nodes. `script`, `innerHTML`, `outerHTML`, `srcdoc`,
 inline event-handler attributes, and `javascript:`, `vbscript:`, or `data:` URL schemes
 are rejected. Interpolated strings are never parsed as markup.
+
+## External HTML templates
+
+A component may replace its inline view roots with one build-time HTML template. The
+path is relative to the `.qb` file, must end in `.html`, and must stay inside the
+project root after symlink resolution. Inline view roots and `template` cannot be mixed.
+
+```qbits-external
+component Registration:
+    template "./Registration.html"
+    email = ""
+    accepted = false
+```
+
+```html
+<form qb-on-submit="accepted = true">
+  <label>Email <input type="email" qb-model="email" required></label>
+  <p qb-text="email" qb-bind-aria-label="email"></p>
+</form>
+```
+
+The HTML file is parsed and lowered into the same compiled view model as indentation
+syntax; it is never fetched or parsed in the browser. Standard HTML, inline SVG,
+custom elements, imported Qbits components, and a bare `<slot></slot>` are supported.
+Formatting whitespace is standard HTML text and is preserved inside elements.
+
+Supported directives are deliberately small:
+
+- `qb-text="expression"` replaces element content with escaped reactive text.
+- `qb-bind-name="expression"` reactively binds an existing safe DOM attribute or
+  form property, including `class`, `style`, `data-*`, `aria-*`, and SVG casing.
+- `qb-on-event="statement"` attaches one existing Qbits handler statement. Multiple
+  distinct events may be declared on one element; arbitrary JavaScript is not accepted.
+- `qb-model="target"` provides two-way string, number, checkbox, radio, select, and
+  compatible custom-control binding to writable state. Empty numeric input remains in
+  the browser until a valid finite safe integer is entered because Qbits number state
+  is non-nullable.
+- `qb-if="condition"` uses the existing reactive conditional implementation.
+- `qb-for="item in items" qb-key="item.id"` uses existing keyed reconciliation.
+
+`qb-model` cannot be combined with `qb-bind-value` or `qb-bind-checked`. Template
+expressions and handler statements use the existing Qbits grammar, not JavaScript.
+`qb-form` and `qb-field` are reserved for the future Stage 7B.1 forms/validation API
+and currently produce a compiler error. See `examples/html-template` for a native form,
+keyed list, and reactive SVG example.
 
 Props are named, read-only, and have literal defaults. Types are inferred as
 string, number, or boolean. Numeric literals currently remain nonnegative safe

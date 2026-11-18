@@ -48,6 +48,7 @@
     "editor/qbits-highlight.css",
     "examples/http-basics",
     "examples/http-commerce",
+    "examples/html-template",
     "docs/agent.md",
     "docs/api.md",
     "docs/architecture.md",
@@ -127,6 +128,7 @@
     "qb": "dist/lib/tooling/cli.js"
   },
   "dependencies": {
+    "parse5": "^8.1.1",
     "vscode-textmate": "^9.3.2"
   }
 }

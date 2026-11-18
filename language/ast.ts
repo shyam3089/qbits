@@ -1,4 +1,4 @@
-export interface Span { start:number; end:number }
+export interface Span { start:number; end:number; origin?:{source:string;filename:string} }
 export interface Node<T> { value:T; span:Span }
 export type Literal = string | number | boolean | null;
 export type Expression =
@@ -52,13 +52,14 @@ export interface EmittedEvent {name:string;payload:EventPayloadType|null}
 export interface Action {name:Node<string>;statements:Statement[];span:Span}
 export interface ClassDecl {name:Node<string>;fields:State[];computed:Computed[];actions:Action[];span:Span}
 export interface Handler {event:Node<string>;parameter?:Node<string>;payloadType?:EventPayloadType|null;kind?:'click'|'clickBoolean'|'input'|'change';statements:Statement[];span:Span}
-export interface ElementNode {kind:'element';tag:Node<string>;attributes:Record<string,Expression>;indentedAttributes:string[];children:ViewNode[];handler?:Handler;span:Span}
+export interface ElementNode {kind:'element';tag:Node<string>;attributes:Record<string,Expression>;indentedAttributes:string[];children:ViewNode[];handler?:Handler;handlers?:Handler[];model?:Expression;span:Span}
+export interface TextNode {kind:'text';value:Expression;span:Span}
 export interface ConditionalNode {kind:'conditional';condition:ConditionExpression;consequent:ViewNode[];alternate:ViewNode[];span:Span}
 export interface IterationNode {kind:'iteration';item:Node<string>;collection:Expression;key:Expression;children:ViewNode[];span:Span}
 export interface SlotNode {kind:'slot';span:Span}
 export interface RouterNode {kind:'router';routes:{path:Node<string>;children:ViewNode[];span:Span}[];span:Span}
-export type ViewNode = ElementNode | ConditionalNode | IterationNode | SlotNode | RouterNode;
+export type ViewNode = ElementNode | TextNode | ConditionalNode | IterationNode | SlotNode | RouterNode;
 export interface Component {
-  kind:'Component'|'SharedState'|'Service';name:Node<string>;span:Span;imports:Import[];uses:Node<string>[];classes:ClassDecl[];props:Prop[];states:State[];computed:Computed[];httpClients:HttpClient[];client?:Node<string>;queries:Query[];httpActions:HttpAction[];sockets:SocketDecl[];sse:SocketDecl[];init:Statement[];cleanup:Statement[];roots:ViewNode[];emits:EmittedEvent[];
+  kind:'Component'|'SharedState'|'Service';name:Node<string>;span:Span;template?:Node<string>;imports:Import[];uses:Node<string>[];classes:ClassDecl[];props:Prop[];states:State[];computed:Computed[];httpClients:HttpClient[];client?:Node<string>;queries:Query[];httpActions:HttpAction[];sockets:SocketDecl[];sse:SocketDecl[];init:Statement[];cleanup:Statement[];roots:ViewNode[];emits:EmittedEvent[];
 }
 export interface Diagnostic {filename:string;line:number;column:number;span:Span;message:string}

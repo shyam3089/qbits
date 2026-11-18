@@ -4,7 +4,9 @@ Qbits is a small, typed, indentation-based UI language that compiles to browser
 JavaScript. It provides fine-grained reactivity, keyed lists, components, one default
 slot, shared reactive state, typed child events, lifecycle hooks, typed HTTP resources,
 file transfers, WebSockets/SSE, application-scoped services, and safe text/property
-rendering without executing source expressions.
+rendering without executing source expressions. Components may optionally declare a
+relative external `.html` template; build tooling compiles its HTML/SVG and the small
+`qb-*` directive set into the same runtime model as indentation syntax.
 
 The supported 1.1.0 public surface is frozen in the [API reference](docs/api.md). See the
 [complete grammar](docs/syntax.md), [HTTP and service guide](docs/http-stage4e.md),

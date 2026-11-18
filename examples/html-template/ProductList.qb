@@ -1,0 +1,8 @@
+class Product:
+    id = 0
+    name = ""
+    stock = 0
+component ProductList:
+    template "./ProductList.html"
+    products = [Product(1, "Tea", 8), Product(2, "Coffee", 5)]
+    selected = 8

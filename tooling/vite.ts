@@ -5,7 +5,7 @@ import { identity, isSource, metadata } from './config.js';
 export function languagePlugin(options:CompileFileOptions={}): Plugin {
   return {name: `${identity.languageId}-compiler`, enforce: 'pre',
     handleHotUpdate(context) {
-      if (!isSource(context.file) && !context.file.endsWith('.css')) return;
+      if (!isSource(context.file) && !context.file.endsWith('.css') && !context.file.endsWith('.html')) return;
       // A failed parent transform may not yet have registered its dependency
       // edges. Clear cached parent failures as well as successfully loaded children.
       context.server.moduleGraph.invalidateAll();

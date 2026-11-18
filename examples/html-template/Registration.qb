@@ -1,0 +1,5 @@
+component Registration:
+    template "./Registration.html"
+    email = ""
+    password = ""
+    submitted = false

@@ -185,7 +185,7 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
   const service=at('service'),start=word(service?'service':'component').span.start;const name=id();const props:Prop[]=[];
   if(service&&at('('))fail(source,filename,peek().span,'Services do not accept props');
   if(at('(')){cursor++;if(!at(')'))do{const prop=id();symbol('=');const initial=literal();props.push({name:prop,initial,span:{start:prop.span.start,end:initial.span.end}});if(!at(','))break;cursor++;}while(true);symbol(')');}
-  block();const uses:Node<string>[]=[],states:State[]=[];const derived:Computed[]=[];const httpClients:HttpClient[]=[];const queries:Query[]=[];const httpActions:HttpAction[]=[];const sockets:SocketDecl[]=[],sse:SocketDecl[]=[];let defaultClient:Node<string>|undefined;const init:Statement[]=[];const cleanup:Statement[]=[];const roots:ViewNode[]=[];
+  block();const uses:Node<string>[]=[],states:State[]=[];const derived:Computed[]=[];const httpClients:HttpClient[]=[];const queries:Query[]=[];const httpActions:HttpAction[]=[];const sockets:SocketDecl[]=[],sse:SocketDecl[]=[];let defaultClient:Node<string>|undefined,template:Node<string>|undefined;const init:Statement[]=[];const cleanup:Statement[]=[];const roots:ViewNode[]=[];
   function httpClient():HttpClient {
     const start=word('http').span.start;word('client');const clientName=id();block();let base:Expression|undefined,auth:HttpClient['auth'];const interceptors:HttpClient['interceptors']=[];
     while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){
@@ -254,7 +254,8 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     take('DEDENT');if(!url)fail(source,filename,name.span,`${label} requires connect`);return {name,url,client,message,disconnect,span:{start,end:lastEnd}};
   }
   while(peek().kind!=='DEDENT'&&peek().kind!=='eof') {
-    if(at('use')){if(roots.length)fail(source,filename,peek().span,'Service use declarations must precede elements');word('use');const used=id();if(uses.some(item=>item.value===used.value))fail(source,filename,used.span,`Duplicate service use ${JSON.stringify(used.value)}`);uses.push(used);take('NEWLINE');}
+    if(at('template')&&peek(1).kind==='string'){const token=word('template');if(service)fail(source,filename,token.span,'Services cannot declare templates');if(template)fail(source,filename,token.span,'Component may declare one external template');if(roots.length)fail(source,filename,token.span,'External template must be declared before inline elements');const path=take('string');template={value:path.value,span:path.span};take('NEWLINE');}
+    else if(at('use')){if(roots.length)fail(source,filename,peek().span,'Service use declarations must precede elements');word('use');const used=id();if(uses.some(item=>item.value===used.value))fail(source,filename,used.span,`Duplicate service use ${JSON.stringify(used.value)}`);uses.push(used);take('NEWLINE');}
     else if(at('http')&&peek(1).value==='client'){if(roots.length)fail(source,filename,peek().span,'HTTP client declarations must precede elements');httpClients.push(httpClient());}
     else if(at('client')&&peek(1).kind==='identifier'&&peek(2).kind==='NEWLINE'){if(roots.length)fail(source,filename,peek().span,'Client selection must precede elements');const token=word('client');if(defaultClient)fail(source,filename,token.span,'Client may be declared once per component');defaultClient=id();take('NEWLINE');}
     else if(at('query')&&peek(1).kind==='identifier'&&peek(2).value===':'){if(roots.length)fail(source,filename,peek().span,'Query declarations must precede elements');queries.push(query());}
@@ -266,9 +267,9 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
       if(roots.length)fail(source,filename,peek().span,'Lifecycle declarations must precede elements');word('on');const phase=take('identifier');block();const body=statements();take('DEDENT');(phase.value==='init'?init:cleanup).push(...body);
     } else if(at('state')||peek(1)?.value==='=') {
       if(roots.length)fail(source,filename,peek().span,'State declarations must precede elements');const start=at('state')?word('state').span.start:peek().span.start,state=id();symbol('=');const initial=expression();states.push({name:state,initial,span:{start,end:initial.span.end}});take('NEWLINE');
-    } else if(service)fail(source,filename,peek().span,'Services support use, client, query, and action declarations only');else roots.push(view());
+    } else if(service)fail(source,filename,peek().span,'Services support use, client, query, and action declarations only');else {if(template)fail(source,filename,peek().span,'Component cannot mix an external template with inline elements');roots.push(view());}
   }
-  take('DEDENT');take('eof');if(service&&!queries.length&&!httpActions.length)fail(source,filename,name.span,'Service requires at least one query or action');if(!service&&!roots.length)fail(source,filename,name.span,'Component requires at least one root element');
-  const end=roots.at(-1)?.span.end??httpActions.at(-1)?.span.end??queries.at(-1)?.span.end??uses.at(-1)?.span.end??name.span.end;
-  return {kind:service?'Service':'Component',name,span:{start,end},imports,uses,classes,props,states,computed:derived,httpClients,client:defaultClient,queries,httpActions,sockets,sse,init,cleanup,roots,emits:[]};
+  take('DEDENT');take('eof');if(service&&!queries.length&&!httpActions.length)fail(source,filename,name.span,'Service requires at least one query or action');if(!service&&!roots.length&&!template)fail(source,filename,name.span,'Component requires at least one root element or external template');
+  const end=roots.at(-1)?.span.end??template?.span.end??httpActions.at(-1)?.span.end??queries.at(-1)?.span.end??uses.at(-1)?.span.end??name.span.end;
+  return {kind:service?'Service':'Component',name,span:{start,end},template,imports,uses,classes,props,states,computed:derived,httpClients,client:defaultClient,queries,httpActions,sockets,sse,init,cleanup,roots,emits:[]};
 }

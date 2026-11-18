@@ -1,10 +1,11 @@
 // Node-only module graph validation. The language compiler remains filesystem-free.
-import {readFileSync,realpathSync,statSync} from 'node:fs';
-import {dirname,resolve} from 'node:path';
+import {existsSync,readFileSync,realpathSync,statSync} from 'node:fs';
+import {dirname,isAbsolute,relative,resolve} from 'node:path';
 import {fail,generate,measureComponentComplexity,parse,resolveModuleGraphLimits,utf8Length,validate,type CompilerLimits,type Component,type Import,type ModuleGraphLimits} from '../language/index.js';
 import {identity} from './config.js';
+import {compileHtmlTemplate} from './html-template.js';
 
-export interface CompileFileOptions {limits?:Partial<CompilerLimits>;graphLimits?:Partial<ModuleGraphLimits>}
+export interface CompileFileOptions {limits?:Partial<CompilerLimits>;graphLimits?:Partial<ModuleGraphLimits>;projectRoot?:string}
 interface Dependency {entry:Import;record:ModuleRecord}
 interface ModuleRecord {key:string;file:string;text:string;depth:number;ast?:Component;dependencies:Dependency[]}
 
@@ -20,10 +21,18 @@ export function compileFile(filename:string,source?:string,watch?:(path:string)=
     const record:ModuleRecord={key,file,text,depth,dependencies:[]};records.set(key,record);pending.push(record);totalBytes+=bytes;watch?.(key);return record;
   };
   const rootFile=resolve(filename);let rootSource=source;
+  let projectRoot=options.projectRoot?realpathSync(resolve(options.projectRoot)):dirname(rootFile);if(!options.projectRoot){let candidate=dirname(rootFile);while(true){if(existsSync(resolve(candidate,'package.json'))){projectRoot=realpathSync(candidate);break;}const parent=dirname(candidate);if(parent===candidate)break;candidate=parent;}}
   if(rootSource===undefined){const size=statSync(rootFile).size;if(size>graphLimits.maxTotalSourceBytes)fail('',rootFile,{start:0,end:0},`Project source exceeds the configured limit of ${graphLimits.maxTotalSourceBytes} UTF-8 bytes`);rootSource=readFileSync(rootFile,'utf8');}
   const root=add(rootFile,rootSource);
   for(let cursor=0;cursor<pending.length;cursor++){
     const record=pending[cursor],ast=parse(record.text,record.file,options.limits);record.ast=ast;
+    if(ast.template){
+      const requested=ast.template.value;if(!/^\.\.?\//.test(requested)||/[?#\\]/.test(requested)||!requested.endsWith('.html'))fail(record.text,record.file,ast.template.span,'External templates must use a plain relative .html path');
+      const path=resolve(dirname(record.file),requested);watch?.(path);let templateFile:string,templateSource:string;
+      try{templateFile=realpathSync(path);if(!statSync(templateFile).isFile())throw new Error('Not a file');const escaped=relative(projectRoot,templateFile);if(escaped.startsWith('..')||isAbsolute(escaped))fail(record.text,record.file,ast.template.span,'External template resolves outside the project root');const size=statSync(templateFile).size;if(totalBytes+size>graphLimits.maxTotalSourceBytes)fail(record.text,record.file,ast.template.span,`Project source exceeds the configured limit of ${graphLimits.maxTotalSourceBytes} UTF-8 bytes`);templateSource=readFileSync(templateFile,'utf8');totalBytes+=utf8Length(templateSource);watch?.(templateFile);}
+      catch(error){if(error instanceof Error&&error.name==='CompileError')throw error;fail(record.text,record.file,ast.template.span,`Missing external template ${JSON.stringify(requested)}`);}
+      ast.roots=compileHtmlTemplate(templateSource!,templateFile!,ast);if(!ast.roots.length)fail(templateSource!,templateFile!,{start:0,end:0},'External template requires at least one root node');
+    }
     const complexity=measureComponentComplexity(ast);if(totalComplexity+complexity>graphLimits.maxAggregateComplexity)fail(record.text,record.file,ast.span,`Project complexity exceeds the configured limit of ${graphLimits.maxAggregateComplexity} AST objects`);totalComplexity+=complexity;
     for(const entry of ast.imports){
       if(!/^\.\.?\//.test(entry.path.value)||/[?#\\]/.test(entry.path.value))fail(record.text,record.file,entry.path.span,'Imports must use plain relative module paths');
@@ -61,9 +70,10 @@ export function compileFile(filename:string,source?:string,watch?:(path:string)=
   for(let index=order.length-1;index>=0;index--){
     const record=order[index],ast=record.ast!,components=new Map<string,Component>(),shared=new Map<string,Component>(),services=new Map<string,Component>();
     for(const dependency of record.dependencies){const imported=dependency.record.ast!,kind=imported.kind==='SharedState'?'shared':imported.kind==='Service'?'service':'component';dependency.entry.kind=kind;(kind==='shared'?shared:kind==='service'?services:components).set(dependency.entry.name!.value,imported);}
+    const canonicalize=(nodes:Component['roots']):void=>{for(const node of nodes){if(node.kind==='conditional'){canonicalize(node.consequent);canonicalize(node.alternate);}else if(node.kind==='iteration')canonicalize(node.children);else if(node.kind==='router')for(const route of node.routes)canonicalize(route.children);else if(node.kind==='element'){const child=components.get(node.tag.value);if(child)for(const key of Object.keys(node.attributes)){const canonical=child.props.find(prop=>prop.name.value.toLowerCase()===key.toLowerCase())?.name.value;if(canonical&&canonical!==key){if(Object.hasOwn(node.attributes,canonical))fail(record.text,record.file,node.attributes[key].span,`Duplicate prop ${JSON.stringify(canonical)}`);Object.defineProperty(node.attributes,canonical,{value:node.attributes[key],enumerable:true,configurable:true});delete node.attributes[key];}}canonicalize(node.children);}}};canonicalize(ast.roots);
     validate(ast,record.text,record.file,{sourceExtension:identity.sourceExtension,components,shared,services,limits:options.limits});
-    function check(nodes:Component['roots']):void {for(const node of nodes){if(node.kind==='slot')continue;if(node.kind==='router'){for(const route of node.routes)check(route.children);continue;}if(node.kind==='conditional'){check(node.consequent);check(node.alternate);continue;}if(node.kind==='iteration'){check(node.children);continue;}const child=components.get(node.tag.value);if(child&&node.attributes.class&&rootCounts.get(child)!==1)fail(record.text,record.file,node.attributes.class.span,'Ambiguous class forwarding: component must resolve to a single root element');check(node.children);}}
-    function count(nodes:Component['roots']):number|null {let total=0;for(const node of nodes){if(node.kind==='iteration'||node.kind==='slot'||node.kind==='router')return null;if(node.kind==='conditional'){const consequent=count(node.consequent),alternate=node.alternate.length?count(node.alternate):0;if(consequent===null||alternate===null||consequent!==alternate)return null;total+=consequent;continue;}const child=components.get(node.tag.value),resolved=child?rootCounts.get(child):1;if(resolved===undefined||resolved===null)return null;total+=resolved;}return total;}
+    function check(nodes:Component['roots']):void {for(const node of nodes){if(node.kind==='slot'||node.kind==='text')continue;if(node.kind==='router'){for(const route of node.routes)check(route.children);continue;}if(node.kind==='conditional'){check(node.consequent);check(node.alternate);continue;}if(node.kind==='iteration'){check(node.children);continue;}const child=components.get(node.tag.value);if(child&&node.attributes.class&&rootCounts.get(child)!==1)fail(record.text,record.file,node.attributes.class.span,'Ambiguous class forwarding: component must resolve to a single root element');check(node.children);}}
+    function count(nodes:Component['roots']):number|null {let total=0;for(const node of nodes){if(node.kind==='iteration'||node.kind==='slot'||node.kind==='router'||node.kind==='text')return null;if(node.kind==='conditional'){const consequent=count(node.consequent),alternate=node.alternate.length?count(node.alternate):0;if(consequent===null||alternate===null||consequent!==alternate)return null;total+=consequent;continue;}const child=components.get(node.tag.value),resolved=child?rootCounts.get(child):1;if(resolved===undefined||resolved===null)return null;total+=resolved;}return total;}
     check(ast.roots);rootCounts.set(ast,count(ast.roots));
   }
   return {ast:root.ast!,code:generate(root.ast!)};

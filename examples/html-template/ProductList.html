@@ -1,0 +1,13 @@
+<section aria-labelledby="products-title">
+  <h2 id="products-title">Products</h2>
+  <ul>
+    <li qb-for="product in products" qb-key="product.id">
+      <strong qb-text="product.name"></strong>
+      <span qb-text="str(product.stock)"></span>
+    </li>
+  </ul>
+  <svg viewBox="0 0 160 36" role="img" aria-label="Selected product stock">
+    <defs><linearGradient id="stock-fill"><stop offset="0%" stop-color="#2563eb"></stop><stop offset="100%" stop-color="#14b8a6"></stop></linearGradient></defs>
+    <rect x="2" y="8" qb-bind-width="selected" height="20" rx="4" fill="url(#stock-fill)" transform="scale(10 1)"></rect>
+  </svg>
+</section>

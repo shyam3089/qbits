@@ -82,6 +82,9 @@ and can perform side effects outside the runtime journal. See reactivity.md and
 performance.md for detailed behavior and measurements.
 
 `tooling/` owns identity validation, CLI filesystem access, and Vite transformation.
+External `.html` templates are parsed there at build time and lowered to the existing
+language AST before validation and generation. The browser runtime receives the same
+view model shape used by inline `.qb` roots and performs no HTML parsing.
 Component-import discovery, cycle detection, ordering and longest-depth calculation are
 iterative. A real-path map counts shared dependencies once, while cumulative UTF-8 source
 bytes and parsed AST complexity are charged to each distinct module. Bottom-up validation
