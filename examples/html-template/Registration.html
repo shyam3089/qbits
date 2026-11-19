@@ -1,7 +1,15 @@
-<form class="registration" qb-on-submit="submitted = true" aria-labelledby="registration-title">
+<form class="registration" qb-form="signup" aria-labelledby="registration-title">
   <h2 id="registration-title">Create account</h2>
-  <label>Email <input type="email" autocomplete="email" required qb-model="email"></label>
-  <label>Password <input type="password" autocomplete="new-password" minlength="8" required qb-model="password"></label>
+  <label for="registration-email">Email</label>
+  <input id="registration-email" type="email" autocomplete="email" qb-field="email">
+  <label for="registration-username">Username</label>
+  <input id="registration-username" autocomplete="username" qb-field="username">
+  <label for="registration-password">Password</label>
+  <input id="registration-password" type="password" autocomplete="new-password" qb-field="password">
+  <label for="registration-confirm-password">Confirm password</label>
+  <input id="registration-confirm-password" type="password" autocomplete="new-password" qb-field="confirmPassword">
+  <label for="registration-newsletter">Newsletter</label>
+  <input id="registration-newsletter" type="checkbox" qb-field="newsletter">
   <button type="submit">Register</button>
-  <p qb-if="submitted" aria-live="polite">Registration submitted safely.</p>
+  <button type="reset">Reset</button>
 </form>

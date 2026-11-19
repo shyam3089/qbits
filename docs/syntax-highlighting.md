@@ -73,7 +73,7 @@ colors: `keyword.*`, `storage.type.*`, `entity.name.type.*`,
 `support.type.*`, `support.function.*`, `string.*`, `constant.*`, `comment.*`,
 `keyword.operator.*`, and `punctuation.*`.
 
-Highlighting is contextual for declarations, events, control-flow headers, HTTP
-configuration, and directives. Keyword matches use identifier boundaries, while
+Highlighting is contextual for record (`type` and `class`), form/field, validator,
+event, control-flow, HTTP configuration, and directive declarations. Keyword matches use identifier boundaries, while
 strings and comments take precedence, preventing keyword coloring inside those
 regions.

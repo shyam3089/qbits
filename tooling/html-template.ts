@@ -48,7 +48,7 @@ export function compileHtmlTemplate(source:string,filename:string,ast:Component)
     }
     if(!html.tagName)return [];
     const location=html.sourceCodeLocation??undefined,span=origin(location),tag=components.get(html.tagName.toLowerCase())??html.tagName;
-    const attributes:Record<string,Expression>=Object.create(null),handlers:Handler[]=[];let model:Expression|undefined,condition:Expression|undefined,iteration:{item:string;collection:Expression;key?:Expression;span:Span}|undefined,pendingKey:{value:Expression;span:Span}|undefined,text:Expression|undefined;
+    const attributes:Record<string,Expression>=Object.create(null),handlers:Handler[]=[];let model:Expression|undefined,form:ElementNode['form'],field:ElementNode['field'],condition:Expression|undefined,iteration:{item:string;collection:Expression;key?:Expression;span:Span}|undefined,pendingKey:{value:Expression;span:Span}|undefined,text:Expression|undefined;
     for(const attribute of html.attrs??[]){
       const attrLocation=location?.attrs?.[attribute.name],name=rawName(source,attrLocation,attribute.prefix?`${attribute.prefix}:${attribute.name}`:attribute.name),valueSpan=locateValue(source,attrLocation??location!),directive=name.toLowerCase();
       if(!directive.startsWith('qb-')){
@@ -56,7 +56,10 @@ export function compileHtmlTemplate(source:string,filename:string,ast:Component)
         const value:boolean|string=booleanAttributes.has(name.toLowerCase())&&attribute.value===''?true:attribute.value;
         Object.defineProperty(attributes,name,{value:{kind:'literal',value,span:{...valueSpan,origin:{source,filename}}},enumerable:true});continue;
       }
-      if(directive==='qb-form'||directive==='qb-field')fail(source,filename,origin(attrLocation),`${name} is reserved for Stage 7B.1 forms and is not supported by external templates`);
+      if(directive==='qb-form'||directive==='qb-field'){
+        if(!/^[A-Za-z_][A-Za-z0-9_]*$/.test(attribute.value))fail(source,filename,valueSpan,`${name} requires one form or field identifier`);
+        const target={value:attribute.value,span:{...valueSpan,origin:{source,filename}}};if(directive==='qb-form')form=target;else field=target;continue;
+      }
       if(directive==='qb-text')text=expression(attribute.value,valueSpan,source,filename);
       else if(directive==='qb-model')model=expression(attribute.value,valueSpan,source,filename);
       else if(directive==='qb-if')condition=expression(attribute.value,valueSpan,source,filename);
@@ -70,10 +73,12 @@ export function compileHtmlTemplate(source:string,filename:string,ast:Component)
     if(pendingKey&&!iteration)fail(source,filename,pendingKey.span,'qb-key must be used with qb-for on the same element');if(iteration&&pendingKey)iteration.key=pendingKey.value;
     if(iteration&&!iteration.key)fail(source,filename,iteration.span,'qb-for requires qb-key for stable updates');
     if(model&&(Object.hasOwn(attributes,'value')||Object.hasOwn(attributes,'checked')))fail(source,filename,model.span,'qb-model cannot be combined with value or checked bindings');
+    const radioValue=tag==='input'&&attributes.type?.kind==='literal'&&attributes.type.value==='radio'&&attributes.value?.kind==='literal';
+    if(field&&(model||Object.hasOwn(attributes,'value')&&!radioValue||Object.hasOwn(attributes,'checked')||Object.hasOwn(attributes,'bind')))fail(source,filename,field.span,'qb-field cannot be combined with qb-model, bind, reactive value, or checked bindings');
     const childSource=html.content?.childNodes??html.childNodes??[],children=childSource.flatMap(child=>convert(child));
     if(text&&children.some(child=>child.kind!=='text'||child.value.kind!=='literal'||typeof child.value.value!=='string'||child.value.value.trim()!==''))fail(source,filename,text.span,'qb-text cannot be combined with element content');
-    const bareSlot=tag==='slot'&&!Object.keys(attributes).length&&!handlers.length&&!model&&!condition&&!iteration&&!children.length;
-    let node:ViewNode=bareSlot?{kind:'slot',span}:{kind:'element',tag:{value:tag,span},attributes,indentedAttributes:[],children:text?[]:children,...(text?{attributes:{...attributes,text}}:{}),...(handlers.length?{handlers}:{}),...(model?{model}:{}),span};
+    const bareSlot=tag==='slot'&&!Object.keys(attributes).length&&!handlers.length&&!model&&!form&&!field&&!condition&&!iteration&&!children.length;
+    let node:ViewNode=bareSlot?{kind:'slot',span}:{kind:'element',tag:{value:tag,span},attributes,indentedAttributes:[],children:text?[]:children,...(text?{attributes:{...attributes,text}}:{}),...(handlers.length?{handlers}:{}),...(model?{model}:{}),...(form?{form}:{}),...(field?{field}:{}),span};
     if(condition)node={kind:'conditional',condition,consequent:[node],alternate:[],span};
     if(iteration)node={kind:'iteration',item:{value:iteration.item,span:iteration.span},collection:iteration.collection,key:iteration.key!,children:[node],span};
     return [node];

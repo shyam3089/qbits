@@ -58,7 +58,7 @@
     "type-declarations": {
       "patterns": [
         {
-          "match": "^([ \\t]*)(class)([ \\t]+)([A-Za-z_][A-Za-z0-9_]*)(?=[ \\t]*:)",
+          "match": "^([ \\t]*)(class|type)([ \\t]+)([A-Za-z_][A-Za-z0-9_]*)(?=[ \\t]*:)",
           "captures": {
             "2": { "name": "storage.type.class.qbits" },
             "4": { "name": "entity.name.type.class.qbits" }
@@ -97,6 +97,23 @@
     },
     "resource-declarations": {
       "patterns": [
+        {
+          "match": "^([ \\t]*)(form|field)([ \\t]+)([A-Za-z_][A-Za-z0-9_]*)(?:[ \\t]+(validate)([ \\t]+)(on)([ \\t]+)(change|blur|submit))?(?=[ \\t]*:|[ \\t]*$)",
+          "captures": {
+            "2": { "name": "storage.type.qbits" },
+            "4": { "name": "variable.other.readwrite.qbits" },
+            "5": { "name": "keyword.other.directive.qbits" },
+            "7": { "name": "keyword.other.directive.qbits" },
+            "9": { "name": "constant.language.qbits" }
+          }
+        },
+        {
+          "match": "^([ \\t]*)(required|email|min|max|minLength|maxLength|pattern|match)\\b|\\b(msg)(?=[ \\t]*=)",
+          "captures": {
+            "2": { "name": "support.function.builtin.qbits" },
+            "3": { "name": "variable.other.property.qbits" }
+          }
+        },
         {
           "match": "^([ \\t]*)(http)([ \\t]+)(client)([ \\t]+)([A-Za-z_][A-Za-z0-9_]*)(?=[ \\t]*:)",
           "captures": {

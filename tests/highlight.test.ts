@@ -19,7 +19,7 @@ test('built-in highlighting reuses source.qbits across every shipped example',as
 
 test('built-in highlighting covers declarations, HTTP, connections, values, and comments',async()=>{
   const source=[
-    'class Product:',
+    'type Product:',
     '    name = "Qbits"',
     'service Api:',
     '    query products:',
@@ -29,6 +29,9 @@ test('built-in highlighting covers declarations, HTTP, connections, values, and 
     '        post "/products"',
     'component App:',
     '    state count = 1',
+    '    form profile validate on blur:',
+    '        field name validate on change:',
+    '            required msg="Name is required"',
     '    socket updates:',
     '        connect "/updates"',
     '    sse notices:',
@@ -37,6 +40,7 @@ test('built-in highlighting covers declarations, HTTP, connections, values, and 
   ].join('\n');
   const tokens=(await tokenizeQbits(source)).flatMap(line=>line.tokens);
   for(const className of ['qbits-token--type','qbits-token--function','qbits-token--state','qbits-token--keyword','qbits-token--string','qbits-token--number','qbits-token--comment'])assert.ok(tokens.some(token=>token.className===className),className);
+  for(const keyword of ['type','form','field','validate','required'])assert.ok(tokens.some(token=>token.text===keyword&&token.className),`${keyword} is highlighted`);
 });
 
 test('HTML rendering escapes untrusted source and bounds highlighting work',async()=>{

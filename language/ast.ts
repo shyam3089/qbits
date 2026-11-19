@@ -19,6 +19,11 @@ export interface Import {name?:Node<string>;path:Node<string>;span:Span;kind?:'c
 export interface Prop {name:Node<string>;initial:Node<Literal>;span:Span}
 export interface State {name:Node<string>;initial:Expression;span:Span}
 export interface Computed {name:Node<string>;expression:Expression;span:Span}
+export type ValidationTiming='change'|'blur'|'submit';
+export type ValidatorKind='required'|'email'|'min'|'max'|'minLength'|'maxLength'|'pattern'|'match';
+export interface ValidatorDecl {kind:ValidatorKind;argument?:Node<number|string>;message?:Node<string>;span:Span}
+export interface FormField {name:Node<string>;timing?:Node<ValidationTiming>;validators:ValidatorDecl[];span:Span}
+export interface FormDecl {name:Node<string>;timing:Node<ValidationTiming>;fields:FormField[];span:Span}
 export type HttpMethod='get'|'post'|'put'|'patch'|'delete';
 export interface HttpInterceptor {phase:'request'|'response'|'error';handler:Node<string>;span:Span}
 export interface HttpClient {name:Node<string>;base?:Expression;auth?:{scheme:'bearer';provider:Node<string>;span:Span};interceptors:HttpInterceptor[];span:Span}
@@ -52,7 +57,7 @@ export interface EmittedEvent {name:string;payload:EventPayloadType|null}
 export interface Action {name:Node<string>;statements:Statement[];span:Span}
 export interface ClassDecl {name:Node<string>;fields:State[];computed:Computed[];actions:Action[];span:Span}
 export interface Handler {event:Node<string>;parameter?:Node<string>;payloadType?:EventPayloadType|null;kind?:'click'|'clickBoolean'|'input'|'change';statements:Statement[];span:Span}
-export interface ElementNode {kind:'element';tag:Node<string>;attributes:Record<string,Expression>;indentedAttributes:string[];children:ViewNode[];handler?:Handler;handlers?:Handler[];model?:Expression;span:Span}
+export interface ElementNode {kind:'element';tag:Node<string>;attributes:Record<string,Expression>;indentedAttributes:string[];children:ViewNode[];handler?:Handler;handlers?:Handler[];model?:Expression;form?:Node<string>;field?:Node<string>;fieldForm?:string;span:Span}
 export interface TextNode {kind:'text';value:Expression;span:Span}
 export interface ConditionalNode {kind:'conditional';condition:ConditionExpression;consequent:ViewNode[];alternate:ViewNode[];span:Span}
 export interface IterationNode {kind:'iteration';item:Node<string>;collection:Expression;key:Expression;children:ViewNode[];span:Span}
@@ -60,6 +65,6 @@ export interface SlotNode {kind:'slot';span:Span}
 export interface RouterNode {kind:'router';routes:{path:Node<string>;children:ViewNode[];span:Span}[];span:Span}
 export type ViewNode = ElementNode | TextNode | ConditionalNode | IterationNode | SlotNode | RouterNode;
 export interface Component {
-  kind:'Component'|'SharedState'|'Service';name:Node<string>;span:Span;template?:Node<string>;imports:Import[];uses:Node<string>[];classes:ClassDecl[];props:Prop[];states:State[];computed:Computed[];httpClients:HttpClient[];client?:Node<string>;queries:Query[];httpActions:HttpAction[];sockets:SocketDecl[];sse:SocketDecl[];init:Statement[];cleanup:Statement[];roots:ViewNode[];emits:EmittedEvent[];
+  kind:'Component'|'SharedState'|'Service';name:Node<string>;span:Span;template?:Node<string>;imports:Import[];uses:Node<string>[];classes:ClassDecl[];props:Prop[];states:State[];computed:Computed[];forms:FormDecl[];httpClients:HttpClient[];client?:Node<string>;queries:Query[];httpActions:HttpAction[];sockets:SocketDecl[];sse:SocketDecl[];init:Statement[];cleanup:Statement[];roots:ViewNode[];emits:EmittedEvent[];
 }
 export interface Diagnostic {filename:string;line:number;column:number;span:Span;message:string}

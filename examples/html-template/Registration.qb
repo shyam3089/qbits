@@ -1,5 +1,25 @@
 component Registration:
     template "./Registration.html"
-    email = ""
-    password = ""
-    submitted = false
+    state email = ""
+    state username = ""
+    state password = ""
+    state confirmPassword = ""
+    state newsletter = false
+
+    form signup validate on blur:
+        field email:
+            required msg="Email is required"
+            email msg="Enter a valid email"
+            maxLength 254
+        field username validate on change:
+            required
+            minLength 3 msg="Minimum 3 characters"
+            maxLength 20
+            pattern "^[A-Za-z0-9_]+$"
+        field password:
+            required
+            minLength 12
+        field confirmPassword:
+            required
+            match password msg="Passwords do not match"
+        field newsletter

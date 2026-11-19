@@ -104,9 +104,63 @@ Supported directives are deliberately small:
 
 `qb-model` cannot be combined with `qb-bind-value` or `qb-bind-checked`. Template
 expressions and handler statements use the existing Qbits grammar, not JavaScript.
-`qb-form` and `qb-field` are reserved for the future Stage 7B.1 forms/validation API
-and currently produce a compiler error. See `examples/html-template` for a native form,
-keyed list, and reactive SVG example.
+`qb-form` and `qb-field` connect external HTML to a declared reactive form. See
+[Reactive forms](#reactive-forms) and `examples/html-template`.
+
+## Reactive forms
+
+Forms reuse component state as their only value source. A form-level timing applies to
+every field unless the field overrides it:
+
+```qbits-external
+component Registration:
+    template "./Registration.html"
+    state email = ""
+    state password = ""
+    state confirmPassword = ""
+
+    form signup validate on blur:
+        field email:
+            required msg="Email is required"
+            email
+            maxLength 254
+        field password:
+            required
+            minLength 12
+        field confirmPassword validate on change:
+            required
+            match password msg="Passwords do not match"
+```
+
+```html
+<form qb-form="signup">
+  <label for="email">Email</label><input id="email" type="email" qb-field="email">
+  <label for="password">Password</label><input id="password" type="password" qb-field="password">
+  <label for="confirm">Confirm</label><input id="confirm" type="password" qb-field="confirmPassword">
+  <button type="submit">Register</button><button type="reset">Reset</button>
+</form>
+```
+
+Built-ins are `required`, `email`, `min`, `max`, `minLength`, `maxLength`,
+`pattern`, and generic equality `match`. `msg="..."` replaces a rule's default plain-
+text message. Patterns are bounded to 256 characters and use a conservative safe
+subset without groups, alternation, backreferences, lookarounds, or repeated wildcards. Validators other than
+`required` ignore empty optional values.
+
+Field metadata is `signup.email.value`, `valid`, `invalid`, `dirty`, `touched`,
+`errors`, and `error`; form metadata is `signup.value`, `valid`, `invalid`, `dirty`,
+and `touched`. Metadata is read-only. Validity always reflects current state, while
+errors appear after the configured `change` or `blur`, or after a submit attempt.
+Programmatic state writes revalidate without marking a field dirty.
+
+`qb-field` supports text, email, password, number, checkbox, radio, textarea, and
+single or multiple select controls. It preserves control identity and authored ARIA,
+adds a stable adjacent plain-text error description, and manages `aria-invalid`.
+Invalid submit is prevented and focuses the first connected enabled invalid control.
+Valid submit is also prevented before Stage 7B.2, with no navigation, HTTP request, or
+application submit side effect. Reset restores mount-time values and clears dirty,
+touched, and displayed-error state. Asynchronous validation, server errors, payload
+construction, submitting state, and HTTP submission are deferred to Stage 7B.2.
 
 Props are named, read-only, and have literal defaults. Types are inferred as
 string, number, or boolean. Numeric literals currently remain nonnegative safe
@@ -358,7 +412,7 @@ are no constructor declarations, inheritance, access modifiers, static members, 
 arbitrary method bodies.
 
 ```text
-class Product:
+type Product:
     id = 0
     name = ""
     quantity = 0
@@ -389,6 +443,10 @@ component Catalog:
             on click:
                 products.append(Product(3, "Cocoa", 1))
 ```
+
+`type` is the preferred additive alias for record declarations. Existing `class`
+declarations remain supported and compile to the identical constructor and schema
+representation; neither keyword adds inheritance or methods beyond existing actions.
 
 Homogeneous populated lists infer their item type. An empty list declares it explicitly,
 for example `products = [] as Product` or `ids = [] as number`. A class name must resolve

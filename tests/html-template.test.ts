@@ -23,7 +23,7 @@ test('external template diagnostics preserve HTML filename and reject unsafe or 
     ['<a href="javascript:alert(1)">x</a>',/Unsafe URL scheme/],
     ['<script src="./x.js"></script>',/script elements are forbidden/],
     ['<div qb-html="name"></div>',/Unknown Qbits template directive/],
-    ['<form qb-form="account"></form>',/reserved for Stage 7B\.1/],
+    ['<form qb-form="account"></form>',/Unknown form/],
     ['<input qb-model="name" qb-bind-value="name">',/cannot be combined/]
   ];
   for(const [html,expected] of cases){const value=await fixture('component App:\n    template "./App.html"\n    name = ""\n',html);try{assert.throws(()=>compileFile(value.file),error=>{assert.match(String(error),expected);assert.match(String(error),/App\.html:/);return true;});}finally{await rm(value.directory,{recursive:true,force:true});}}

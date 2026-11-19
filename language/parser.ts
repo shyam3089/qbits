@@ -1,4 +1,4 @@
-import type {Action,ClassDecl,Component,Computed,ConditionExpression,ElementNode,Expression,Handler,HttpAction,HttpClient,HttpMethod,Import,IterationNode,Literal,Node,Prop,Query,SlotNode,SocketDecl,State,Statement,ViewNode} from './ast.js';
+import type {Action,ClassDecl,Component,Computed,ConditionExpression,ElementNode,Expression,FormDecl,Handler,HttpAction,HttpClient,HttpMethod,Import,IterationNode,Literal,Node,Prop,Query,SlotNode,SocketDecl,State,Statement,ValidationTiming,ValidatorDecl,ValidatorKind,ViewNode} from './ast.js';
 import {tokenize,type Token} from './tokenizer.js';
 import {fail} from './diagnostics.js';
 import {resolveCompilerLimits,type CompilerLimits} from './limits.js';
@@ -16,7 +16,7 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
   function nestedExpression<T>(span:Token['span'],run:()=>T):T {if(++expressionDepth>limits.maxExpressionDepth)fail(source,filename,span,`Expression nesting exceeds the configured limit of ${limits.maxExpressionDepth} levels`);try{return run();}finally{expressionDepth--;}}
   function id():Node<string> {
     const token=take('identifier');
-    if(token.value==='service'||token.value==='use'||['component','import','from','text','class','computed','action','state','for','in','key','str','len','on','emit','init','cleanup','if','else','and','or','not','var','let','const','true','false','null','File'].includes(token.value)) fail(source,filename,token.span,`Reserved word ${JSON.stringify(token.value)} cannot be an identifier`);
+    if(token.value==='service'||token.value==='use'||['component','import','from','text','class','type','computed','action','state','form','field','validate','msg','for','in','key','str','len','on','emit','init','cleanup','if','else','and','or','not','var','let','const','true','false','null','File'].includes(token.value)) fail(source,filename,token.span,`Reserved word ${JSON.stringify(token.value)} cannot be an identifier`);
     return {value:token.value,span:token.span};
   }
   function literal():Node<Literal> {
@@ -167,25 +167,39 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
   function computed():Computed {const start=word('computed').span.start;const name=id();symbol('=');const value=expression();take('NEWLINE');return {name,expression:value,span:{start,end:value.span.end}};}
   function action():Action {const start=word('action').span.start;const name=id();block();const body=statements();take('DEDENT');if(!body.length)fail(source,filename,name.span,'Action requires at least one statement');return {name,statements:body,span:{start,end:body.at(-1)!.span.end}};}
   function classDecl():ClassDecl {
-    const start=word('class').span.start;const name=id();block();const fields:State[]=[];const derived:Computed[]=[];const actions:Action[]=[];
+    const start=take('identifier').span.start;const name=id();block();const fields:State[]=[];const derived:Computed[]=[];const actions:Action[]=[];
     while(peek().kind!=='DEDENT'&&peek().kind!=='eof') {
       if(at('computed'))derived.push(computed());else if(at('action'))actions.push(action());else {const field=id();symbol('=');const initial=expression();take('NEWLINE');fields.push({name:field,initial,span:{start:field.span.start,end:initial.span.end}});}
     }take('DEDENT');const end=[...fields,...derived,...actions].at(-1)?.span.end??name.span.end;return {name,fields,computed:derived,actions,span:{start,end}};
   }
   const imports:Import[]=[];
   while(at('import')){const start=word('import').span.start;let name:Node<string>|undefined;if(peek().kind!=='string'){name=id();word('from');}const path=take('string');take('NEWLINE');imports.push({name,path:{value:path.value,span:path.span},span:{start,end:path.span.end}});}
-  const classes:ClassDecl[]=[];while(at('class'))classes.push(classDecl());
+  const classes:ClassDecl[]=[];while(at('class')||at('type'))classes.push(classDecl());
   if(at('shared')){
     if(imports.length)fail(source,filename,imports[0].span,'Shared state modules cannot import other modules');
     const start=word('shared').span.start,name=id();block();const states:State[]=[];
     while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){const state=id();symbol('=');const initial=expression();take('NEWLINE');states.push({name:state,initial,span:{start:state.span.start,end:initial.span.end}});}
     take('DEDENT');take('eof');if(!states.length)fail(source,filename,name.span,'Shared state requires at least one value');
-    return {kind:'SharedState',name,span:{start,end:states.at(-1)!.span.end},imports:[],uses:[],classes,props:[],states,computed:[],httpClients:[],queries:[],httpActions:[],sockets:[],sse:[],init:[],cleanup:[],roots:[],emits:[]};
+    return {kind:'SharedState',name,span:{start,end:states.at(-1)!.span.end},imports:[],uses:[],classes,props:[],states,computed:[],forms:[],httpClients:[],queries:[],httpActions:[],sockets:[],sse:[],init:[],cleanup:[],roots:[],emits:[]};
   }
   const service=at('service'),start=word(service?'service':'component').span.start;const name=id();const props:Prop[]=[];
   if(service&&at('('))fail(source,filename,peek().span,'Services do not accept props');
   if(at('(')){cursor++;if(!at(')'))do{const prop=id();symbol('=');const initial=literal();props.push({name:prop,initial,span:{start:prop.span.start,end:initial.span.end}});if(!at(','))break;cursor++;}while(true);symbol(')');}
-  block();const uses:Node<string>[]=[],states:State[]=[];const derived:Computed[]=[];const httpClients:HttpClient[]=[];const queries:Query[]=[];const httpActions:HttpAction[]=[];const sockets:SocketDecl[]=[],sse:SocketDecl[]=[];let defaultClient:Node<string>|undefined,template:Node<string>|undefined;const init:Statement[]=[];const cleanup:Statement[]=[];const roots:ViewNode[]=[];
+  block();const uses:Node<string>[]=[],states:State[]=[];const derived:Computed[]=[];const forms:FormDecl[]=[];const httpClients:HttpClient[]=[];const queries:Query[]=[];const httpActions:HttpAction[]=[];const sockets:SocketDecl[]=[],sse:SocketDecl[]=[];let defaultClient:Node<string>|undefined,template:Node<string>|undefined;const init:Statement[]=[];const cleanup:Statement[]=[];const roots:ViewNode[]=[];
+  const timing=():Node<ValidationTiming>=>{word('validate');word('on');const token=take('identifier');if(!['change','blur','submit'].includes(token.value))fail(source,filename,token.span,'Validation timing requires change, blur, or submit');return {value:token.value as ValidationTiming,span:token.span};};
+  function formDecl():FormDecl {
+    const start=word('form').span.start,name=id(),formTiming=at('validate')?timing():{value:'submit' as const,span:name.span};block();const fields:FormDecl['fields']=[];
+    while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){
+      const fieldStart=word('field').span.start,fieldName=id(),fieldTiming=at('validate')?timing():undefined,validators:ValidatorDecl[]=[];
+      if(at(':')){block();while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){
+        const validator=take('identifier'),kind=validator.value as ValidatorKind;if(!['required','email','min','max','minLength','maxLength','pattern','match'].includes(kind))fail(source,filename,validator.span,`Unknown form validator ${JSON.stringify(validator.value)}`);
+        let argument:Node<number|string>|undefined;if(['min','max','minLength','maxLength'].includes(kind)){const value=take('number');argument={value:Number(value.value),span:value.span};}else if(kind==='pattern'){const value=take('string');argument={value:value.value,span:value.span};}else if(kind==='match')argument=id();
+        let message:Node<string>|undefined;if(at('msg')){word('msg');symbol('=');const value=take('string');message={value:value.value,span:value.span};}
+        take('NEWLINE');validators.push({kind,argument,message,span:{start:validator.span.start,end:message?.span.end??argument?.span.end??validator.span.end}});
+      }take('DEDENT');}else take('NEWLINE');fields.push({name:fieldName,timing:fieldTiming,validators,span:{start:fieldStart,end:validators.at(-1)?.span.end??fieldTiming?.span.end??fieldName.span.end}});
+    }
+    take('DEDENT');if(!fields.length)fail(source,filename,name.span,'Form requires at least one field');return {name,timing:formTiming,fields,span:{start,end:fields.at(-1)!.span.end}};
+  }
   function httpClient():HttpClient {
     const start=word('http').span.start;word('client');const clientName=id();block();let base:Expression|undefined,auth:HttpClient['auth'];const interceptors:HttpClient['interceptors']=[];
     while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){
@@ -263,6 +277,7 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     else if(at('socket')&&peek(1).kind==='identifier'&&peek(2).value===':'){if(roots.length)fail(source,filename,peek().span,'Socket declarations must precede elements');sockets.push(connection('socket'));}
     else if(at('sse')&&peek(1).kind==='identifier'&&peek(2).value===':'){if(roots.length)fail(source,filename,peek().span,'SSE declarations must precede elements');sse.push(connection('sse'));}
     else if(at('computed')) {if(roots.length)fail(source,filename,peek().span,'Computed declarations must precede elements');derived.push(computed());}
+    else if(at('form')&&peek(1).kind==='identifier'&&(peek(2).value===':'||peek(2).value==='validate')){if(service)fail(source,filename,peek().span,'Services cannot declare forms');if(roots.length)fail(source,filename,peek().span,'Form declarations must precede elements');forms.push(formDecl());}
     else if(at('on')&&(peek(1).value==='init'||peek(1).value==='cleanup')) {
       if(roots.length)fail(source,filename,peek().span,'Lifecycle declarations must precede elements');word('on');const phase=take('identifier');block();const body=statements();take('DEDENT');(phase.value==='init'?init:cleanup).push(...body);
     } else if(at('state')||peek(1)?.value==='=') {
@@ -271,5 +286,5 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
   }
   take('DEDENT');take('eof');if(service&&!queries.length&&!httpActions.length)fail(source,filename,name.span,'Service requires at least one query or action');if(!service&&!roots.length&&!template)fail(source,filename,name.span,'Component requires at least one root element or external template');
   const end=roots.at(-1)?.span.end??template?.span.end??httpActions.at(-1)?.span.end??queries.at(-1)?.span.end??uses.at(-1)?.span.end??name.span.end;
-  return {kind:service?'Service':'Component',name,span:{start,end},template,imports,uses,classes,props,states,computed:derived,httpClients,client:defaultClient,queries,httpActions,sockets,sse,init,cleanup,roots,emits:[]};
+  return {kind:service?'Service':'Component',name,span:{start,end},template,imports,uses,classes,props,states,computed:derived,forms,httpClients,client:defaultClient,queries,httpActions,sockets,sse,init,cleanup,roots,emits:[]};
 }
