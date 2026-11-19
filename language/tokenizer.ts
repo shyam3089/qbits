@@ -7,7 +7,7 @@ export function tokenize(source: string, filename = '<input>', limitOverrides:Pa
   const limits=resolveCompilerLimits(limitOverrides);
   if(source.length>limits.maxSourceLength)fail(source,filename,{start:0,end:0},`Source exceeds the configured limit of ${limits.maxSourceLength} UTF-16 code units`);
   const tokens: Token[] = []; const levels = [0]; let width: number | undefined;
-  let followsHeader = false;
+  let followsHeader = false,optionalHeader=false;
   const emit = (kind: Token['kind'], start: number, end: number, value = '') => tokens.push({kind, value, span: {start, end}});
   let offset = 0;
   while (offset < source.length) {
@@ -20,11 +20,11 @@ export function tokenize(source: string, filename = '<input>', limitOverrides:Pa
     while (i < end && source[i] === ' ') i++;
     if (source[i] === '\t') fail(source, filename, {start: i, end: i + 1}, 'Tabs are not allowed; use spaces for indentation');
     if (i === end || source[i] === '#') continue;
-    const indent = i - start; const current = levels.at(-1)!;
+    const indent = i - start; const current = levels.at(-1)!,lineTokenStart=tokens.length;
     if (followsHeader && indent <= current) fail(source, filename, {start: i, end: i}, 'Expected an indented block after colon');
     if (indent > current) {
       if (tokens.length === 0) fail(source, filename, {start, end: i}, 'Unexpected indentation at top level');
-      if (!followsHeader) fail(source, filename, {start, end: i}, 'Unexpected indentation: only a colon header opens a block');
+      if (!followsHeader&&!optionalHeader) fail(source, filename, {start, end: i}, 'Unexpected indentation: only a colon header opens a block');
       width ??= indent;
       if (indent - current !== width) fail(source, filename, {start, end: i}, `Inconsistent indentation: each block must add ${width} spaces`);
       levels.push(indent); emit('INDENT', start, i);
@@ -56,7 +56,9 @@ export function tokenize(source: string, filename = '<input>', limitOverrides:Pa
       else fail(source, filename, {start: i, end: i + 1}, `Unexpected character ${JSON.stringify(source[i])}; use indentation and newlines, not braces or semicolons`);
       emit(kind, tokenStart, i, value);
     }
+    const lineTokens=tokens.slice(lineTokenStart),asyncHeader=lineTokens[0]?.kind==='identifier'&&lineTokens[0].value==='async';
     followsHeader = tokens.at(-1)?.kind === 'symbol' && tokens.at(-1)?.value === ':';
+    optionalHeader=asyncHeader;
     emit('NEWLINE', end, offset);
   }
   while (levels.length > 1) { levels.pop(); emit('DEDENT', source.length, source.length); }

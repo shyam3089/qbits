@@ -57,7 +57,7 @@ export function compileHtmlTemplate(source:string,filename:string,ast:Component)
         Object.defineProperty(attributes,name,{value:{kind:'literal',value,span:{...valueSpan,origin:{source,filename}}},enumerable:true});continue;
       }
       if(directive==='qb-form'||directive==='qb-field'){
-        if(!/^[A-Za-z_][A-Za-z0-9_]*$/.test(attribute.value))fail(source,filename,valueSpan,`${name} requires one form or field identifier`);
+        const pattern=directive==='qb-form'?/^[A-Za-z_][A-Za-z0-9_]*$/:/^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/;if(!pattern.test(attribute.value))fail(source,filename,valueSpan,`${name} requires a safe form or field path`);
         const target={value:attribute.value,span:{...valueSpan,origin:{source,filename}}};if(directive==='qb-form')form=target;else field=target;continue;
       }
       if(directive==='qb-text')text=expression(attribute.value,valueSpan,source,filename);

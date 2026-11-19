@@ -22,8 +22,12 @@ export interface Computed {name:Node<string>;expression:Expression;span:Span}
 export type ValidationTiming='change'|'blur'|'submit';
 export type ValidatorKind='required'|'email'|'min'|'max'|'minLength'|'maxLength'|'pattern'|'match';
 export interface ValidatorDecl {kind:ValidatorKind;argument?:Node<number|string>;message?:Node<string>;span:Span}
-export interface FormField {name:Node<string>;timing?:Node<ValidationTiming>;validators:ValidatorDecl[];span:Span}
-export interface FormDecl {name:Node<string>;timing:Node<ValidationTiming>;fields:FormField[];span:Span}
+export interface AsyncValidatorDecl {kind:'async';action:Node<string>;dependencies:Expression[];debounce?:Node<number>;message?:Node<string>;span:Span}
+export interface FormField {kind:'field';name:Node<string>;timing?:Node<ValidationTiming>;validators:(ValidatorDecl|AsyncValidatorDecl)[];fields:FormEntry[];span:Span}
+export interface FormArray {kind:'array';name:Node<string>;fields:FormEntry[];span:Span}
+export type FormEntry=FormField|FormArray;
+export interface FormSubmit {action:Node<string>;arguments:Expression[];span:Span}
+export interface FormDecl {name:Node<string>;timing:Node<ValidationTiming>;fields:FormEntry[];submit?:FormSubmit;span:Span}
 export type HttpMethod='get'|'post'|'put'|'patch'|'delete';
 export interface HttpInterceptor {phase:'request'|'response'|'error';handler:Node<string>;span:Span}
 export interface HttpClient {name:Node<string>;base?:Expression;auth?:{scheme:'bearer';provider:Node<string>;span:Span};interceptors:HttpInterceptor[];span:Span}
@@ -39,6 +43,7 @@ export interface HttpAction {
   params:{name:Node<string>;value:Expression;span:Span}[];headers:{name:Node<string>;value:Expression;span:Span}[];
   body?:Expression;response?:Node<string>;responseList:boolean;client?:Node<string>;refresh:Node<string>[];instant:InstantBlock[];
   uploads:{name:Node<string>;value:Expression;span:Span}[];download?:Node<string>;span:Span;
+  errorResponse?:{status:Node<number>;response:Node<string>;responseList:boolean;span:Span};
 }
 export interface SocketDecl {
   name:Node<string>;url:Expression;client?:Node<string>;message?:{parameter:Node<string>;statements:Statement[];span:Span};

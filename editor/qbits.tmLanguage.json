@@ -98,7 +98,7 @@
     "resource-declarations": {
       "patterns": [
         {
-          "match": "^([ \\t]*)(form|field)([ \\t]+)([A-Za-z_][A-Za-z0-9_]*)(?:[ \\t]+(validate)([ \\t]+)(on)([ \\t]+)(change|blur|submit))?(?=[ \\t]*:|[ \\t]*$)",
+          "match": "^([ \\t]*)(form|field|array)([ \\t]+)([A-Za-z_][A-Za-z0-9_]*)(?:[ \\t]+(validate)([ \\t]+)(on)([ \\t]+)(change|blur|submit))?(?=[ \\t]*:|[ \\t]*$)",
           "captures": {
             "2": { "name": "storage.type.qbits" },
             "4": { "name": "variable.other.readwrite.qbits" },
@@ -112,6 +112,14 @@
           "captures": {
             "2": { "name": "support.function.builtin.qbits" },
             "3": { "name": "variable.other.property.qbits" }
+          }
+        },
+        {
+          "match": "^([ \\t]*)(async|submit)([ \\t]+)([A-Za-z_][A-Za-z0-9_]*)(?:\\b|(?=\\())|\\b(depends|debounce|ms|s)\\b",
+          "captures": {
+            "2": { "name": "support.function.builtin.qbits" },
+            "4": { "name": "entity.name.function.qbits" },
+            "5": { "name": "keyword.other.directive.qbits" }
           }
         },
         {

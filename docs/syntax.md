@@ -1,4 +1,4 @@
-# Qbits syntax through Stage 7B.0
+# Qbits syntax through Stage 7B.2
 
 One default component is declared per file. Imports precede the component.
 The Phase 1 counter remains valid:
@@ -148,19 +148,80 @@ subset without groups, alternation, backreferences, lookarounds, or repeated wil
 `required` ignore empty optional values.
 
 Field metadata is `signup.email.value`, `valid`, `invalid`, `dirty`, `touched`,
-`errors`, and `error`; form metadata is `signup.value`, `valid`, `invalid`, `dirty`,
-and `touched`. Metadata is read-only. Validity always reflects current state, while
+`pending`, `errors`, `error`, `validationError`, and `serverError`; form metadata is
+`signup.value`, `valid`, `invalid`, `dirty`, `touched`, `pending`, `submitting`,
+`submitted`, `submitSuccess`, `submitError`, `validationError`, and `result`.
+Metadata is read-only. Validity always reflects current state, while
 errors appear after the configured `change` or `blur`, or after a submit attempt.
 Programmatic state writes revalidate without marking a field dirty.
+
+Nested records, stable record arrays, asynchronous validation, and typed HTTP submit
+use the same state and action declarations:
+
+```qbits-external
+class Account:
+    username = ""
+class Address:
+    city = ""
+class RegistrationRequest:
+    account = Account("")
+    addresses = [] as Address
+class FieldError:
+    path = ""
+    message = ""
+component Registration:
+    account = Account("")
+    addresses = [] as Address
+    action usernameAvailable(value):
+        get "/users/available"
+        param value = value
+        response boolean
+    action register(payload):
+        post "/registrations"
+        body payload
+        response string
+        error 422 response list[FieldError]
+    form signup validate on blur:
+        field account:
+            field username validate on change:
+                required
+                async usernameAvailable debounce 300 ms
+                    msg="Username is already used"
+        array addresses:
+            field city:
+                required
+        submit register(RegistrationRequest(account, addresses))
+```
+
+Use dotted paths for records. Array templates iterate the stable metadata items and
+bind through the item alias:
+
+```html
+<input qb-field="account.username">
+<div qb-for="address in signup.addresses.items" qb-key="address.key">
+  <input qb-field="address.city">
+</div>
+```
+
+An async validator calls a safe typed GET action. `depends` adds typed action
+arguments after the field value, `debounce` is optional, superseded requests are
+cancelled, and stale completions are ignored. A `false` result is a validation
+failure; network, protocol, or malformed-response failures populate
+`validationError` without becoming a user validation message.
+
+Submit waits for current async validation and prevents duplicates. Its explicit
+constructor expression is the only payload source. Typed success data is exposed as
+`result`. A declared 422 `list[FieldError]` maps bounded JSON-pointer-style paths such
+as `/account/username` and `/addresses/0/city` against the submitted array snapshot;
+unknown, duplicate, malformed, or unsafe paths reject the complete mapping.
 
 `qb-field` supports text, email, password, number, checkbox, radio, textarea, and
 single or multiple select controls. It preserves control identity and authored ARIA,
 adds a stable adjacent plain-text error description, and manages `aria-invalid`.
 Invalid submit is prevented and focuses the first connected enabled invalid control.
-Valid submit is also prevented before Stage 7B.2, with no navigation, HTTP request, or
-application submit side effect. Reset restores mount-time values and clears dirty,
-touched, and displayed-error state. Asynchronous validation, server errors, payload
-construction, submitting state, and HTTP submission are deferred to Stage 7B.2.
+Valid submit invokes the declared typed action. Reset cancels pending validation,
+restores the complete mount-time record/list graph and order, preserves retained
+record identity, and clears validation and submission metadata.
 
 Props are named, read-only, and have literal defaults. Types are inferred as
 string, number, or boolean. Numeric literals currently remain nonnegative safe

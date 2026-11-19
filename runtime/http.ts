@@ -1,11 +1,12 @@
 export type HttpMethod='GET'|'POST'|'PUT'|'PATCH'|'DELETE';
 export type HttpPrimitive='string'|'number'|'boolean';
-export interface HttpRecordSchema {readonly fields:Readonly<Record<string,HttpPrimitive>>}
-export type HttpResponseSchema=HttpPrimitive|HttpRecordSchema|{readonly list:HttpPrimitive|HttpRecordSchema};
+export interface HttpRecordSchema {readonly fields:Readonly<Record<string,HttpResponseSchema>>}
+export interface HttpListSchema {readonly list:HttpResponseSchema}
+export type HttpResponseSchema=HttpPrimitive|HttpRecordSchema|HttpListSchema;
 export interface HttpRequest {
-  method:HttpMethod;url:string;headers:Headers;body?:unknown;signal?:AbortSignal;response?:HttpResponseSchema;
+  method:HttpMethod;url:string;headers:Headers;body?:unknown;signal?:AbortSignal;response?:HttpResponseSchema;errorResponses?:Readonly<Record<number,HttpResponseSchema>>;
 }
-export interface HttpOptions {headers?:HeadersInit;params?:Readonly<Record<string,string|number|boolean>>;body?:unknown;signal?:AbortSignal;response?:HttpResponseSchema;client?:string}
+export interface HttpOptions {headers?:HeadersInit;params?:Readonly<Record<string,string|number|boolean>>;body?:unknown;signal?:AbortSignal;response?:HttpResponseSchema;errorResponses?:Readonly<Record<number,HttpResponseSchema>>;client?:string}
 export interface HttpTransferOptions extends HttpOptions {direction:'upload'|'download';onProgress?:(percent:number|null,loaded:number,total?:number)=>void}
 export type HttpRequestInterceptor=(request:HttpRequest)=>HttpRequest|void|Promise<HttpRequest|void>;
 export type HttpResponseInterceptor=(value:unknown,response:Response,request:HttpRequest)=>unknown|Promise<unknown>;
