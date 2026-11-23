@@ -1,4 +1,4 @@
-import type {Action,AsyncValidatorDecl,ClassDecl,Component,Computed,ConditionExpression,ElementNode,Expression,FormDecl,FormEntry,Handler,HttpAction,HttpClient,HttpMethod,Import,IterationNode,Literal,Node,Prop,Query,SlotNode,SocketDecl,State,Statement,ValidationTiming,ValidatorDecl,ValidatorKind,ViewNode} from './ast.js';
+import type {Action,AsyncValidatorDecl,ClassDecl,Component,Computed,ConditionExpression,ElementNode,Expression,FormDecl,FormEntry,Handler,HttpAction,HttpClient,HttpMethod,Import,IterationNode,Literal,Node,Prop,Query,RouteNode,SlotNode,SocketDecl,State,Statement,ValidationTiming,ValidatorDecl,ValidatorKind,ViewNode} from './ast.js';
 import {tokenize,type Token} from './tokenizer.js';
 import {fail} from './diagnostics.js';
 import {resolveCompilerLimits,type CompilerLimits} from './limits.js';
@@ -85,7 +85,7 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     if(at('await')||peek().kind==='identifier'&&peek(1).value==='='&&peek(2).value==='await'){
       const binding=at('await')?undefined:id(),start=binding?.span.start??peek().span.start;if(binding)symbol('=');word('await');word('http');symbol('.');const method=take('identifier');if(!['get','post','put','patch','delete'].includes(method.value))fail(source,filename,method.span,'await http requires get, post, put, patch, or delete');const args=argumentsList();let client:Node<string>|undefined,response:Node<string>|undefined,responseList=false,end=args.end;while(peek().kind!=='NEWLINE'){if(at('client')){const token=word('client');if(client)fail(source,filename,token.span,'Imperative HTTP call may select one client');client=id();end=client.span.end;}else if(at('response')){const token=word('response');if(response)fail(source,filename,token.span,'Imperative HTTP call may declare one response type');if(at('list')){word('list');symbol('[');response=id();end=symbol(']').span.end;responseList=true;}else{response=id();end=response.span.end;}}else fail(source,filename,peek().span,'Expected client or response after imperative HTTP call');}take('NEWLINE');return {kind:'awaitHttp',binding,method:{value:method.value as HttpMethod,span:method.span},arguments:args.values,client,response,responseList,span:{start,end}};
     }
-    if(at('navigate')&&!['=','.'].includes(peek(1).value)){const start=word('navigate').span.start,path=expression();take('NEWLINE');return {kind:'navigate',path,span:{start,end:path.span.end}};}
+    if(at('navigate')&&!['=','.'].includes(peek(1).value)){const start=word('navigate').span.start,path=expression(),arguments_:NonNullable<Extract<Statement,{kind:'navigate'}>['arguments']>=[];let end=path.span.end;if(at(':')){block();while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){const name=id();symbol('=');const value=expression();take('NEWLINE');arguments_.push({name,value});end=value.span.end;}take('DEDENT');if(!arguments_.length)fail(source,filename,path.span,'Multiline navigate requires parameter assignments');}else take('NEWLINE');return {kind:'navigate',path,...(arguments_.length?{arguments:arguments_}:{}),span:{start,end}};}
     if(at('emit')) {
       const start=word('emit').span.start,event=id(),args=at('(')?argumentsList():{values:[],end:event.span.end};
       if(args.values.length>1)fail(source,filename,event.span,'Emitted events accept at most one payload');
@@ -147,21 +147,27 @@ export function parse(source:string,filename='<input>',limitOverrides:Partial<Co
     return {kind:'iteration',item,collection,key,children,span:{start,end:children.at(-1)!.span.end}};
   }
   function slot():SlotNode {const token=word('slot');take('NEWLINE');return {kind:'slot',span:token.span};}
+  let routeCount=0,routeDepth=0;
+  function route():RouteNode {
+    if(++routeCount>Math.min(256,limits.maxCollectionItems))fail(source,filename,peek().span,'Route tree exceeds 256 routes or the configured collection limit');
+    const routeStart=word('route').span.start,token=take('string');block();const query:RouteNode['query']=[],children:ViewNode[]=[];routeDepth++;
+    try{
+      if(at('query')){word('query');block();while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){const name=id();symbol('=');const initial=literal();take('NEWLINE');query.push({name,initial});}take('DEDENT');if(!query.length)fail(source,filename,token.span,'Route query requires default assignments');}
+      while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){if(at('query'))fail(source,filename,peek().span,'Route query must precede route views');children.push(view());}
+    }finally{routeDepth--;}
+    take('DEDENT');if(!children.length)fail(source,filename,token.span,'Route requires a view block');return {kind:'route',path:{value:token.value,span:token.span},query,children,span:{start:routeStart,end:children.at(-1)!.span.end}};
+  }
   function router():ViewNode {
     const start=word('router').span.start;block();const routes:Extract<ViewNode,{kind:'router'}>['routes']=[];
     while(peek().kind!=='DEDENT'&&peek().kind!=='eof'){
-      if(routes.length>=Math.min(256,limits.maxCollectionItems))fail(source,filename,peek().span,'Route table exceeds 256 routes or the configured collection limit');
-      const routeStart=word('route').span.start,token=take('string');block();const children:ViewNode[]=[];
-      while(peek().kind!=='DEDENT'&&peek().kind!=='eof')children.push(view());take('DEDENT');
-      if(!children.length)fail(source,filename,token.span,'Route requires a view block');
-      routes.push({path:{value:token.value,span:token.span},children,span:{start:routeStart,end:children.at(-1)!.span.end}});
+      if(!at('route'))fail(source,filename,peek().span,'router supports route declarations only');routes.push(route());
     }
     take('DEDENT');if(!routes.length)fail(source,filename,{start,end:start},'Router requires routes');return {kind:'router',routes,span:{start,end:routes.at(-1)!.span.end}};
   }
   function view():ViewNode {
     if(++viewDepth>limits.maxNestingDepth)fail(source,filename,peek().span,`View nesting exceeds the configured limit of ${limits.maxNestingDepth} levels`);
     try{if(at('else'))fail(source,filename,peek().span,'else must immediately follow an if block at the same indentation');
-    if(at('route'))fail(source,filename,peek().span,'route must be directly inside router');
+    if(at('route')){if(!routeDepth)fail(source,filename,peek().span,'route must be directly inside router or a parent route');return route();}
     if(at('router'))return router();if(at('if'))return conditional();if(at('for'))return iteration();if(at('slot')&&peek(1).kind==='NEWLINE')return slot();return element();}finally{viewDepth--;}
   }
   function computed():Computed {const start=word('computed').span.start;const name=id();symbol('=');const value=expression();take('NEWLINE');return {name,expression:value,span:{start,end:value.span.end}};}

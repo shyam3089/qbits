@@ -14,9 +14,10 @@ component-owned text WebSockets; and receive-only Server-Sent Events.
 The compiler rejects syntax outside [syntax.md](syntax.md). Generated output is an ES
 module and is intended to be used with the matching Qbits runtime version.
 
-Client-side routing is experimental. Its currently documented static, parameter, and
-fallback routes are tested, but its syntax and navigation behavior may change between
-releases outside the stable API guarantee. Nested routes and guards are not supported.
+Client-side routing is experimental. Its documented static, nested, parameter, query,
+fallback, and synchronous navigation behavior is tested, but its syntax may change
+between releases outside the stable API guarantee. Guards and asynchronous route
+loading are not supported.
 
 ## Package entry points
 

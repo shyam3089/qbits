@@ -4,14 +4,20 @@ import { validateIdentity } from '../tooling/identity.mjs';
 const identity = validateIdentity(JSON.parse(await readFile(new URL('../identity.json', import.meta.url), 'utf8')));
 const root = new URL('../', import.meta.url);
 const generatedReplacements = new Map([
-  ['docs/security.md', [
+  ['docs/security.md', [[
     'Form 422 mappings accept only bounded, unique JSON-pointer-style paths, reject prototype-related segments and unknown fields, and resolve array indexes against the submission snapshot. Validation transport failures remain separate from user validation failures. Async validator generations, cancellation and component cleanup prevent stale responses from mutating current form state; trusted server and host side effects remain outside transactional rollback.',
     'Form 422 mappings accept only bounded, unique JSON-pointer-style paths, reject malformed escapes, prototype-related segments, unknown fields, and removed snapshot entries, and resolve array indexes against the submission snapshot. Validation transport failures remain separate from user validation failures. Async validator generations, cancellation and component cleanup prevent stale responses from mutating current form state; trusted server and host side effects remain outside transactional rollback. Fetch-backed JSON responses are bounded by schema depth and item count, but not by a response-byte ceiling before parsing; applications must enforce response-size limits at the server or transport boundary.'
-  ]]
+  ],[
+    '\n\nWebSocket connections accept only same-origin',
+    '\n\nNested routes remain one statically compiled router tree. Typed path numbers require canonical safe integers, query values are converted only to their declared primitive defaults, and malformed typed URLs select a bounded fallback rather than entering component state. Multiline navigation resolves a compiler-known route, requires every path argument, encodes path and query values, and still passes the same-origin URL checks. Route matching and client-visible fallbacks are not authentication or authorization boundaries.\n\nWebSocket connections accept only same-origin'
+  ]]],
+  ['docs/limitations.md', [[
+    'Filtering/sorting expressions, indexes, nested collection mutation, nested routing, routing guards, SSR, plugins, LSP/editor extensions, native targets and a registry remain unsupported.',
+    'Filtering/sorting expressions, indexes, nested collection mutation, routing guards, asynchronous route loading, SSR, plugins, LSP/editor extensions, native targets and a registry remain unsupported.'
+  ]]]
 ]);
 async function sync(path, content) {
-  const replacement = generatedReplacements.get(path);
-  if (replacement) content = content.replace(replacement[0], replacement[1]);
+  for (const replacement of generatedReplacements.get(path) ?? []) content = content.replace(replacement[0], replacement[1]);
   const url = new URL(path, root); const before = await readFile(url, 'utf8').catch(() => '');
   const normalized = value => value.replace(/\r\n/g, '\n');
   const normalizedContent = normalized(content);

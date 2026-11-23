@@ -50,7 +50,7 @@ export interface SocketDecl {
   disconnect?:{statements:Statement[];reconnect?:Node<number>;span:Span};span:Span;
 }
 export type Statement =
-  | {kind:'navigate';path:Expression;span:Span}
+  | {kind:'navigate';path:Expression;arguments?:{name:Node<string>;value:Expression}[];route?:{parameters:{name:string;type:'string'|'number'}[];query:{name:string;type:'string'|'number'|'boolean'}[]};span:Span}
   | {kind:'assign';target:Expression;value:Expression;span:Span}
   | {kind:'eventAssign';target:Expression;member:Node<'value'|'checked'|'file'|'files'>;span:Span}
   | {kind:'call';target:Expression;method:Node<string>;arguments:Expression[];span:Span}
@@ -67,8 +67,9 @@ export interface TextNode {kind:'text';value:Expression;span:Span}
 export interface ConditionalNode {kind:'conditional';condition:ConditionExpression;consequent:ViewNode[];alternate:ViewNode[];span:Span}
 export interface IterationNode {kind:'iteration';item:Node<string>;collection:Expression;key:Expression;children:ViewNode[];span:Span}
 export interface SlotNode {kind:'slot';span:Span}
-export interface RouterNode {kind:'router';routes:{path:Node<string>;children:ViewNode[];span:Span}[];span:Span}
-export type ViewNode = ElementNode | TextNode | ConditionalNode | IterationNode | SlotNode | RouterNode;
+export interface RouteNode {kind:'route';path:Node<string>;query:{name:Node<string>;initial:Node<Literal>}[];children:ViewNode[];span:Span}
+export interface RouterNode {kind:'router';routes:RouteNode[];span:Span}
+export type ViewNode = ElementNode | TextNode | ConditionalNode | IterationNode | SlotNode | RouterNode | RouteNode;
 export interface Component {
   kind:'Component'|'SharedState'|'Service';name:Node<string>;span:Span;template?:Node<string>;imports:Import[];uses:Node<string>[];classes:ClassDecl[];props:Prop[];states:State[];computed:Computed[];forms:FormDecl[];httpClients:HttpClient[];client?:Node<string>;queries:Query[];httpActions:HttpAction[];sockets:SocketDecl[];sse:SocketDecl[];init:Statement[];cleanup:Statement[];roots:ViewNode[];emits:EmittedEvent[];
 }

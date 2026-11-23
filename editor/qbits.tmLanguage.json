@@ -206,7 +206,7 @@
     },
     "control-flow": {
       "patterns": [
-        { "match": "^([ \\t]*)(if|else|router|slot)\\b", "captures": { "2": { "name": "keyword.control.qbits" } } },
+        { "match": "^([ \\t]*)(if|else|router|slot|query)\\b", "captures": { "2": { "name": "keyword.control.qbits" } } },
         {
           "match": "^([ \\t]*)(route)([ \\t]+)",
           "captures": { "2": { "name": "keyword.control.qbits" } }

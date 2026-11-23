@@ -407,22 +407,31 @@ component Availability:
 ### Client-side routing
 
 Routing is optional. Put one static `router:` in the app's mounted component tree.
-Each `route` takes a literal path and a view block; the final `route "*"` is the
-required 404 fallback. Route parameters are read-only strings scoped to that route.
+Root routes use absolute paths and the final root `route "*"` is the required 404
+fallback. Nested routes use relative paths, `""` is an index route, and a nested
+`route "*"` is optional. When a child group has no matching fallback, matching
+continues with the nearest ancestor fallback.
 
 ```text
 component Store:
-    button text="Product":
+    button text="Reviews":
         on click:
-            navigate "/products/42"
+            navigate "/products/<id>":
+                id = 42
+                tab = "reviews"
+                page = 2
     router:
         route "/":
-            p text="Home"
-        route "/products/<id>":
-            p text="Product " + id
-            button text="Home":
-                on click:
-                    navigate "/"
+            section:
+                route "":
+                    p text="Home"
+                route "products/<id:number>":
+                    query:
+                        tab = "details"
+                        page = 1
+                    p text="Product " + str(id) + " " + tab + " " + str(page)
+                route "*":
+                    p text="Store page not found"
         route "*":
             p text="Page not found"
 ```
@@ -432,32 +441,50 @@ component Store:
 the current URL adds no history entry. Back/forward updates mounted routers through
 `popstate`. Separate mounts retain separate state; navigation in one mount does not
 write another mount's route state. Back/forward reflects the document URL in each.
-Host `pushState` calls alone do not notify routers.
+Host `pushState` calls alone do not notify routers. A multiline navigation destination
+is a literal full route template without inline types. Its assignments are checked
+against that route's path parameters and declared query values, then encoded into a
+local URL. The destination is resolved against the router declared in the same
+component; child components can continue to use ordinary string `navigate`. All path
+parameters are required; query assignments are optional.
 
-Routes match whole paths, case sensitively. Static segments use ASCII letters,
-digits, underscores and hyphens. `<name>` captures one decoded segment. More static
-segments win; duplicates and equally specific overlapping patterns are rejected.
+Routes match complete root-to-leaf paths, case sensitively. Static segments use ASCII
+letters, digits, underscores and hyphens. `<name>` captures one decoded string segment;
+`<name:number>` accepts only canonical finite safe integers such as `0`, `42`, or `-3`.
+Values such as `01`, `-0`, `1.0`, exponents, and unsafe integers do not match and use
+the nearest fallback. Parent parameters are inherited by nested routes. More static
+segments win; duplicates and equally specific overlapping patterns are rejected even
+when their parameter types differ.
 Legacy `:name` patterns are rejected; replace `/products/:id` with `/products/<id>`.
 Parameters can feed text, conditions and child props. A parameter change within
-the same route retains its components and local state; switching route branches
-stages new content before disposing old content, using existing lifecycle ordering.
-Keep persistent UI outside the outlet. A parameterized match does not validate
-whether a product or other application record exists.
+the same route retains its components and local state. Query groups contain literal
+string, boolean, or safe-integer defaults; missing, duplicate, or invalid typed query
+values resolve to those defaults. Query-only navigation updates subscribed bindings
+without recreating the matched route components. Ordinary state changes do not write
+browser history.
+
+Nested route declarations supplied as content to a component render through that
+component's existing default `slot`. Common parent layouts remain mounted while their
+active child changes. Layout and page components may use inline views or external HTML
+templates; an external layout uses a bare `<slot></slot>`. Switching unmatched route
+branches stages new content before disposing old content using existing lifecycle
+ordering. A parameterized match does not validate whether an application record exists.
 
 Navigation accepts only same-origin paths beginning with one `/`; query strings
-and fragments are preserved but do not affect matching or expose extra bindings.
+and fragments are preserved but do not affect path matching. Only query keys declared
+by the matched route chain expose bindings; unknown keys remain unbound.
 Malformed escapes, dot segments, encoded separators, backslashes and controls are
 rejected. Malformed browser paths and unmatched paths render the fallback.
 Decoded parameters remain text, with no source or HTML execution. Paths are limited
-to 2048 characters and tables to 256 routes, additionally respecting collection,
+to 2048 characters and trees to 256 routes, additionally respecting collection,
 work, DOM, component and effect limits. Trailing slashes are distinct paths.
 
 Failed synchronous navigation preserves committed state, DOM and URL; failed
 back/forward rendering restores the previous URL with `replaceState` at the current
 history position. Cleanup errors after commit are surfaced without undoing the new
 route. Disposal removes the router's history listener. Navigation during route
-preparation or lifecycle finalization is unsupported. There are no nested routers,
-guards, redirects, link interception or asynchronous route loaders. Production
+preparation or lifecycle finalization is unsupported. There are no nested router
+instances, guards, redirects, link interception or asynchronous route loaders. Production
 hosting must serve the app entry for deep links.
 
 Supported standard elements: main, section, div, h1–h6, p, span, label, button, input.

@@ -38,7 +38,7 @@ export function generate(ast:Component):string {
     throw new Error(`Unsupported expression ${(value as {kind:string}).kind}`);
   }
   const condition=expression;
-  const statement=(value:Statement):unknown=>value.kind==='navigate'?{kind:value.kind,path:expression(value.path)}:value.kind==='assign'?{kind:value.kind,target:expression(value.target),value:expression(value.value)}:value.kind==='eventAssign'?{kind:value.kind,target:expression(value.target),member:value.member.value}:value.kind==='emit'?{kind:value.kind,event:value.event.value,...(value.payload?{payload:expression(value.payload)}:{})}:value.kind==='invoke'?{kind:value.kind,action:value.action.value,arguments:value.arguments.map(expression)}:value.kind==='awaitHttp'?{kind:value.kind,...(value.binding?{binding:value.binding.value}:{}),method:value.method.value,arguments:value.arguments.map(expression),...(value.client||ast.client?{client:(value.client??ast.client)!.value}:{}),...(value.response?{response:value.response.value,responseList:value.responseList}:{})}:{kind:value.kind,target:expression(value.target),method:value.method.value,arguments:value.arguments.map(expression)};
+  const statement=(value:Statement):unknown=>value.kind==='navigate'?{kind:value.kind,path:expression(value.path),...(value.arguments?{arguments:value.arguments.map(item=>({name:item.name.value,value:expression(item.value)})),route:value.route}: {})}:value.kind==='assign'?{kind:value.kind,target:expression(value.target),value:expression(value.value)}:value.kind==='eventAssign'?{kind:value.kind,target:expression(value.target),member:value.member.value}:value.kind==='emit'?{kind:value.kind,event:value.event.value,...(value.payload?{payload:expression(value.payload)}:{})}:value.kind==='invoke'?{kind:value.kind,action:value.action.value,arguments:value.arguments.map(expression)}:value.kind==='awaitHttp'?{kind:value.kind,...(value.binding?{binding:value.binding.value}:{}),method:value.method.value,arguments:value.arguments.map(expression),...(value.client||ast.client?{client:(value.client??ast.client)!.value}:{}),...(value.response?{response:value.response.value,responseList:value.responseList}:{})}:{kind:value.kind,target:expression(value.target),method:value.method.value,arguments:value.arguments.map(expression)};
   const componentImports=ast.imports.filter(item=>item.name&&item.kind!=='shared'&&item.kind!=='service'),sharedImports=ast.imports.filter(item=>item.name&&item.kind==='shared'),serviceImports=ast.imports.filter(item=>item.name&&item.kind==='service');
   function nodes(values:ViewNode[]):unknown[]{
     const result:unknown[]=[];
@@ -51,7 +51,8 @@ export function generate(ast:Component):string {
   }
   function node(value:Exclude<ViewNode,{kind:'conditional'}>):unknown {
     if(value.kind==='text')return {kind:value.kind,value:expression(value.value)};
-    if(value.kind==='router')return {kind:value.kind,routes:value.routes.map(route=>({path:route.path.value,children:nodes(route.children)}))};
+    if(value.kind==='router')return {kind:value.kind,routes:value.routes.map(node)};
+    if(value.kind==='route')return {kind:value.kind,path:value.path.value,query:value.query.map(item=>({name:item.name.value,initial:item.initial.value})),children:nodes(value.children)};
     if(value.kind==='slot')return {kind:value.kind};
     if(value.kind==='iteration')return {kind:value.kind,item:value.item.value,collection:expression(value.collection),key:expression(value.key),children:nodes(value.children)};
     const attributes:Record<string,unknown>={};
