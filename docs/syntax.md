@@ -1,4 +1,4 @@
-# Qbits syntax through Stage 7B.2
+# Qbits syntax through Stage 7B.3
 
 One default component is declared per file. Imports precede the component.
 The Phase 1 counter remains valid:
@@ -207,13 +207,19 @@ An async validator calls a safe typed GET action. `depends` adds typed action
 arguments after the field value, `debounce` is optional, superseded requests are
 cancelled, and stale completions are ignored. A `false` result is a validation
 failure; network, protocol, or malformed-response failures populate
-`validationError` without becoming a user validation message.
+`validationError` without becoming a user validation message. `pending` covers both
+the debounce interval and the active request. Submit follows the latest field value
+when edits supersede validation, and reset, field removal, and component disposal
+settle pending validation without allowing a stale completion to update metadata.
 
 Submit waits for current async validation and prevents duplicates. Its explicit
 constructor expression is the only payload source. Typed success data is exposed as
 `result`. A declared 422 `list[FieldError]` maps bounded JSON-pointer-style paths such
 as `/account/username` and `/addresses/0/city` against the submitted array snapshot;
 unknown, duplicate, malformed, or unsafe paths reject the complete mapping.
+Snapshot entries removed before the response are also rejected rather than receiving
+detached errors. Field server errors clear when that field's value changes. While an
+HTTP submission is active, additional submit attempts are ignored.
 
 `qb-field` supports text, email, password, number, checkbox, radio, textarea, and
 single or multiple select controls. It preserves control identity and authored ARIA,
@@ -222,6 +228,11 @@ Invalid submit is prevented and focuses the first connected enabled invalid cont
 Valid submit invokes the declared typed action. Reset cancels pending validation,
 restores the complete mount-time record/list graph and order, preserves retained
 record identity, and clears validation and submission metadata.
+
+`qb-form` keeps native keyboard submission. Visible field messages are plain text and
+are connected to controls with `aria-describedby`; revealed failures update
+`aria-invalid`, and correction or dynamic field cleanup removes the framework-owned
+ARIA reference without replacing the control.
 
 Props are named, read-only, and have literal defaults. Types are inferred as
 string, number, or boolean. Numeric literals currently remain nonnegative safe

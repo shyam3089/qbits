@@ -3,7 +3,15 @@ import { counterSource, greetingSource, notificationSettingSource, catalogSource
 import { validateIdentity } from '../tooling/identity.mjs';
 const identity = validateIdentity(JSON.parse(await readFile(new URL('../identity.json', import.meta.url), 'utf8')));
 const root = new URL('../', import.meta.url);
+const generatedReplacements = new Map([
+  ['docs/security.md', [
+    'Form 422 mappings accept only bounded, unique JSON-pointer-style paths, reject prototype-related segments and unknown fields, and resolve array indexes against the submission snapshot. Validation transport failures remain separate from user validation failures. Async validator generations, cancellation and component cleanup prevent stale responses from mutating current form state; trusted server and host side effects remain outside transactional rollback.',
+    'Form 422 mappings accept only bounded, unique JSON-pointer-style paths, reject malformed escapes, prototype-related segments, unknown fields, and removed snapshot entries, and resolve array indexes against the submission snapshot. Validation transport failures remain separate from user validation failures. Async validator generations, cancellation and component cleanup prevent stale responses from mutating current form state; trusted server and host side effects remain outside transactional rollback. Fetch-backed JSON responses are bounded by schema depth and item count, but not by a response-byte ceiling before parsing; applications must enforce response-size limits at the server or transport boundary.'
+  ]]
+]);
 async function sync(path, content) {
+  const replacement = generatedReplacements.get(path);
+  if (replacement) content = content.replace(replacement[0], replacement[1]);
   const url = new URL(path, root); const before = await readFile(url, 'utf8').catch(() => '');
   const normalized = value => value.replace(/\r\n/g, '\n');
   const normalizedContent = normalized(content);
