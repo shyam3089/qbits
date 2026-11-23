@@ -503,7 +503,8 @@ navigation usable. Initial loading and errors render without exposing protected 
 content.
 
 `guard:` conditions are synchronous. `guard async:` additionally permits calls to
-declared typed, body-free GET actions whose response is exactly `boolean`. Guards run
+declared side-effect-free typed GET actions whose response is exactly `boolean`; guard
+actions cannot declare a body, instant update, refresh, upload, or download. Guards run
 parent before child; a true branch must contain only `navigate` or `navigate replace`.
 No state mutation is allowed in a guard. New navigation cancels cancellable guard
 requests and ignores all stale completions. Transport failures populate
