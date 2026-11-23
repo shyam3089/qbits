@@ -192,7 +192,7 @@
           }
         },
         {
-          "match": "\\b(emit|navigate)\\b",
+          "match": "\\b(emit|navigate|back|forward|replace)\\b",
           "name": "keyword.control.qbits"
         },
         {
@@ -206,7 +206,7 @@
     },
     "control-flow": {
       "patterns": [
-        { "match": "^([ \\t]*)(if|else|router|slot|query)\\b", "captures": { "2": { "name": "keyword.control.qbits" } } },
+        { "match": "^([ \\t]*)(if|else|router|slot|query|guard|async|lazy|loading|error|scroll|restore)\\b", "captures": { "2": { "name": "keyword.control.qbits" } } },
         {
           "match": "^([ \\t]*)(route)([ \\t]+)",
           "captures": { "2": { "name": "keyword.control.qbits" } }

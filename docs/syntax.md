@@ -413,7 +413,11 @@ fallback. Nested routes use relative paths, `""` is an index route, and a nested
 continues with the nearest ancestor fallback.
 
 ```text
+import ReportsPage from "./ReportsPage.qb"
 component Store:
+    action canOpenReports():
+        get "/api/reports/access"
+        response boolean
     button text="Reviews":
         on click:
             navigate "/products/<id>":
@@ -421,6 +425,12 @@ component Store:
                 tab = "reviews"
                 page = 2
     router:
+        scroll:
+            restore = true
+        loading:
+            p text="Loading page"
+        error:
+            p text=navigation.error
         route "/":
             section:
                 route "":
@@ -430,15 +440,29 @@ component Store:
                         tab = "details"
                         page = 1
                     p text="Product " + str(id) + " " + tab + " " + str(page)
+                route "reports":
+                    guard async:
+                        if not canOpenReports():
+                            navigate replace "/login"
+                    lazy:
+                        ReportsPage
+                    loading:
+                        p text="Loading reports"
+                    error:
+                        p text=navigation.error
                 route "*":
                     p text="Store page not found"
+        route "/old-products":
+            navigate replace "/products/1"
         route "*":
             p text="Page not found"
 ```
 
 `navigate` accepts a string expression in built-in or child event handlers, uses
 `history.pushState`, and updates the initiating app without reloading. Repeating
-the current URL adds no history entry. Back/forward updates mounted routers through
+the current URL adds no history entry. `navigate replace "/path"` replaces the current
+entry; `navigate back` and `navigate forward` call the corresponding browser-history
+operations. Back/forward updates mounted routers through
 `popstate`. Separate mounts retain separate state; navigation in one mount does not
 write another mount's route state. Back/forward reflects the document URL in each.
 Host `pushState` calls alone do not notify routers. A multiline navigation destination
@@ -463,6 +487,36 @@ values resolve to those defaults. Query-only navigation updates subscribed bindi
 without recreating the matched route components. Ordinary state changes do not write
 browser history.
 
+Same-origin native `<a href>` clicks use the router without a page reload. Modified
+clicks, non-primary buttons, `download`, non-`_self` targets, cross-origin URLs, and
+non-HTTP(S) schemes retain native browser behavior. Qbits does not modify host-owned
+`history.state`. Scroll restoration is enabled by default: new navigation starts at
+the fragment target or page top, while back/forward restores a bounded in-memory
+position. Declare `scroll: restore = false` to disable router scrolling.
+
+`navigation.pending` is a read-only boolean and `navigation.error` is a read-only,
+sanitized error string. Both are reactive in inline and external templates. Async
+navigation retains the committed page. A route-specific `loading:` or `error:` block
+overrides the router-level block; the loading overlay covers the changing content,
+blocks its pointer interaction, announces status accessibly, and leaves shared
+navigation usable. Initial loading and errors render without exposing protected route
+content.
+
+`guard:` conditions are synchronous. `guard async:` additionally permits calls to
+declared typed, body-free GET actions whose response is exactly `boolean`. Guards run
+parent before child; a true branch must contain only `navigate` or `navigate replace`.
+No state mutation is allowed in a guard. New navigation cancels cancellable guard
+requests and ignores all stale completions. Transport failures populate
+`navigation.error`; they are not treated as access denial. Redirect chains are bounded
+to 16 steps. A route containing only `navigate` or `navigate replace` is a redirect-only
+route; there is no `redirect` keyword.
+
+`lazy:` contains exactly one normally imported component. When that import has no eager
+use elsewhere in the component, generated JavaScript uses a dynamic import and the
+bundler can emit a separate route chunk. An eagerly used import remains eager. Failed
+imports retain the committed page and select the nearest route or router `error:` block.
+Qbits does not prefetch route chunks.
+
 Nested route declarations supplied as content to a component render through that
 component's existing default `slot`. Common parent layouts remain mounted while their
 active child changes. Layout and page components may use inline views or external HTML
@@ -481,11 +535,12 @@ work, DOM, component and effect limits. Trailing slashes are distinct paths.
 
 Failed synchronous navigation preserves committed state, DOM and URL; failed
 back/forward rendering restores the previous URL with `replaceState` at the current
-history position. Cleanup errors after commit are surfaced without undoing the new
-route. Disposal removes the router's history listener. Navigation during route
-preparation or lifecycle finalization is unsupported. There are no nested router
-instances, guards, redirects, link interception or asynchronous route loaders. Production
-hosting must serve the app entry for deep links.
+history position. Async guard, redirect, and lazy work is latest-navigation-wins.
+Cleanup errors after commit are surfaced without undoing the new route. Disposal
+removes router history and link listeners and cancels active guard work. Navigation
+during route preparation or lifecycle finalization is unsupported. Nested router
+instances remain unsupported. Production hosting must serve the app entry for deep
+links.
 
 Supported standard elements: main, section, div, h1–h6, p, span, label, button, input.
 Elements may nest using colon blocks or end at a newline when they have no children
