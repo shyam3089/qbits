@@ -498,9 +498,12 @@ position. Declare `scroll: restore = false` to disable router scrolling.
 sanitized error string. Both are reactive in inline and external templates. Async
 navigation retains the committed page. A route-specific `loading:` or `error:` block
 overrides the router-level block; the loading overlay covers the changing content,
-blocks its pointer interaction, announces status accessibly, and leaves shared
-navigation usable. Initial loading and errors render without exposing protected route
-content.
+makes that outgoing route subtree inert to keyboard and pointer interaction, announces
+status accessibly, and leaves shared navigation usable. If navigation fails or is
+cancelled, Qbits restores the prior inert state and restores outgoing focus unless the
+user moved focus elsewhere. Navigation errors expose only a generic message or HTTP
+status, not raw transport or lazy-module details. Initial loading and errors render
+without exposing protected route content.
 
 `guard:` conditions are synchronous. `guard async:` additionally permits calls to
 declared side-effect-free typed GET actions whose response is exactly `boolean`; guard

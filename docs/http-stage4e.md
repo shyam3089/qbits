@@ -390,6 +390,15 @@ wrong types, non-finite/unsafe numbers, excessive depth, and oversized collectio
 are rejected before commit. Records are hydrated into Qbits classes without
 executing server-supplied source or HTML.
 
+Typed JSON success and declared error bodies are limited by `maxTransferBytes`
+(67,108,864 bytes by default). Fetch responses are counted while streaming and are
+rejected before text decoding or JSON parsing; `Content-Length` is only an early hint
+and is not trusted as enforcement. XHR upload/download responses are checked through
+progress events and again by final blob size because browser XHR owns buffering.
+Increasing this limit transfers memory-exhaustion risk to the host. Response
+interceptors and values returned directly by trusted host code are outside the network
+byte boundary, but still pass declared schema limits.
+
 Concurrent safe reads are deduplicated by scope and request identity. Obsolete query
 generations cannot commit. Concurrent actions remain distinct; optimistic layers
 settle independently. Framework queues, response collections/depth, transfer bytes,

@@ -9,6 +9,7 @@ import {languagePlugin} from '../tooling/vite.js';
 
 const syntax=`import Reports from "./Reports.qb"
 component App:
+    count = 0
     allowed = false
     action canOpen():
         get "/allowed"
@@ -84,14 +85,18 @@ test('Firefox coordinates native links, history, guards, stale results, and a re
   await write('index.html','<main id="app"></main><script type="module" src="/main.ts"></script>');
   await write('main.ts',"import App from './App.qb';import * as runtime from '@qbits/runtime';globalThis.disposeApp=App(document.querySelector('#app')!,runtime);");
   await write('Reports.qb','component Reports:\n    p id="reports" text="Reports loaded"');
+  await write('BrokenLazy.qb','component BrokenLazy:\n    p id="broken-lazy-page" text="Should not mount"');
   await write('App.qb',`import Reports from "./Reports.qb"
+import BrokenLazy from "./BrokenLazy.qb"
 component App:
+    count = 0
     action canOpen():
         get "/allowed"
         response boolean
     nav style="position: fixed; top: 0; z-index: 2147483647":
         a id="home-link" href="/" text="Home"
         a id="reports-link" href="/reports" text="Reports"
+        a id="broken-lazy-link" href="/broken-lazy" text="Broken lazy"
         a id="loop-link" href="/loop-one" text="Loop"
         a id="external-link" href="https://example.com/" target="_blank" text="External"
     output id="pending" text=str(navigation.pending)
@@ -102,6 +107,9 @@ component App:
     button id="back" text="Back":
         on click:
             navigate back
+    button id="forward" text="Forward":
+        on click:
+            navigate forward
     router:
         scroll:
             restore = true
@@ -112,6 +120,11 @@ component App:
         route "/":
             div style="height: 2000px":
                 p id="home" text="Home page"
+                input id="outgoing-input" type="text" value="focus"
+                button id="outgoing-button" text="Outgoing":
+                    on click:
+                        count = count + 1
+                output id="outgoing-count" text=str(count)
         route "/reports":
             guard async:
                 if not canOpen():
@@ -124,6 +137,13 @@ component App:
                 p id="reports-error" text=navigation.error
         route "/old":
             navigate replace "/reports"
+        route "/broken-lazy":
+            lazy:
+                BrokenLazy
+            loading:
+                p id="broken-lazy-loading" text="Loading broken page"
+            error:
+                p id="broken-lazy-error" text=navigation.error
         route "/login":
             p id="login" text="Login"
         route "/loop-one":
@@ -134,14 +154,15 @@ component App:
             p id="missing" text="Missing"`);
   const server=await createServer({root:directory,plugins:[languagePlugin({projectRoot:directory})],resolve:{alias:{'@qbits/runtime':resolve('runtime/index.ts')}},server:{host:'127.0.0.1',port:0,fs:{allow:[resolve('.'),directory]}},build:{outDir:join(directory,'dist'),emptyOutDir:true},logLevel:'silent'}),browser=await firefox.launch({headless:true});
   try{
-    await server.listen();const page=await browser.newPage(),errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));let calls=0;const responders:((allowed:boolean,status?:number)=>void)[]=[];await page.route('**/allowed',route=>{calls++;responders.push((allowed,status=200)=>route.fulfill({status,body:JSON.stringify(allowed),contentType:'application/json'}));});await page.goto(server.resolvedUrls!.local[0]);await page.locator('#home').waitFor();
+    await server.listen();const page=await browser.newPage(),errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));let calls=0;const responders:((allowed:boolean,status?:number)=>void)[]=[];await page.route('**/allowed',route=>{calls++;responders.push((allowed,status=200)=>route.fulfill({status,body:JSON.stringify(allowed),contentType:'application/json'}));});await page.route('**/BrokenLazy.qb*',route=>route.abort());await page.goto(server.resolvedUrls!.local[0]);await page.locator('#home').waitFor();
     const originalState=await page.evaluate(()=>{history.replaceState({host:'kept'},'',location.href);scrollTo(0,300);return {state:history.state,y:scrollY,restoration:history.scrollRestoration};});assert.deepEqual(originalState,{state:{host:'kept'},y:300,restoration:'manual'});
-    await page.locator('#reports-link').click();await page.locator('#reports-loading').waitFor();assert.equal(await page.locator('#pending').textContent(),'true');assert.equal(await page.locator('#home').count(),1);assert.equal(await page.locator('[data-qb-route-status="loading"]').getAttribute('aria-live'),'polite');assert.equal(await page.locator('#home').evaluate(element=>{const rectangle=element.parentElement!.getBoundingClientRect(),top=document.elementFromPoint(Math.max(0,rectangle.left)+1,Math.max(80,rectangle.top+1));return Boolean(top?.closest('[data-qb-route-status="loading"]'));}),true);
-    await page.locator('#home-link').click();await page.locator('#home').waitFor();responders.shift()!(true);await page.waitForTimeout(50);assert.equal(await page.locator('#reports').count(),0);assert.equal(await page.evaluate(()=>scrollY),300);
+    await page.locator('#reports-link').click();await page.locator('#reports-loading').waitFor();assert.equal(await page.locator('#pending').textContent(),'true');assert.equal(await page.locator('#home').count(),1);assert.equal(await page.locator('[data-qb-route-status="loading"]').getAttribute('aria-live'),'polite');assert.equal(await page.locator('#home').evaluate(element=>{const rectangle=element.parentElement!.getBoundingClientRect(),top=document.elementFromPoint(Math.max(0,rectangle.left)+1,Math.max(80,rectangle.top+1));return Boolean(top?.closest('[data-qb-route-status="loading"]'));}),true);assert.equal(await page.locator('#home').evaluate(element=>(element.parentElement as HTMLElement).inert),true);
+    await page.locator('#home-link').click();await page.locator('#home').waitFor();responders.shift()!(true);await page.waitForTimeout(50);assert.equal(await page.locator('#reports').count(),0);assert.equal(await page.evaluate(()=>scrollY),300);assert.equal(await page.evaluate(()=>document.activeElement?.id),'home-link');assert.equal(await page.locator('#home').evaluate(element=>(element.parentElement as HTMLElement).inert),false);
     await page.locator('#reports-link').click();await page.locator('#reports-loading').waitFor();responders.shift()!(true);await page.locator('#reports').waitFor();assert.equal(await page.locator('#pending').textContent(),'false');assert.deepEqual(await page.evaluate(()=>history.state),{host:'kept'});assert.equal(await page.evaluate(()=>scrollY),0);
-    await page.locator('#replace').click();await page.locator('#login').waitFor();assert.equal(new URL(page.url()).pathname,'/login');await page.locator('#back').click();await page.locator('#home').waitFor();await page.waitForTimeout(20);assert.equal(await page.evaluate(()=>scrollY),300);
-    await page.locator('#reports-link').click();await page.locator('#reports-loading').waitFor();responders.shift()!(false,503);await page.locator('#reports-error').waitFor();assert.match(await page.locator('#nav-error').textContent()??'',/HTTP 503/);assert.equal(await page.locator('#home').count(),1);
-    await page.goto(new URL('/old',server.resolvedUrls!.local[0]).href);await page.locator('#reports-loading').waitFor();responders.shift()!(false);await page.locator('#login').waitFor({timeout:5000}).catch(async error=>{throw new Error(`${error}; url=${page.url()}; body=${await page.locator('body').textContent()}; calls=${calls}; queued=${responders.length}; errors=${errors.join('|')}`);});assert.equal(new URL(page.url()).pathname,'/login');assert.equal(calls,4);
+    await page.locator('#replace').click();await page.locator('#login').waitFor();assert.equal(new URL(page.url()).pathname,'/login');await page.locator('#reports-link').click();await page.locator('#reports-loading').waitFor();await page.locator('#forward').click();responders.shift()!(true);await page.waitForTimeout(50);assert.equal(await page.locator('#login').count(),1);assert.equal(await page.locator('#pending').textContent(),'false');assert.equal(await page.locator('#reports').count(),0);await page.locator('#back').click();await page.locator('#home').waitFor({timeout:5000}).catch(async error=>{throw new Error(`${error}; url=${page.url()}; body=${await page.locator('body').textContent()}; errors=${errors.join('|')}`);});await page.waitForTimeout(20);assert.equal(await page.evaluate(()=>scrollY),300);
+    await page.locator('#outgoing-input').focus();await page.evaluate(()=>document.querySelector<HTMLAnchorElement>('#reports-link')!.click());await page.locator('#reports-loading').waitFor();responders.shift()!(false,503);await page.locator('#reports-error').waitFor();assert.match(await page.locator('#nav-error').textContent()??'',/HTTP 503/);assert.equal(await page.locator('#home').count(),1);assert.equal(await page.evaluate(()=>document.activeElement?.id),'outgoing-input');assert.equal(await page.locator('#home').evaluate(element=>(element.parentElement as HTMLElement).inert),false);await page.locator('#outgoing-button').click();assert.equal(await page.locator('#outgoing-count').textContent(),'1');
+    await page.locator('#broken-lazy-link').click();await page.locator('#broken-lazy-error').waitFor();assert.equal(await page.locator('#nav-error').textContent(),'Navigation failed');assert.equal(await page.locator('#broken-lazy-page').count(),0);assert.equal(await page.locator('#home').count(),1);assert.equal(await page.locator('[data-qb-route-status="error"]').evaluate(element=>(element as HTMLElement).style.pointerEvents),'none');await page.locator('#outgoing-button').click();assert.equal(await page.locator('#outgoing-count').textContent(),'2');
+    await page.goto(new URL('/old',server.resolvedUrls!.local[0]).href);await page.locator('#reports-loading').waitFor();responders.shift()!(false);await page.locator('#login').waitFor({timeout:5000}).catch(async error=>{throw new Error(`${error}; url=${page.url()}; body=${await page.locator('body').textContent()}; calls=${calls}; queued=${responders.length}; errors=${errors.join('|')}`);});assert.equal(new URL(page.url()).pathname,'/login');assert.equal(calls,5);
     await page.locator('#home-link').click();await page.locator('#home').waitFor();await page.locator('#loop-link').click();assert.match(await page.locator('#nav-error').textContent()??'',/redirect limit/i);assert.equal(await page.locator('#home').count(),1);
     await page.locator('#reports-link').click();await page.locator('#reports-loading').waitFor();await page.evaluate(()=>(globalThis as any).disposeApp());responders.shift()!(true);await page.waitForTimeout(50);assert.equal(await page.locator('#app').textContent(),'');assert.deepEqual(errors,[]);
   }finally{await browser.close();await server.close();await rm(directory,{recursive:true,force:true});}

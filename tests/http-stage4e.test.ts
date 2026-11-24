@@ -81,6 +81,20 @@ test('Stage 4E HTTP security bounds redirects, origins, tokens, malformed payloa
   let cancelled=false;const controller=new AbortController(),pending=createHttp({fetch:async(_input,init)=>await new Promise<Response>((_resolve,reject)=>init?.signal?.addEventListener('abort',()=>{cancelled=true;reject(init.signal!.reason);},{once:true}))}).get('/slow',{signal:controller.signal});controller.abort(new DOMException('cancelled','AbortError'));await assert.rejects(()=>pending,(error:unknown)=>(error as Error).name==='AbortError');assert.equal(cancelled,true);
 });
 
+test('HTTP JSON responses enforce decoded byte limits before parsing without trusting Content-Length',async()=>{
+  const json={'content-type':'application/json'};
+  assert.equal(await createHttp({maxTransferBytes:4,fetch:async()=>new Response('true',{headers:json})}).get('/exact',{response:'boolean'}),true);
+  const streamed=()=>new Response(new ReadableStream<Uint8Array>({start(controller){controller.enqueue(new TextEncoder().encode('{bad'));controller.enqueue(new Uint8Array([32]));controller.close();}}),{headers:json});
+  await assert.rejects(()=>createHttp({maxTransferBytes:4,fetch:async()=>streamed()}).get('/chunked'),/maximum of 4 bytes/);
+  await assert.rejects(()=>createHttp({maxTransferBytes:3,fetch:async()=>new Response('true',{headers:{...json,'content-length':'1'}})}).get('/underreported'),/maximum of 3 bytes/);
+  await assert.rejects(()=>createHttp({maxTransferBytes:3,fetch:async()=>new Response('true',{headers:{...json,'content-length':'4'}})}).get('/declared'),/maximum of 3 bytes/);
+  await assert.rejects(()=>createHttp({maxTransferBytes:4,fetch:async()=>new Response('{bad ',{status:422,headers:json})}).post('/typed-error',{errorResponses:{422:{fields:{message:'string'}}}}),/maximum of 4 bytes/);
+  let cancelled=false;const controller=new AbortController();
+  // The caller signal must participate while the response stream is being read.
+  const signalled=createHttp({maxTransferBytes:4,fetch:async()=>new Response(new ReadableStream<Uint8Array>({start(stream){stream.enqueue(new Uint8Array([123]));},cancel(){cancelled=true;}}),{headers:json})}).get('/abort',{signal:controller.signal});await new Promise(resolve=>setTimeout(resolve,0));controller.abort(new DOMException('cancelled','AbortError'));
+  await assert.rejects(()=>signalled,(error:unknown)=>(error as Error).name==='AbortError');assert.equal(cancelled,true);
+});
+
 test('Stage 4E rejects conflicting inherited service clients and rolls back the failed Firefox mount',async()=>{
   const service=compile(serviceSource,'Catalog.qb'),services=new Map([['Catalog',service.ast]]),consumer=(name:string,base:string)=>compile(`import Catalog from "./Catalog.qb"
 component ${name}:

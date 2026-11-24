@@ -60,6 +60,7 @@ test('HTTP transfer engine preserves multipart, auth, interceptors, progress, bi
   const oversized=api.transfer('GET','large',{client:'api',direction:'download'}),large=await instance(3);large.progress('download',9);await assert.rejects(oversized,/maximum of 8 bytes/);
   const failed=api.transfer('GET','failure',{client:'api',direction:'download'}),failure=await instance(4);failure.load(new Blob(),503);await assert.rejects(failed,(error:unknown)=>error instanceof HttpError&&error.status===503);
   const redirected=api.transfer('GET','redirect',{client:'api',direction:'download'}),redirect=await instance(5);redirect.responseURL='https://evil.test/file';redirect.load(new Blob(['x']),200,'content-type: application/octet-stream\r\n');await assert.rejects(redirected,/cross-origin redirect/);
+  const oversizedUpload=api.transfer('POST','large-response',{client:'api',direction:'upload',body:form,response:'string'}),largeResponse=await instance(6);largeResponse.progress('download',9);await assert.rejects(oversizedUpload,/maximum of 8 bytes/);
 });
 
 test('download actions track progress, cancellation and object URL cleanup in Firefox',async()=>{
